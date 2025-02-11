@@ -1,10 +1,19 @@
 # Todoist MCP
+[![smithery badge](https://smithery.ai/badge/@miottid/todoist-mcp)](https://smithery.ai/server/@miottid/todoist-mcp)
 
 Connect this [Model Context Protocol](https://modelcontextprotocol.io/introduction) server to your LLM to interact with Todoist.
 
 It supports all the APIs available from the [Todoist TypeScript Client](https://doist.github.io/todoist-api-typescript/api/classes/TodoistApi/).
 
 ### Setup
+
+### Installing via Smithery
+
+To install Todoist MCP for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@miottid/todoist-mcp):
+
+```bash
+npx -y @smithery/cli install @miottid/todoist-mcp --client claude
+```
 
 **Build the server app:**
 
