@@ -33,10 +33,6 @@ COPY --from=builder /app/node_modules ./node_modules
 # Copy the package.json for runtime metadata
 COPY package.json ./
 
-# Copy the environment configuration
-# (Make sure to create or provide the .env file in the docker build context)
-COPY .env .env
-
 # Set the environment variable for production
 ENV NODE_ENV=production
 
