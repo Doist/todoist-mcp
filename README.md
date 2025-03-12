@@ -5,6 +5,10 @@ Connect this [Model Context Protocol](https://modelcontextprotocol.io/introducti
 
 It supports all the APIs available from the [Todoist TypeScript Client](https://doist.github.io/todoist-api-typescript/api/classes/TodoistApi/).
 
+<a href="https://glama.ai/mcp/servers/2010u29g1w">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/2010u29g1w/badge" alt="Todoist MCP server" />
+</a>
+
 ### Setup
 
 ### Installing via Smithery
