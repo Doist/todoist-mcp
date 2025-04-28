@@ -1,0 +1,15 @@
+name: Build
+
+on: [push]
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v3
+              with:
+                  node-version-file: '.node-version'
+            - run: npm install
+            - run: npm run build
