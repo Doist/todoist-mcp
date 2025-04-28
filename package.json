@@ -31,7 +31,7 @@
         "@biomejs/biome": "1.9.4",
         "@types/node": "22.13.1",
         "husky": "9.1.7",
-        "lint-staged": "15.4.3",
+        "lint-staged": "15.5.1",
         "typescript": "5.7.3"
     },
     "lint-staged": {
