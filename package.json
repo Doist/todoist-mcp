@@ -24,7 +24,7 @@
     "license": "MIT",
     "description": "Connect this [Model Context Protocol](https://modelcontextprotocol.io/introduction) server to your LLM to interact with Todoist.",
     "dependencies": {
-        "@doist/todoist-api-typescript": "4.0.3",
+        "@doist/todoist-api-typescript": "4.0.4",
         "@modelcontextprotocol/sdk": "1.10.2"
     },
     "devDependencies": {
