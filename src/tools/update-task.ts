@@ -21,14 +21,21 @@ export function registerUpdateTask(server: McpServer, api: TodoistApi) {
                 .optional()
                 .describe('Task priority from 1 (normal) to 4 (urgent)'),
             labels: z.array(z.string()).optional(),
-            deadlineDate: z
+            dueString: z
                 .string()
                 .optional()
-                .describe('Specific date in YYYY-MM-DD format relative to user’s timezone.'),
-            deadlineLang: z
+                .describe('Natural language for the due date (e.g., "today at 10am")'),
+            dueLang: z
                 .string()
                 .optional()
-                .describe('2-letter code specifying language of deadline.'),
+                .describe('2-letter code specifying language of due date'),
+            dueDate: z.string().optional().describe('Specific date in YYYY-MM-DD format'),
+            dueDateTime: z
+                .string()
+                .optional()
+                .describe(
+                    'Specific date and time in RFC3339 format (e.g., "2025-05-06T15:40:00Z")',
+                ),
         },
         async ({
             taskId,
@@ -37,18 +44,28 @@ export function registerUpdateTask(server: McpServer, api: TodoistApi) {
             assigneeId,
             priority,
             labels,
-            deadlineDate,
-            deadlineLang,
+            dueString,
+            dueLang,
+            dueDate,
+            dueDateTime,
         }) => {
+            //Update task requires dueDate or dueDateTime.
+            //If only dueDate is provided, use it as dueDateTime.
+            if (dueDate && !dueDateTime) {
+                dueDateTime = dueDate
+            }
+
             const task = await api.updateTask(taskId, {
                 content,
                 description,
                 assigneeId,
                 priority,
                 labels,
-                deadlineDate,
-                deadlineLang,
+                dueString,
+                dueLang,
+                dueDatetime: dueDateTime ?? '',
             })
+
             return {
                 content: [{ type: 'text', text: JSON.stringify(task, null, 2) }],
             }
