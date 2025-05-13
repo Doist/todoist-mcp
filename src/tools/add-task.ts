@@ -30,6 +30,30 @@ export function registerAddTask(server: McpServer, api: TodoistApi) {
                 .string()
                 .optional()
                 .describe('2-letter code specifying language of deadline.'),
+            dueString: z
+                .string()
+                .optional()
+                .describe('Natural language description of due date like "tomorrow at 3pm"'),
+            dueDate: z
+                .string()
+                .optional()
+                .describe('Specific date in YYYY-MM-DD format relative to user's timezone'),
+            dueDatetime: z
+                .string()
+                .optional()
+                .describe('Full ISO datetime format like "2023-12-31T15:00:00Z"'),
+            dueLang: z
+                .string()
+                .optional()
+                .describe('2-letter code specifying language of due date'),
+            duration: z
+                .number()
+                .optional()
+                .describe('Duration of the task'),
+            durationUnit: z
+                .string()
+                .optional()
+                .describe('Unit for task duration (e.g., "minute", "hour", "day")'),
         },
         async ({
             content,
@@ -40,6 +64,12 @@ export function registerAddTask(server: McpServer, api: TodoistApi) {
             labels,
             deadlineDate,
             deadlineLang,
+            dueString,
+            dueDate,
+            dueDatetime,
+            dueLang,
+            duration,
+            durationUnit,
         }) => {
             const task = await api.addTask({
                 content,
@@ -50,6 +80,12 @@ export function registerAddTask(server: McpServer, api: TodoistApi) {
                 labels,
                 deadlineDate,
                 deadlineLang,
+                dueString,
+                dueDate,
+                dueDatetime,
+                dueLang,
+                duration,
+                durationUnit,
             })
             return {
                 content: [
