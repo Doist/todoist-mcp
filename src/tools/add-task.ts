@@ -1,4 +1,4 @@
-import type { TodoistApi } from '@doist/todoist-api-typescript'
+import type { AddTaskArgs, TodoistApi } from '@doist/todoist-api-typescript'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
@@ -100,7 +100,7 @@ export function registerAddTask(server: McpServer, api: TodoistApi) {
             }
 
             // Handle due date (can only have one of dueDate or dueDatetime)
-            let taskArgs: Record<string, unknown> = {}
+            let taskArgs: Partial<AddTaskArgs> = {}
             if (dueDate) {
                 taskArgs = { ...baseArgs, dueDate }
             } else if (dueDatetime) {
@@ -114,7 +114,7 @@ export function registerAddTask(server: McpServer, api: TodoistApi) {
                 taskArgs = { ...taskArgs, duration, durationUnit }
             }
 
-            const task = await api.addTask(taskArgs)
+            const task = await api.addTask(taskArgs as AddTaskArgs)
 
             return {
                 content: [
