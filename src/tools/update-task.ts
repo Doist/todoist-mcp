@@ -32,21 +32,19 @@ export function registerUpdateTask(server: McpServer, api: TodoistApi) {
             dueDate: z
                 .string()
                 .optional()
-                .describe('Specific date in YYYY-MM-DD format (cannot be used with dueDatetime)'),
+                .describe("Specific date in YYYY-MM-DD format relative to user's timezone"),
             dueDatetime: z
                 .string()
                 .optional()
-                .describe(
-                    'Full ISO datetime format like "2023-12-31T15:00:00Z" (cannot be used with dueDate)',
-                ),
+                .describe('Full ISO datetime format like "2023-12-31T15:00:00Z"'),
             deadlineDate: z
                 .string()
                 .optional()
-                .describe('Specific date in YYYY-MM-DD format for the deadline'),
+                .describe("Specific date in YYYY-MM-DD format relative to user's timezone."),
             deadlineLang: z
                 .string()
                 .optional()
-                .describe('2-letter code specifying language of deadline'),
+                .describe('2-letter code specifying language of deadline.'),
             duration: z
                 .number()
                 .optional()
