@@ -18,6 +18,7 @@ import { registerGetComment } from './tools/get-comment.js'
 import { registerGetComments } from './tools/get-comments.js'
 import { registerGetLabel } from './tools/get-label.js'
 import { registerGetLabels } from './tools/get-labels.js'
+import { registerGetProductivityStats } from './tools/get-productivity-stats.js'
 import { registerGetProjectCollaborators } from './tools/get-project-collaborators.js'
 import { registerGetProjectComments } from './tools/get-project-comments.js'
 import { registerGetProject } from './tools/get-project.js'
@@ -74,6 +75,7 @@ registerGetTask(server, api)
 registerGetTasks(server, api)
 registerGetTasksCompletedByCompletionDate(server, api)
 registerGetTasksCompletedByDueDate(server, api)
+registerGetProductivityStats(server, api)
 registerUpdateTask(server, api)
 registerCloseTask(server, api)
 registerMoveTaskToProject(server, api)

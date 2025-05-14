@@ -11,6 +11,7 @@ This integration implements all the APIs available from the [Todoist TypeScript 
 - Create tasks with natural language (e.g., "Submit report by Friday 5pm #Work")
 - Retrieve tasks (individual, filtered, or all tasks)
 - Retrieve completed tasks (by completion date or due date)
+- Get productivity statistics
 - Update tasks
 - Move tasks (individually or in batches)
 - Close/reopen tasks
