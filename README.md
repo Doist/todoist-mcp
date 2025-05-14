@@ -4,7 +4,7 @@ Connect this [Model Context Protocol](https://modelcontextprotocol.io/introducti
 
 ## Functionality
 
-This integration implements the [Todoist API v1 specification](https://developer.todoist.com/api/v1/), providing access to:
+This integration implements all the APIs available from the [Todoist TypeScript Client](https://doist.github.io/todoist-api-typescript/api/classes/TodoistApi/), providing access to:
 
 ### Task Management
 - Create tasks (with content, descriptions, due dates, priorities, labels, and more)
