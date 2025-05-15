@@ -1,7 +1,7 @@
 import type { TodoistApi } from '@doist/todoist-api-typescript'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-
+import { callRestTodoistApi } from '../todoist-api.js'
 // Since the Todoist TypeScript API client doesn't expose the completed tasks endpoint directly,
 // we'll need to make a custom request to the API
 export function registerGetTasksCompletedByDueDate(server: McpServer, api: TodoistApi) {
@@ -47,36 +47,11 @@ export function registerGetTasksCompletedByDueDate(server: McpServer, api: Todoi
             if (limit) params.append('limit', limit.toString())
             if (cursor) params.append('cursor', cursor)
 
-            // Since this endpoint is not directly exposed in the TypeScript client,
-            // we need to make a direct fetch request using the authentication token
-            // Access the private properties with a type assertion to a more specific interface
-            interface TodoistApiInternal {
-                restApiBase: string
-                authToken: string
-            }
+            const path = `/tasks/completed/by_due_date?${params.toString()}`
+            const res = await callRestTodoistApi(path, api)
+            const data = await res.json()
 
-            const baseUrl =
-                (api as unknown as TodoistApiInternal).restApiBase || 'https://api.todoist.com'
-            const authToken = (api as unknown as TodoistApiInternal).authToken
-
-            const response = await fetch(
-                `${baseUrl}/api/v1/tasks/completed/by_due_date?${params.toString()}`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${authToken}`,
-                    },
-                },
-            )
-
-            if (!response.ok) {
-                throw new Error(`Todoist API error: ${response.status} ${await response.text()}`)
-            }
-
-            const data = await response.json()
-
-            return {
-                content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
-            }
+            return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
         },
     )
 }
