@@ -1,8 +1,6 @@
 import { TodoistApi } from '@doist/todoist-api-typescript'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { registerAddCommentToProject } from './tools/add-comment-to-project.js'
-import { registerAddCommentToTask } from './tools/add-comment-to-task.js'
 import { registerAddComment } from './tools/add-comment.js'
 import { registerAddLabel } from './tools/add-label.js'
 import { registerAddProject } from './tools/add-project.js'
@@ -32,9 +30,6 @@ import { registerGetTasksByFilter } from './tools/get-tasks-by-filter.js'
 import { registerGetTasksCompletedByCompletionDate } from './tools/get-tasks-completed-by-completion-date.js'
 import { registerGetTasksCompletedByDueDate } from './tools/get-tasks-completed-by-due-date.js'
 import { registerGetTasks } from './tools/get-tasks.js'
-import { registerMoveTaskToParent } from './tools/move-task-to-parent.js'
-import { registerMoveTaskToProject } from './tools/move-task-to-project.js'
-import { registerMoveTaskToSection } from './tools/move-task-to-section.js'
 import { registerMoveTasks } from './tools/move-tasks.js'
 import { registerQuickAddTask } from './tools/quick-add-task.js'
 import { registerRemoveSharedLabel } from './tools/remove-shared-label.js'
@@ -63,7 +58,6 @@ registerGetProjects(server, api)
 registerGetProject(server, api)
 registerUpdateProject(server, api)
 registerDeleteProject(server, api)
-registerMoveTaskToParent(server, api)
 
 /* Collaborators */
 registerGetProjectCollaborators(server, api)
@@ -78,8 +72,6 @@ registerGetTasksCompletedByDueDate(server, api)
 registerGetProductivityStats(server, api)
 registerUpdateTask(server, api)
 registerCloseTask(server, api)
-registerMoveTaskToProject(server, api)
-registerMoveTaskToSection(server, api)
 registerMoveTasks(server, api)
 registerDeleteTask(server, api)
 registerReopenTask(server, api)
@@ -94,8 +86,6 @@ registerDeleteSection(server, api)
 
 /* Comments */
 registerAddComment(server, api)
-registerAddCommentToProject(server, api)
-registerAddCommentToTask(server, api)
 registerGetComment(server, api)
 registerGetComments(server, api)
 registerUpdateComment(server, api)
