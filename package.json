@@ -11,7 +11,7 @@
         "build-tsc": "npx tsc",
         "permissions": "node -e \"require('fs').chmodSync('build/index.js', '755')\"",
         "format": "biome check --write",
-        "prepare": "npm run build"
+        "prepare": "husky || true && npm run build"
     },
     "keywords": [
         "ai",
