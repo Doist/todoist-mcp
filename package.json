@@ -7,7 +7,9 @@
         "todoist-mcp": "./bin/index.js"
     },
     "scripts": {
-        "build": "npx -p typescript tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+        "build": "npm run build-tsc && npm run permissions",
+        "build-tsc": "npx tsc",
+        "permissions": "node -e \"require('fs').chmodSync('build/index.js', '755')\"",
         "format": "biome check --write",
         "prepare": "npm run build"
     },
