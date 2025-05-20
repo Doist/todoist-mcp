@@ -8,7 +8,7 @@
     },
     "scripts": {
         "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
-        "prepack": "npm run build"
+        "prepack": "npm run build",
         "format": "biome check --write",
         "prepare": "husky"
     },
