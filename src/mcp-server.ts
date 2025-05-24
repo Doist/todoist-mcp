@@ -41,6 +41,7 @@ import { listWorkspaces } from './tools/list-workspaces.js'
 import { manageAssignments } from './tools/manage-assignments.js'
 import { projectManagement } from './tools/project-management.js'
 import { projectMove } from './tools/project-move.js'
+import { quickAddTask } from './tools/quick-add-task.js'
 import { reorderObjects } from './tools/reorder-objects.js'
 import { rescheduleTasks } from './tools/reschedule-tasks.js'
 import { search } from './tools/search.js'
@@ -205,6 +206,7 @@ function getMcpServer({
 
     // Task management tools
     registerTool({ tool: addTasks, ...toolArgs })
+    registerTool({ tool: quickAddTask, ...toolArgs })
     registerTool({ tool: completeTasks, ...toolArgs })
     registerTool({ tool: uncompleteTasks, ...toolArgs })
     registerTool({ tool: updateTasks, ...toolArgs })

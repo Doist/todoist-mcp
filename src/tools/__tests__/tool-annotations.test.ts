@@ -25,6 +25,13 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
         idempotentHint: false,
     },
     {
+        name: ToolNames.QUICK_ADD_TASK,
+        title: 'Todoist: Quick Add Task',
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+    },
+    {
         name: ToolNames.COMPLETE_TASKS,
         title: 'Todoist: Complete Tasks',
         readOnlyHint: false,
