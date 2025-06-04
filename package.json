@@ -27,13 +27,13 @@
     "description": "Connect this [Model Context Protocol](https://modelcontextprotocol.io/introduction) server to your LLM to interact with Todoist.",
     "dependencies": {
         "@doist/todoist-api-typescript": "4.0.4",
-        "@modelcontextprotocol/sdk": "1.11.4"
+        "@modelcontextprotocol/sdk": "1.12.1"
     },
     "devDependencies": {
         "@biomejs/biome": "1.9.4",
-        "@types/node": "22.15.19",
+        "@types/node": "22.15.29",
         "husky": "9.1.7",
-        "lint-staged": "16.0.0",
+        "lint-staged": "16.1.0",
         "typescript": "5.8.3"
     },
     "lint-staged": {
