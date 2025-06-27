@@ -15,9 +15,8 @@ export function registerUpdateTask(server: McpServer, api: TodoistApi) {
                 .optional()
                 .describe('The ID of a project collaborator to assign the task to'),
             priority: z
-                .number()
-                .min(1)
-                .max(4)
+                .enum(['1', '2', '3', '4'])
+                .transform(Number)
                 .optional()
                 .describe('Task priority from 1 (normal) to 4 (urgent)'),
             labels: z.array(z.string()).optional(),
