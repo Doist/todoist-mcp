@@ -1,3 +1,5 @@
 .env
 build/
 node_modules/
+.worktrees/  
+.worktrees/ 
