@@ -24,7 +24,9 @@ export function registerUpdateTask(server: McpServer, api: TodoistApi) {
             dueString: z
                 .string()
                 .optional()
-                .describe('Natural language description of due date like "tomorrow at 3pm"'),
+                .describe(
+                    'Natural language description of due date like "tomorrow at 3pm". Use "no date" or "no due date" to remove an existing due date.',
+                ),
             dueLang: z
                 .string()
                 .optional()
