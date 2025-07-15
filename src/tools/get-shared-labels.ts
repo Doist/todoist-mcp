@@ -1,6 +1,7 @@
 import type { TodoistApi } from '@doist/todoist-api-typescript'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { getMaxPaginatedResults } from '../utils/get-max-paginated-results.js'
 
 export function registerGetSharedLabels(server: McpServer, api: TodoistApi) {
     server.tool(
@@ -10,12 +11,9 @@ export function registerGetSharedLabels(server: McpServer, api: TodoistApi) {
             omitPersonal: z.boolean().optional(),
         },
         async ({ omitPersonal }) => {
-            let response = await api.getSharedLabels({ omitPersonal })
-            const labels = response.results
-            while (response.nextCursor) {
-                response = await api.getSharedLabels({ omitPersonal, cursor: response.nextCursor })
-                labels.push(...response.results)
-            }
+            const labels = await getMaxPaginatedResults((params) =>
+                api.getSharedLabels({ omitPersonal, ...params }),
+            )
             return {
                 content: labels.map((label) => ({
                     type: 'text',

@@ -1,6 +1,7 @@
 import type { TodoistApi } from '@doist/todoist-api-typescript'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { getMaxPaginatedResults } from '../utils/get-max-paginated-results.js'
 
 export function registerGetProjectCollaborators(server: McpServer, api: TodoistApi) {
     server.tool(
@@ -10,14 +11,9 @@ export function registerGetProjectCollaborators(server: McpServer, api: TodoistA
             projectId: z.string(),
         },
         async ({ projectId }) => {
-            let response = await api.getProjectCollaborators(projectId)
-            const collaborators = response.results
-            while (response.nextCursor) {
-                response = await api.getProjectCollaborators(projectId, {
-                    cursor: response.nextCursor,
-                })
-                collaborators.push(...response.results)
-            }
+            const collaborators = await getMaxPaginatedResults((params) =>
+                api.getProjectCollaborators(projectId, params),
+            )
             return {
                 content: collaborators.map((collaborator) => ({
                     type: 'text',

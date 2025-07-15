@@ -1,6 +1,7 @@
 import type { TodoistApi } from '@doist/todoist-api-typescript'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { getMaxPaginatedResults } from '../utils/get-max-paginated-results.js'
 
 export function registerGetProjectComments(server: McpServer, api: TodoistApi) {
     server.tool(
@@ -8,12 +9,9 @@ export function registerGetProjectComments(server: McpServer, api: TodoistApi) {
         'Get comments from a project in Todoist',
         { projectId: z.string() },
         async ({ projectId }) => {
-            let response = await api.getComments({ projectId })
-            const comments = response.results
-            while (response.nextCursor) {
-                response = await api.getComments({ projectId, cursor: response.nextCursor })
-                comments.push(...response.results)
-            }
+            const comments = await getMaxPaginatedResults((params) =>
+                api.getComments({ projectId, ...params }),
+            )
             return {
                 content: comments.map((comment) => ({
                     type: 'text',

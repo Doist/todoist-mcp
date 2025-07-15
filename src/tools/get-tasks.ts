@@ -1,6 +1,7 @@
 import type { TodoistApi } from '@doist/todoist-api-typescript'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { getMaxPaginatedResults } from '../utils/get-max-paginated-results.js'
 
 export function registerGetTasks(server: McpServer, api: TodoistApi) {
     server.tool(
@@ -10,12 +11,9 @@ export function registerGetTasks(server: McpServer, api: TodoistApi) {
             projectId: z.string().optional(),
         },
         async ({ projectId }) => {
-            let response = await api.getTasks({ projectId })
-            const tasks = response.results
-            while (response.nextCursor) {
-                response = await api.getTasks({ projectId, cursor: response.nextCursor })
-                tasks.push(...response.results)
-            }
+            const tasks = await getMaxPaginatedResults((params) =>
+                api.getTasks({ projectId, ...params }),
+            )
             return {
                 content: tasks.map((task) => ({
                     type: 'text',
