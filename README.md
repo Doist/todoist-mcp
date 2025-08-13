@@ -3,6 +3,8 @@
 >
 > Doist now maintains the official Todoist MCP tools in the new repository:
 [Doist/todoist-ai](https://github.com/Doist/todoist-ai). Please migrate to the new tools for continued support and updates.
+>
+> More details [here](https://github.com/Doist/todoist-mcp/discussions/103).
 
 # Todoist MCP
 
