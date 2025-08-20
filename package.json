@@ -34,7 +34,7 @@
         "@types/node": "22.17.2",
         "husky": "9.1.7",
         "lint-staged": "16.1.5",
-        "typescript": "5.8.3"
+        "typescript": "5.9.2"
     },
     "lint-staged": {
         "*.{js,ts,json}": ["biome check --write"]
