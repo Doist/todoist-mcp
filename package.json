@@ -30,7 +30,7 @@
         "@modelcontextprotocol/sdk": "1.17.4"
     },
     "devDependencies": {
-        "@biomejs/biome": "2.2.0",
+        "@biomejs/biome": "2.2.2",
         "@types/node": "22.17.2",
         "husky": "9.1.7",
         "lint-staged": "16.1.5",
