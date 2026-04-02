@@ -196,6 +196,26 @@ const ReminderSchema = z.object({
 })
 
 /**
+ * Schema for a goal object returned by tools
+ */
+const GoalSchema = z.object({
+    id: z.string().describe('The unique ID of the goal.'),
+    name: z.string().describe('The name of the goal.'),
+    ownerType: z.string().describe('The owner type: USER or WORKSPACE.'),
+    ownerId: z.string().describe('The owner ID (user ID or workspace ID).'),
+    description: z.string().nullable().describe('The description of the goal.'),
+    deadline: z.string().nullable().describe('The deadline (YYYY-MM-DD).'),
+    isCompleted: z.boolean().describe('Whether the goal is completed.'),
+    progress: z
+        .object({
+            totalItemCount: z.number(),
+            completedItemCount: z.number(),
+            percentage: z.number(),
+        })
+        .describe('Progress of linked tasks.'),
+})
+
+/**
  * Schema for batch operation failure
  */
 const FailureSchema = z.object({
@@ -209,6 +229,7 @@ export {
     CollaboratorSchema,
     CommentSchema,
     FailureSchema,
+    GoalSchema,
     LabelSchema,
     ProjectSchema,
     ReminderSchema,

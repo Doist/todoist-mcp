@@ -10,6 +10,7 @@ const entityTypes = [
     'comment',
     'label',
     'filter',
+    'goal',
     'reminder',
     'location_reminder',
 ] as const
@@ -32,7 +33,7 @@ const OutputSchema = {
 const deleteObject = {
     name: ToolNames.DELETE_OBJECT,
     description:
-        'Delete a project, section, task, comment, label, filter, reminder, or location_reminder by its ID.',
+        'Delete a project, section, task, comment, label, filter, goal, reminder, or location_reminder by its ID.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
@@ -64,6 +65,9 @@ const deleteObject = {
                 await client.sync({
                     commands: [createCommand('filter_delete', { id: args.id })],
                 })
+                break
+            case 'goal':
+                await client.deleteGoal(args.id)
                 break
             case 'reminder':
                 await client.deleteReminder(args.id)

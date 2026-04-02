@@ -14,9 +14,11 @@ import { addFilters } from './tools/add-filters.js'
 import { addLabels } from './tools/add-labels.js'
 import { addProjects } from './tools/add-projects.js'
 import { addReminders } from './tools/add-reminders.js'
+import { addGoals } from './tools/add-goals.js'
 import { addSections } from './tools/add-sections.js'
 import { addTasks } from './tools/add-tasks.js'
 import { analyzeProjectHealth } from './tools/analyze-project-health.js'
+import { completeGoals } from './tools/complete-goals.js'
 import { completeTasks } from './tools/complete-tasks.js'
 import { deleteObject } from './tools/delete-object.js'
 import { fetchObject } from './tools/fetch-object.js'
@@ -29,6 +31,7 @@ import { findLabels } from './tools/find-labels.js'
 import { findProjectCollaborators } from './tools/find-project-collaborators.js'
 import { findProjects } from './tools/find-projects.js'
 import { findReminders } from './tools/find-reminders.js'
+import { findGoals } from './tools/find-goals.js'
 import { findSections } from './tools/find-sections.js'
 import { findTasksByDate } from './tools/find-tasks-by-date.js'
 import { findTasks } from './tools/find-tasks.js'
@@ -37,6 +40,7 @@ import { getProductivityStats } from './tools/get-productivity-stats.js'
 import { getProjectActivityStats } from './tools/get-project-activity-stats.js'
 import { getProjectHealth } from './tools/get-project-health.js'
 import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
+import { linkGoalItems } from './tools/link-goal-items.js'
 import { listWorkspaces } from './tools/list-workspaces.js'
 import { manageAssignments } from './tools/manage-assignments.js'
 import { projectManagement } from './tools/project-management.js'
@@ -50,6 +54,7 @@ import { updateFilters } from './tools/update-filters.js'
 import { updateLabels } from './tools/update-labels.js'
 import { updateProjects } from './tools/update-projects.js'
 import { updateReminders } from './tools/update-reminders.js'
+import { updateGoals } from './tools/update-goals.js'
 import { updateSections } from './tools/update-sections.js'
 import { updateTasks } from './tools/update-tasks.js'
 import { userInfo } from './tools/user-info.js'
@@ -224,6 +229,13 @@ function getMcpServer({
     registerTool({ tool: addSections, ...toolArgs })
     registerTool({ tool: updateSections, ...toolArgs })
     registerTool({ tool: findSections, ...toolArgs })
+
+    // Goal management tools
+    registerTool({ tool: findGoals, ...toolArgs })
+    registerTool({ tool: addGoals, ...toolArgs })
+    registerTool({ tool: updateGoals, ...toolArgs })
+    registerTool({ tool: completeGoals, ...toolArgs })
+    registerTool({ tool: linkGoalItems, ...toolArgs })
 
     // Comment management tools
     registerTool({ tool: addComments, ...toolArgs })

@@ -28,6 +28,13 @@ export const ToolNames = {
     UPDATE_SECTIONS: 'update-sections',
     FIND_SECTIONS: 'find-sections',
 
+    // Goal management tools
+    FIND_GOALS: 'find-goals',
+    ADD_GOALS: 'add-goals',
+    UPDATE_GOALS: 'update-goals',
+    COMPLETE_GOALS: 'complete-goals',
+    LINK_GOAL_ITEMS: 'link-goal-items',
+
     // Comment management tools
     ADD_COMMENTS: 'add-comments',
     UPDATE_COMMENTS: 'update-comments',

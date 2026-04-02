@@ -1,10 +1,16 @@
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { mapComment, mapProject, mapTask } from '../tool-helpers.js'
-import { CommentSchema, ProjectSchema, SectionSchema, TaskSchema } from '../utils/output-schemas.js'
+import {
+    CommentSchema,
+    GoalSchema,
+    ProjectSchema,
+    SectionSchema,
+    TaskSchema,
+} from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
 
-const ObjectTypes = ['task', 'project', 'comment', 'section'] as const
+const ObjectTypes = ['task', 'project', 'comment', 'section', 'goal'] as const
 
 const ArgsSchema = {
     type: z.enum(ObjectTypes).describe('The type of object to fetch.'),
@@ -15,14 +21,14 @@ const OutputSchema = {
     type: z.enum(ObjectTypes).describe('The type of object fetched.'),
     id: z.string().describe('The ID of the fetched object.'),
     object: z
-        .union([TaskSchema, ProjectSchema, CommentSchema, SectionSchema])
+        .union([TaskSchema, ProjectSchema, CommentSchema, SectionSchema, GoalSchema])
         .describe('The fetched object data.'),
 }
 
 const fetchObject = {
     name: ToolNames.FETCH_OBJECT,
     description:
-        'Fetch a single task, project, comment, or section by its ID. Use this when you have a specific object ID and want to retrieve its full details.',
+        'Fetch a single task, project, comment, section, or goal by its ID. Use this when you have a specific object ID and want to retrieve its full details.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
@@ -88,6 +94,27 @@ const fetchObject = {
                             type,
                             id,
                             object: mappedSection,
+                        },
+                    }
+                }
+                case 'goal': {
+                    const goal = await client.getGoal(id)
+                    const mappedGoal = {
+                        id: goal.id,
+                        name: goal.name,
+                        ownerType: goal.ownerType,
+                        ownerId: goal.ownerId,
+                        description: goal.description,
+                        deadline: goal.deadline,
+                        isCompleted: goal.isCompleted,
+                        progress: goal.progress,
+                    }
+                    return {
+                        textContent: `Found goal: ${mappedGoal.name} • id=${mappedGoal.id} • progress=${mappedGoal.progress.percentage}%`,
+                        structuredContent: {
+                            type,
+                            id,
+                            object: mappedGoal,
                         },
                     }
                 }
