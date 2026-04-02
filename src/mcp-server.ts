@@ -90,6 +90,9 @@ You have access to comprehensive Todoist management tools for personal productiv
 - **project-management**: Archive or unarchive projects by ID
 - **project-move**: Move projects between personal and workspace contexts
 - **add-sections/update-sections/find-sections**: Organize tasks within projects using sections
+- **find-goals/add-goals/update-goals**: Manage goals (personal or workspace). Goals track progress via linked tasks
+- **complete-goals**: Complete or uncomplete goals by ID
+- **link-goal-items**: Link or unlink tasks to/from a goal
 - **get-overview**: Get comprehensive Markdown overview of entire account or specific project with task hierarchies. Project data includes parentId (sub-projects), folderId (workspace folder membership), and childOrder (sibling ordering)
 - **list-workspaces**: Get all workspaces for the user with details like plan type, role, and settings
 
