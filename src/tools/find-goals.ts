@@ -11,6 +11,7 @@ const ArgsSchema = {
         .describe(
             'Search for a goal by name (partial and case insensitive match). Supports wildcards (e.g. "ship*"). If omitted, all goals are returned.',
         ),
+    // TODO: Import GOAL_OWNER_TYPES from @doist/todoist-sdk once published
     ownerType: z
         .enum(['USER', 'WORKSPACE'])
         .optional()
