@@ -16,7 +16,7 @@ import { addProjects } from './tools/add-projects.js'
 import { addGoals } from './tools/add-goals.js'
 import { completeGoals } from './tools/complete-goals.js'
 import { findGoals } from './tools/find-goals.js'
-import { linkGoalItems } from './tools/link-goal-items.js'
+import { linkGoalTasks } from './tools/link-goal-tasks.js'
 import { updateGoals } from './tools/update-goals.js'
 // Section management tools
 import { addSections } from './tools/add-sections.js'
@@ -83,7 +83,7 @@ const tools = {
     addGoals,
     updateGoals,
     completeGoals,
-    linkGoalItems,
+    linkGoalTasks,
     // Comment management tools
     addComments,
     updateComments,
@@ -167,7 +167,7 @@ export {
     // Health and insights tools
     getProjectHealth,
     getWorkspaceInsights,
-    linkGoalItems,
+    linkGoalTasks,
     // Workspace tools
     listWorkspaces,
     manageAssignments,

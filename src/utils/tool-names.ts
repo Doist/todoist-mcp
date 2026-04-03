@@ -33,7 +33,7 @@ export const ToolNames = {
     ADD_GOALS: 'add-goals',
     UPDATE_GOALS: 'update-goals',
     COMPLETE_GOALS: 'complete-goals',
-    LINK_GOAL_ITEMS: 'link-goal-items',
+    LINK_GOAL_TASKS: 'link-goal-tasks',
 
     // Comment management tools
     ADD_COMMENTS: 'add-comments',

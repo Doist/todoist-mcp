@@ -40,7 +40,7 @@ import { getProductivityStats } from './tools/get-productivity-stats.js'
 import { getProjectActivityStats } from './tools/get-project-activity-stats.js'
 import { getProjectHealth } from './tools/get-project-health.js'
 import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
-import { linkGoalItems } from './tools/link-goal-items.js'
+import { linkGoalTasks } from './tools/link-goal-tasks.js'
 import { listWorkspaces } from './tools/list-workspaces.js'
 import { manageAssignments } from './tools/manage-assignments.js'
 import { projectManagement } from './tools/project-management.js'
@@ -92,7 +92,7 @@ You have access to comprehensive Todoist management tools for personal productiv
 - **add-sections/update-sections/find-sections**: Organize tasks within projects using sections
 - **find-goals/add-goals/update-goals**: Manage goals (personal or workspace). Goals track progress via linked tasks
 - **complete-goals**: Complete or uncomplete goals by ID
-- **link-goal-items**: Link or unlink tasks to/from a goal
+- **link-goal-tasks**: Link or unlink tasks to/from a goal
 - **get-overview**: Get comprehensive Markdown overview of entire account or specific project with task hierarchies. Project data includes parentId (sub-projects), folderId (workspace folder membership), and childOrder (sibling ordering)
 - **list-workspaces**: Get all workspaces for the user with details like plan type, role, and settings
 
@@ -238,7 +238,7 @@ function getMcpServer({
     registerTool({ tool: addGoals, ...toolArgs })
     registerTool({ tool: updateGoals, ...toolArgs })
     registerTool({ tool: completeGoals, ...toolArgs })
-    registerTool({ tool: linkGoalItems, ...toolArgs })
+    registerTool({ tool: linkGoalTasks, ...toolArgs })
 
     // Comment management tools
     registerTool({ tool: addComments, ...toolArgs })

@@ -45,7 +45,7 @@ import { getOverview } from '../src/tools/get-overview.js'
 import { getProjectActivityStats } from '../src/tools/get-project-activity-stats.js'
 import { getProjectHealth } from '../src/tools/get-project-health.js'
 import { getWorkspaceInsights } from '../src/tools/get-workspace-insights.js'
-import { linkGoalItems } from '../src/tools/link-goal-items.js'
+import { linkGoalTasks } from '../src/tools/link-goal-tasks.js'
 import { listWorkspaces } from '../src/tools/list-workspaces.js'
 import { manageAssignments } from '../src/tools/manage-assignments.js'
 import { projectManagement } from '../src/tools/project-management.js'
@@ -108,7 +108,7 @@ const tools: Record<string, ExecutableTool> = {
     'get-project-activity-stats': getProjectActivityStats,
     'analyze-project-health': analyzeProjectHealth,
     'get-workspace-insights': getWorkspaceInsights,
-    'link-goal-items': linkGoalItems,
+    'link-goal-tasks': linkGoalTasks,
     'list-workspaces': listWorkspaces,
     'manage-assignments': manageAssignments,
     'project-management': projectManagement,

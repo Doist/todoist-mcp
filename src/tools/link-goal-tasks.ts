@@ -6,7 +6,7 @@ import { ToolNames } from '../utils/tool-names.js'
 
 const ArgsSchema = {
     goalId: z.string().min(1).describe('The ID of the goal.'),
-    itemIds: z.array(z.string().min(1)).min(1).describe('The IDs of the tasks to link or unlink.'),
+    taskIds: z.array(z.string().min(1)).min(1).describe('The IDs of the tasks to link or unlink.'),
     action: z.enum(['link', 'unlink']).describe('Whether to link or unlink the tasks.'),
 }
 
@@ -18,8 +18,8 @@ const OutputSchema = {
     failureCount: z.number().describe('The number of failed operations.'),
 }
 
-const linkGoalItems = {
-    name: ToolNames.LINK_GOAL_ITEMS,
+const linkGoalTasks = {
+    name: ToolNames.LINK_GOAL_TASKS,
     description: 'Link or unlink tasks to/from a goal.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
@@ -28,17 +28,17 @@ const linkGoalItems = {
         const processed: string[] = []
         const failures: Array<{ item: string; error: string; code?: string }> = []
 
-        for (const itemId of args.itemIds) {
+        for (const taskId of args.taskIds) {
             try {
                 if (args.action === 'link') {
-                    await client.linkItemToGoal(args.goalId, itemId)
+                    await client.linkTaskToGoal(args.goalId, taskId)
                 } else {
-                    await client.unlinkItemFromGoal(args.goalId, itemId)
+                    await client.unlinkTaskFromGoal(args.goalId, taskId)
                 }
-                processed.push(itemId)
+                processed.push(taskId)
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-                failures.push({ item: itemId, error: errorMessage })
+                failures.push({ item: taskId, error: errorMessage })
             }
         }
 
@@ -47,7 +47,7 @@ const linkGoalItems = {
         const textContent = summarizeBatch({
             action: actionLabel,
             success: processed.length,
-            total: args.itemIds.length,
+            total: args.taskIds.length,
             successItems: processed,
             failures,
         })
@@ -57,7 +57,7 @@ const linkGoalItems = {
             structuredContent: {
                 processed,
                 failures,
-                totalRequested: args.itemIds.length,
+                totalRequested: args.taskIds.length,
                 successCount: processed.length,
                 failureCount: failures.length,
             },
@@ -65,4 +65,4 @@ const linkGoalItems = {
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
 
-export { linkGoalItems }
+export { linkGoalTasks }
