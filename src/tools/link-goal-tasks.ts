@@ -31,9 +31,9 @@ const linkGoalTasks = {
         for (const taskId of args.taskIds) {
             try {
                 if (args.action === 'link') {
-                    await client.linkTaskToGoal(args.goalId, taskId)
+                    await client.linkTaskToGoal({ goalId: args.goalId, taskId })
                 } else {
-                    await client.unlinkTaskFromGoal(args.goalId, taskId)
+                    await client.unlinkTaskFromGoal({ goalId: args.goalId, taskId })
                 }
                 processed.push(taskId)
             } catch (error) {

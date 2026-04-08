@@ -1,3 +1,4 @@
+import { GOAL_OWNER_TYPES } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { GoalSchema as GoalOutputSchema } from '../utils/output-schemas.js'
@@ -11,9 +12,8 @@ const ArgsSchema = {
         .describe(
             'Search for a goal by name (partial and case insensitive match). Supports wildcards (e.g. "ship*"). If omitted, all goals are returned.',
         ),
-    // TODO: Import GOAL_OWNER_TYPES from @doist/todoist-sdk once published
     ownerType: z
-        .enum(['USER', 'WORKSPACE'])
+        .enum(GOAL_OWNER_TYPES)
         .optional()
         .describe('Filter by ownership type. Omit for all accessible goals.'),
 }
@@ -34,20 +34,15 @@ const findGoals = {
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     async execute(args, client) {
-        let results
-
-        if (args.searchText) {
-            const response = await client.searchGoals({
-                query: args.searchText,
-                ownerType: args.ownerType,
-            })
-            results = response.results
-        } else {
-            const response = await client.getGoals({
-                ownerType: args.ownerType,
-            })
-            results = response.results
-        }
+        const response = args.searchText
+            ? await client.searchGoals({
+                  query: args.searchText,
+                  ownerType: args.ownerType,
+              })
+            : await client.getGoals({
+                  ownerType: args.ownerType,
+              })
+        const results = response.results
 
         const goals = results.map((g) => ({
             id: g.id,
@@ -67,7 +62,10 @@ const findGoals = {
         const previewLines =
             goals.length > 0
                 ? goals
-                      .map((g) => `    ${g.name} • id=${g.id} • progress=${g.progress.percentage}%`)
+                      .map(
+                          (g) =>
+                              `    ${g.name} • id=${g.id} • progress=${g.progress?.percentage ?? 0}%`,
+                      )
                       .join('\n')
                 : undefined
 
@@ -76,7 +74,11 @@ const findGoals = {
             count: goals.length,
             previewLines,
             zeroReasonHints: args.searchText
-                ? ['Try broader search terms', 'Check spelling', 'Remove searchText to see all goals']
+                ? [
+                      'Try broader search terms',
+                      'Check spelling',
+                      'Remove searchText to see all goals',
+                  ]
                 : ['No goals exist yet', `Use ${ToolNames.ADD_GOALS} to create goals`],
         })
 

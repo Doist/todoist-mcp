@@ -5,7 +5,10 @@ import { summarizeBatch } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const ArgsSchema = {
-    ids: z.array(z.string().min(1)).min(1).describe('The IDs of the goals to complete or uncomplete.'),
+    ids: z
+        .array(z.string().min(1))
+        .min(1)
+        .describe('The IDs of the goals to complete or uncomplete.'),
     action: z
         .enum(['complete', 'uncomplete'])
         .describe('Whether to complete or uncomplete the goals.'),

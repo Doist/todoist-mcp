@@ -8,7 +8,9 @@ const GoalInputSchema = z.object({
     workspaceId: z
         .string()
         .optional()
-        .describe('Workspace ID. If provided, creates a workspace goal. If omitted, creates a personal goal.'),
+        .describe(
+            'Workspace ID. If provided, creates a workspace goal. If omitted, creates a personal goal.',
+        ),
     description: z.string().optional().describe('The description of the goal.'),
     deadline: z.string().optional().describe('The target date (YYYY-MM-DD).'),
     responsibleUid: z.string().optional().describe('The user ID responsible for this goal.'),

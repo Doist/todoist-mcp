@@ -110,7 +110,7 @@ const fetchObject = {
                         progress: goal.progress,
                     }
                     return {
-                        textContent: `Found goal: ${mappedGoal.name} • id=${mappedGoal.id} • progress=${mappedGoal.progress.percentage}%`,
+                        textContent: `Found goal: ${mappedGoal.name} • id=${mappedGoal.id} • progress=${mappedGoal.progress?.percentage ?? 0}%`,
                         structuredContent: {
                             type,
                             id,

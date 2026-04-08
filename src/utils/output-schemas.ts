@@ -208,10 +208,11 @@ const GoalSchema = z.object({
     isCompleted: z.boolean().describe('Whether the goal is completed.'),
     progress: z
         .object({
-            totalItemCount: z.number(),
-            completedItemCount: z.number(),
+            totalTaskCount: z.number(),
+            completedTaskCount: z.number(),
             percentage: z.number(),
         })
+        .optional()
         .describe('Progress of linked tasks.'),
 })
 
