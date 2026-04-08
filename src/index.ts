@@ -8,21 +8,18 @@ import {
 import { addComments } from './tools/add-comments.js'
 // Filter management tools
 import { addFilters } from './tools/add-filters.js'
+// Goal management tools
+import { addGoals } from './tools/add-goals.js'
 // Label management tools
 import { addLabels } from './tools/add-labels.js'
 // Project management tools
 import { addProjects } from './tools/add-projects.js'
-// Goal management tools
-import { addGoals } from './tools/add-goals.js'
-import { completeGoals } from './tools/complete-goals.js'
-import { findGoals } from './tools/find-goals.js'
-import { linkGoalTasks } from './tools/link-goal-tasks.js'
-import { updateGoals } from './tools/update-goals.js'
 // Section management tools
 import { addSections } from './tools/add-sections.js'
 // Task management tools
 import { addTasks } from './tools/add-tasks.js'
 import { analyzeProjectHealth } from './tools/analyze-project-health.js'
+import { completeGoals } from './tools/complete-goals.js'
 import { completeTasks } from './tools/complete-tasks.js'
 // General tools
 import { deleteObject } from './tools/delete-object.js'
@@ -32,6 +29,7 @@ import { findActivity } from './tools/find-activity.js'
 import { findComments } from './tools/find-comments.js'
 import { findCompletedTasks } from './tools/find-completed-tasks.js'
 import { findFilters } from './tools/find-filters.js'
+import { findGoals } from './tools/find-goals.js'
 import { findLabels } from './tools/find-labels.js'
 // Assignment and collaboration tools
 import { findProjectCollaborators } from './tools/find-project-collaborators.js'
@@ -44,6 +42,7 @@ import { getProductivityStats } from './tools/get-productivity-stats.js'
 import { getProjectActivityStats } from './tools/get-project-activity-stats.js'
 import { getProjectHealth } from './tools/get-project-health.js'
 import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
+import { linkGoalTasks } from './tools/link-goal-tasks.js'
 import { listWorkspaces } from './tools/list-workspaces.js'
 import { manageAssignments } from './tools/manage-assignments.js'
 import { reorderObjects } from './tools/reorder-objects.js'
@@ -52,6 +51,7 @@ import { search } from './tools/search.js'
 import { uncompleteTasks } from './tools/uncomplete-tasks.js'
 import { updateComments } from './tools/update-comments.js'
 import { updateFilters } from './tools/update-filters.js'
+import { updateGoals } from './tools/update-goals.js'
 import { updateLabels } from './tools/update-labels.js'
 import { updateProjects } from './tools/update-projects.js'
 import { updateSections } from './tools/update-sections.js'
