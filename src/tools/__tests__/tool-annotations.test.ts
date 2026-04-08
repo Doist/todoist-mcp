@@ -159,7 +159,7 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
     },
     {
         name: ToolNames.LINK_GOAL_TASKS,
-        title: 'Todoist: Link Goal Items',
+        title: 'Todoist: Link Goal Tasks',
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,
