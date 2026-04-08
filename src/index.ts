@@ -123,73 +123,74 @@ const tools = {
 }
 
 export {
-    // Comment management tools
-    addComments,
-    addFilters,
-    // Label management tools
-    addLabels,
-    // Project management tools
-    addProjects,
-    // Goal management tools
-    addGoals,
-    // Section management tools
-    addSections,
     // Task management tools
     addTasks,
-    analyzeProjectHealth,
-    completeGoals,
     completeTasks,
+    findTasks,
+    findTasksByDate,
+    findCompletedTasks,
+    rescheduleTasks,
+    // Project management tools
+    addProjects,
+    findProjects,
+    analyzeProjectHealth,
+    // Section management tools
+    addSections,
+    findSections,
+    // Goal management tools
+    addGoals,
+    completeGoals,
+    findGoals,
+    linkGoalTasks,
+    updateGoals,
+    // Comment management tools
+    addComments,
+    findComments,
+    // Label management tools
+    addLabels,
+    findLabels,
+    updateLabels,
+    // Filter management tools
+    addFilters,
+    findFilters,
+    // Activity and audit tools
+    findActivity,
+    getProductivityStats,
+    // Health and insights tools
+    getProjectHealth,
+    getProjectActivityStats,
+    getWorkspaceInsights,
+    // Assignment and collaboration tools
+    findProjectCollaborators,
+    manageAssignments,
+    // Workspace tools
+    listWorkspaces,
+    // Attachment tools
+    viewAttachment,
+    // General tools
     deleteObject,
+    getOverview,
+    reorderObjects,
+    userInfo,
+    uncompleteTasks,
+    updateComments,
+    updateFilters,
+    updateProjects,
+    updateSections,
+    updateTasks,
+    // OpenAI MCP tools
+    search,
+    fetch,
+    // Server and types
+    getMcpServer,
+    tools,
     FEATURE_NAMES,
     type Feature,
     type FeatureName,
     type Features,
-    fetch,
-    // Activity and audit tools
-    findActivity,
-    findComments,
-    findCompletedTasks,
-    // Filter management tools
-    findFilters,
-    findGoals,
-    findLabels,
-    // Assignment and collaboration tools
-    findProjectCollaborators,
-    findProjects,
-    findSections,
-    findTasks,
-    findTasksByDate,
-    getMcpServer,
-    // General tools
-    getOverview,
-    getProductivityStats,
-    getProjectActivityStats,
-    // Health and insights tools
-    getProjectHealth,
-    getWorkspaceInsights,
-    linkGoalTasks,
-    // Workspace tools
-    listWorkspaces,
-    manageAssignments,
-    reorderObjects,
     // Token validation middleware
     requireValidTodoistToken,
     type RequireValidTodoistTokenOptions,
-    rescheduleTasks,
-    // OpenAI MCP tools
-    search,
-    tools,
-    uncompleteTasks,
-    updateComments,
-    updateFilters,
-    updateGoals,
-    updateLabels,
-    updateProjects,
-    updateSections,
-    updateTasks,
-    userInfo,
     // Token validation utility
     validateTodoistToken,
-    // Attachment tools
-    viewAttachment,
 }
