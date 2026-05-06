@@ -37,7 +37,7 @@ const updateSections = {
         return {
             textContent,
             structuredContent: {
-                sections: updatedSections,
+                sections: updatedSections.map(({ id, name }) => ({ id, name })),
                 totalCount: updatedSections.length,
                 updatedSectionIds: updatedSections.map((section) => section.id),
             },

@@ -56,7 +56,7 @@ const addSections = {
         return {
             textContent,
             structuredContent: {
-                sections: newSections,
+                sections: newSections.map(({ id, name }) => ({ id, name })),
                 totalCount: newSections.length,
             },
         }
