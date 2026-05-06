@@ -72,6 +72,16 @@ const SectionSchema = z.object({
     name: z.string().describe('The name of the section.'),
 })
 
+type SectionSummary = z.infer<typeof SectionSchema>
+
+/**
+ * Strip an SDK Section (or any object with id/name) down to the fields
+ * declared in SectionSchema. Keeps tool responses aligned with the schema.
+ */
+function toSectionSummary({ id, name }: SectionSummary): SectionSummary {
+    return { id, name }
+}
+
 /**
  * Schema for a file attachment in a comment
  */
@@ -203,5 +213,7 @@ export {
     ProjectSchema,
     ReminderSchema,
     SectionSchema,
+    type SectionSummary,
     TaskSchema,
+    toSectionSummary,
 }

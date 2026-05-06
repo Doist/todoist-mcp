@@ -8,7 +8,7 @@ import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { mapTask, type Project } from '../tool-helpers.js'
 import { ApiLimits } from '../utils/constants.js'
-import { SectionSchema } from '../utils/output-schemas.js'
+import { SectionSchema, type SectionSummary, toSectionSummary } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const ArgsSchema = {
@@ -234,12 +234,6 @@ function renderTaskTreeMarkdown(tasks: TaskTreeNode[], indent = ''): string[] {
     return lines
 }
 
-type SectionSummary = z.infer<typeof SectionSchema>
-
-function toSectionSummaries(sections: Section[]): SectionSummary[] {
-    return sections.map(({ id, name }) => ({ id, name }))
-}
-
 type ProjectStructure = {
     id: string
     name: string
@@ -288,7 +282,7 @@ function buildProjectStructure(
         parentId: isPersonalProject(project) ? (project.parentId ?? undefined) : undefined,
         folderId: isWorkspaceProject(project) ? (project.folderId ?? undefined) : undefined,
         childOrder: project.childOrder,
-        sections: toSectionSummaries(sectionsByProject[project.id] || []),
+        sections: (sectionsByProject[project.id] || []).map(toSectionSummary),
         children: project.children.map((child: ProjectWithChildren) =>
             buildProjectStructure(child, sectionsByProject),
         ),
@@ -358,7 +352,7 @@ async function generateAccountOverview(
             ? {
                   id: inbox.id,
                   name: inbox.name,
-                  sections: toSectionSummaries(sectionsByProject[inbox.id] || []),
+                  sections: (sectionsByProject[inbox.id] || []).map(toSectionSummary),
               }
             : null,
         projects: tree.map((project) =>
@@ -424,7 +418,7 @@ async function generateProjectOverview(
             id: project.id,
             name: project.name,
         },
-        sections: toSectionSummaries(sections),
+        sections: sections.map(toSectionSummary),
         tasks: allTasks.map((task) => ({
             ...task,
             children: [], // Tasks already include hierarchical info via parentId
