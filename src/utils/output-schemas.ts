@@ -1,4 +1,4 @@
-import { LOCATION_TRIGGERS, REMINDER_TYPES } from '@doist/todoist-sdk'
+import { LOCATION_TRIGGERS, REMINDER_TYPES, type Section } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import { ColorOutputSchema } from './colors.js'
 import { PrioritySchema } from './priorities.js'
@@ -78,7 +78,7 @@ type SectionSummary = z.infer<typeof SectionSchema>
  * Strip an SDK Section (or any object with id/name) down to the fields
  * declared in SectionSchema. Keeps tool responses aligned with the schema.
  */
-function toSectionSummary({ id, name }: SectionSummary): SectionSummary {
+function toSectionSummary({ id, name }: Section): SectionSummary {
     return { id, name }
 }
 
