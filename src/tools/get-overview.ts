@@ -8,6 +8,7 @@ import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { mapTask, type Project } from '../tool-helpers.js'
 import { ApiLimits } from '../utils/constants.js'
+import { SectionSchema, type SectionSummary, toSectionSummary } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const ArgsSchema = {
@@ -86,14 +87,7 @@ const OutputSchema = {
         .object({
             id: z.string().describe('The inbox project ID.'),
             name: z.string().describe('The inbox project name.'),
-            sections: z
-                .array(
-                    z.object({
-                        id: z.string(),
-                        name: z.string(),
-                    }),
-                )
-                .describe('Sections in the inbox project.'),
+            sections: z.array(SectionSchema).describe('Sections in the inbox project.'),
         })
         .nullable()
         .optional()
@@ -112,12 +106,7 @@ const OutputSchema = {
         .optional()
         .describe('Project details (project overview only).'),
     sections: z
-        .array(
-            z.object({
-                id: z.string(),
-                name: z.string(),
-            }),
-        )
+        .array(SectionSchema)
         .optional()
         .describe('List of sections (project overview only).'),
     tasks: z.array(z.any()).optional().describe('List of tasks (project overview only).'),
@@ -251,7 +240,7 @@ type ProjectStructure = {
     parentId?: string
     folderId?: string
     childOrder: number
-    sections: Section[]
+    sections: SectionSummary[]
     children: ProjectStructure[]
 }
 
@@ -260,7 +249,7 @@ type AccountOverviewStructured = Record<string, unknown> & {
     inbox: {
         id: string
         name: string
-        sections: Section[]
+        sections: SectionSummary[]
     } | null
     projects: ProjectStructure[]
     totalProjects: number
@@ -274,7 +263,7 @@ type ProjectOverviewStructured = Record<string, unknown> & {
         id: string
         name: string
     }
-    sections: Section[]
+    sections: SectionSummary[]
     tasks: Array<ReturnType<typeof mapTask> & { children: never[] }>
     stats: {
         totalTasks: number
@@ -293,7 +282,7 @@ function buildProjectStructure(
         parentId: isPersonalProject(project) ? (project.parentId ?? undefined) : undefined,
         folderId: isWorkspaceProject(project) ? (project.folderId ?? undefined) : undefined,
         childOrder: project.childOrder,
-        sections: sectionsByProject[project.id] || [],
+        sections: (sectionsByProject[project.id] || []).map(toSectionSummary),
         children: project.children.map((child: ProjectWithChildren) =>
             buildProjectStructure(child, sectionsByProject),
         ),
@@ -363,7 +352,7 @@ async function generateAccountOverview(
             ? {
                   id: inbox.id,
                   name: inbox.name,
-                  sections: sectionsByProject[inbox.id] || [],
+                  sections: (sectionsByProject[inbox.id] || []).map(toSectionSummary),
               }
             : null,
         projects: tree.map((project) =>
@@ -429,7 +418,7 @@ async function generateProjectOverview(
             id: project.id,
             name: project.name,
         },
-        sections: sections,
+        sections: sections.map(toSectionSummary),
         tasks: allTasks.map((task) => ({
             ...task,
             children: [], // Tasks already include hierarchical info via parentId

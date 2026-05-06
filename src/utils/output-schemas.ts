@@ -1,4 +1,4 @@
-import { LOCATION_TRIGGERS, REMINDER_TYPES } from '@doist/todoist-sdk'
+import { LOCATION_TRIGGERS, REMINDER_TYPES, type Section } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import { ColorOutputSchema } from './colors.js'
 import { PrioritySchema } from './priorities.js'
@@ -71,6 +71,16 @@ const SectionSchema = z.object({
     id: z.string().describe('The unique ID of the section.'),
     name: z.string().describe('The name of the section.'),
 })
+
+type SectionSummary = z.infer<typeof SectionSchema>
+
+/**
+ * Strip an SDK Section (or any object with id/name) down to the fields
+ * declared in SectionSchema. Keeps tool responses aligned with the schema.
+ */
+function toSectionSummary({ id, name }: Section): SectionSummary {
+    return { id, name }
+}
 
 /**
  * Schema for a file attachment in a comment
@@ -203,5 +213,7 @@ export {
     ProjectSchema,
     ReminderSchema,
     SectionSchema,
+    type SectionSummary,
     TaskSchema,
+    toSectionSummary,
 }

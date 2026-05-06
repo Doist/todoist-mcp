@@ -2,7 +2,7 @@ import type { Section } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { isInboxProjectId, resolveInboxProjectId } from '../tool-helpers.js'
-import { SectionSchema as SectionOutputSchema } from '../utils/output-schemas.js'
+import { SectionSchema as SectionOutputSchema, toSectionSummary } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const SectionSchema = z.object({
@@ -56,7 +56,7 @@ const addSections = {
         return {
             textContent,
             structuredContent: {
-                sections: newSections,
+                sections: newSections.map(toSectionSummary),
                 totalCount: newSections.length,
             },
         }
