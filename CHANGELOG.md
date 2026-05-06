@@ -1,3 +1,9 @@
+## [8.12.1](https://github.com/Doist/todoist-ai/compare/v8.12.0...v8.12.1) (2026-05-06)
+
+### Bug Fixes
+
+* strip section response fields to match output schema ([#470](https://github.com/Doist/todoist-ai/issues/470)) ([7f65614](https://github.com/Doist/todoist-ai/commit/7f65614f3232f97e73c434bc19addf8e0def8d9d))
+
 ## [8.12.0](https://github.com/Doist/todoist-ai/compare/v8.11.1...v8.12.0) (2026-05-04)
 
 ### Features
