@@ -89,15 +89,22 @@ Then enable the server in Cursor settings if prompted.
 
 #### Claude Code (CLI)
 
-Firstly configure Claude so it has a new MCP available using this command:
+The fastest setup is the official Todoist plugin, which wires up the MCP server for you:
+
+```bash
+/plugin marketplace add doist/todoist-ai
+/plugin install todoist@doist
+```
+
+OAuth runs in your browser the first time you use a Todoist tool. See [Anthropic's plugin docs](https://code.claude.com/docs/en/plugins-reference) for more.
+
+If you'd rather configure the MCP server manually, run:
 
 ```bash
 claude mcp add --transport http todoist https://ai.todoist.net/mcp
 ```
 
-Then launch `claude`, execute `/mcp`, then select the `todoist` MCP server.
-
-This will take you through a wizard to authenticate using your browser with Todoist. Once complete you will be able to use todoist in `claude`.
+Then launch `claude`, execute `/mcp`, and select the `todoist` MCP server to authenticate.
 
 #### Visual Studio Code
 

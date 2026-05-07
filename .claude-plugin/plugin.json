@@ -1,0 +1,11 @@
+{
+    "name": "todoist",
+    "version": "8.12.1",
+    "description": "Todoist for Claude Code — manage tasks, projects, labels, and workflows from your terminal.",
+    "author": {
+        "name": "Doist",
+        "url": "https://doist.com"
+    },
+    "homepage": "https://github.com/doist/todoist-ai",
+    "repository": "https://github.com/doist/todoist-ai"
+}

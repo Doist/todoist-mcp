@@ -73,6 +73,7 @@
     "devDependencies": {
         "@modelcontextprotocol/inspector": "0.21.2",
         "@semantic-release/changelog": "6.0.3",
+        "@semantic-release/exec": "7.1.0",
         "@semantic-release/git": "10.0.1",
         "@types/dompurify": "3.2.0",
         "@types/express": "5.0.6",

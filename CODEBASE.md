@@ -20,7 +20,9 @@ TypeScript · ESM-only · Node 18+ · `zod` v4 for schemas · MCP SDK ≥1.25.
 ```
 /
 ├─ src/                   # All source. See tree below.
-├─ scripts/               # run-tool.ts (direct tool invocation), validate-schemas.ts, test-executable.cjs
+├─ scripts/               # run-tool.ts (direct tool invocation), validate-schemas.ts, test-executable.cjs, bump-plugin-version.mjs (semantic-release plugin manifest sync)
+├─ .claude-plugin/        # Claude Code plugin manifest (plugin.json) + marketplace entry (marketplace.json)
+├─ .mcp.json              # MCP server declaration consumed by the Claude Code plugin (HTTP transport → ai.todoist.net/mcp)
 ├─ dist/                  # Build output (Vite). Never edit.
 ├─ CLAUDE.md              # Prescriptive rules (schema design, testing, field clearing)
 ├─ AGENTS.md              # Fuller agent guidelines — includes the authoritative new-tool checklist
@@ -160,7 +162,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; imp
 - **Type-check:** `npm run type-check` (runs `tsc --noEmit`).
 - **Format/lint:** `npm run format:check` / `npm run format:fix` — uses **oxlint + oxfmt**, not eslint/prettier.
 - **Schema lint:** `npm run lint:schemas` — validates every tool's Zod schema via `scripts/validate-schemas.ts`. Runs automatically on `src/tools/*.ts` via lint-staged.
-- **Release:** `semantic-release` on merge to `main` (GitHub Actions). Commits must follow Conventional Commits — enforced by `check-semantic-pull-request.yml`.
+- **Release:** `semantic-release` on merge to `main` (GitHub Actions). Commits must follow Conventional Commits — enforced by `check-semantic-pull-request.yml`. The pipeline runs `scripts/bump-plugin-version.mjs` (via `@semantic-release/exec`) to keep `.claude-plugin/plugin.json` in lockstep with `package.json`; both files are committed back together.
 - **Husky:** `prepare` script installs Husky. Actual commit-time behavior is in `.husky/pre-commit`, which runs `lint-staged` then `npm run type-check`.
 
 ## Run a tool without MCP

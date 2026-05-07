@@ -1,0 +1,17 @@
+{
+    "name": "doist",
+    "owner": {
+        "name": "Doist",
+        "url": "https://doist.com"
+    },
+    "plugins": [
+        {
+            "name": "todoist",
+            "description": "Todoist for Claude Code — manage tasks, projects, labels, and workflows from your terminal.",
+            "source": {
+                "source": "url",
+                "url": "https://github.com/doist/todoist-ai.git"
+            }
+        }
+    ]
+}
