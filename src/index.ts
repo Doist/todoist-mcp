@@ -40,6 +40,7 @@ import { getProjectHealth } from './tools/get-project-health.js'
 import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
 import { listWorkspaces } from './tools/list-workspaces.js'
 import { manageAssignments } from './tools/manage-assignments.js'
+import { quickAddTask } from './tools/quick-add-task.js'
 import { reorderObjects } from './tools/reorder-objects.js'
 import { rescheduleTasks } from './tools/reschedule-tasks.js'
 import { search } from './tools/search.js'
@@ -57,6 +58,7 @@ import { validateTodoistToken } from './utils/validate-todoist-token.js'
 const tools = {
     // Task management tools
     addTasks,
+    quickAddTask,
     completeTasks,
     uncompleteTasks,
     updateTasks,
@@ -154,6 +156,7 @@ export {
     // Workspace tools
     listWorkspaces,
     manageAssignments,
+    quickAddTask,
     reorderObjects,
     // Token validation middleware
     requireValidTodoistToken,
