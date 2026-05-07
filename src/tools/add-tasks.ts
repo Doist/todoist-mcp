@@ -76,7 +76,7 @@ const OutputSchema = {
 const addTasks = {
     name: ToolNames.ADD_TASKS,
     description:
-        'Add one or more tasks to a project, section, or parent. Supports assignment to project collaborators.',
+        'Add one or more tasks (max 25 per call) using **structured fields** — content, description, priority, dueString, deadlineDate, duration, labels, projectId/sectionId/parentId, and responsibleUser. Use this for bulk creation, when you already have IDs, or when you need fields Quick Add does not support (deadlines, durations, explicit ID-based assignment). For a single user-typed natural-language task string (e.g. "Call mom tomorrow at 5pm #Personal p2"), prefer **quick-add-task**.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },

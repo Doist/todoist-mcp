@@ -31,7 +31,7 @@ const OutputSchema = {
 const quickAddTask = {
     name: ToolNames.QUICK_ADD_TASK,
     description:
-        'Create a single task using Todoist\'s natural-language quick-add syntax. The full task (content, due date, priority, labels, project, assignee) is parsed from a single text string — e.g. "Review PR tomorrow at 5pm #Work @urgent p1". Use add-tasks for structured/bulk creation.',
+        'Create a single task from one free-form natural-language string using Todoist\'s Quick Add parser — the same syntax users type into the Todoist app. Parses everything inline: due date ("tomorrow at 5pm", recurring like "every Monday"), priority ("p1"–"p4"), labels ("@label"), project ("#Project Name"), section ("/Section Name"), assignee ("+name" or "+email"), and description (text after " // "). Project/section/assignee are resolved by **name** from the string, not by ID. Use this for one-off, user-style capture (e.g. relaying a message the user typed verbatim). Use **add-tasks** instead when you have structured fields, IDs, multiple tasks (up to 25), a deadline, a duration, or need precise control over assignment validation.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
