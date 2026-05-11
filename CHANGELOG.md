@@ -1,3 +1,9 @@
+## [8.12.2](https://github.com/Doist/todoist-ai/compare/v8.12.1...v8.12.2) (2026-05-11)
+
+### Bug Fixes
+
+* **deps:** update dependency @doist/todoist-sdk to v10.1.1 ([#473](https://github.com/Doist/todoist-ai/issues/473)) ([8d945cc](https://github.com/Doist/todoist-ai/commit/8d945cc69329ee97994828b293a83266a7f0976d))
+
 ## [8.12.1](https://github.com/Doist/todoist-ai/compare/v8.12.0...v8.12.1) (2026-05-06)
 
 ### Bug Fixes
