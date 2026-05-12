@@ -55,9 +55,9 @@ export function buildUsageTrackingHeaders({
         'User-Agent': getUserAgent(),
         'doist-platform': platform,
         'doist-version': TODOIST_AI_VERSION,
-        'X-TD-Request-Id': randomUUID(),
-        'X-TD-Session-Id': sessionId,
-        'X-TD-MCP-Tool': normalizedLabel ?? 'unknown',
+        'request-id': randomUUID(),
+        'session-id': sessionId,
+        'mcp-tool': normalizedLabel ?? 'unknown',
     }
 }
 

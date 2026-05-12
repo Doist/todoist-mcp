@@ -28,15 +28,13 @@ describe('usage tracking', () => {
         expect(headers['User-Agent']).toMatch(/^todoist-ai\/\d+\.\d+\.\d+$/)
         expect(headers['doist-platform']).toBe('mcp')
         expect(headers['doist-version']).toMatch(/^\d+\.\d+\.\d+$/)
-        expect(headers['X-TD-Request-Id']).toBeTruthy()
-        expect(headers['X-TD-Session-Id']).toBe('session-123')
-        expect(headers['X-TD-MCP-Tool']).toBe('find-tasks')
+        expect(headers['request-id']).toBeTruthy()
+        expect(headers['session-id']).toBe('session-123')
+        expect(headers['mcp-tool']).toBe('find-tasks')
     })
 
     it('falls back to unknown when no tool context is set', () => {
-        expect(buildUsageTrackingHeaders({ sessionId: 'session-123' })['X-TD-MCP-Tool']).toBe(
-            'unknown',
-        )
+        expect(buildUsageTrackingHeaders({ sessionId: 'session-123' })['mcp-tool']).toBe('unknown')
     })
 
     it('injects tracking headers into sdk custom fetch requests', async () => {
@@ -75,10 +73,10 @@ describe('usage tracking', () => {
         expect(firstHeaders.authorization).toBe('Bearer token')
         expect(firstHeaders['doist-platform']).toBe('mcp')
         expect(firstHeaders['doist-version']).toMatch(/^\d+\.\d+\.\d+$/)
-        expect(firstHeaders['x-td-mcp-tool']).toBe('find-tasks')
-        expect(firstHeaders['x-td-session-id']).toBe('session-123')
-        expect(firstHeaders['x-td-session-id']).toBe(secondHeaders['x-td-session-id'])
-        expect(firstHeaders['x-td-request-id']).not.toBe(secondHeaders['x-td-request-id'])
+        expect(firstHeaders['mcp-tool']).toBe('find-tasks')
+        expect(firstHeaders['session-id']).toBe('session-123')
+        expect(firstHeaders['session-id']).toBe(secondHeaders['session-id'])
+        expect(firstHeaders['request-id']).not.toBe(secondHeaders['request-id'])
         expect(response.ok).toBe(true)
     })
 
@@ -86,7 +84,7 @@ describe('usage tracking', () => {
         const capturedSessionIds: string[] = []
         const captureFetch: typeof fetch = async (_url, options) => {
             const headers = new Headers(options?.headers)
-            const sessionId = headers.get('x-td-session-id')
+            const sessionId = headers.get('session-id')
             if (!sessionId) {
                 throw new Error('tracked fetch did not include the session header')
             }
@@ -109,7 +107,7 @@ describe('usage tracking', () => {
         const trackedFetch = createTrackedFetch(
             async (_url, options) => {
                 const headers = options?.headers as Record<string, string>
-                const toolName = headers['x-td-mcp-tool']
+                const toolName = headers['mcp-tool']
                 if (!toolName) {
                     throw new Error('tracked fetch did not include the MCP tool header')
                 }
@@ -283,7 +281,7 @@ describe('usage tracking', () => {
         const headers = new Headers(captured?.headers)
         expect(headers.get('authorization')).toBe('Bearer token')
         expect(headers.get('doist-platform')).toBeNull()
-        expect(headers.get('x-td-mcp-tool')).toBeNull()
-        expect(headers.get('x-td-session-id')).toBeNull()
+        expect(headers.get('mcp-tool')).toBeNull()
+        expect(headers.get('session-id')).toBeNull()
     })
 })
