@@ -195,6 +195,7 @@ function toCustomFetchResponse(response: Response): CustomFetchResponse {
         headers: Object.fromEntries(response.headers.entries()),
         text: () => response.text(),
         json: () => response.json(),
+        arrayBuffer: () => response.arrayBuffer(),
     }
 }
 
