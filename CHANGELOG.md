@@ -1,3 +1,9 @@
+## [8.12.3](https://github.com/Doist/todoist-ai/compare/v8.12.2...v8.12.3) (2026-05-13)
+
+### Bug Fixes
+
+* forward arrayBuffer on tracked-fetch wrapper for binary attachments ([#477](https://github.com/Doist/todoist-ai/issues/477)) ([c165788](https://github.com/Doist/todoist-ai/commit/c1657887d788ed78ecbfbc0f5903f635fc293ba6))
+
 ## [8.12.2](https://github.com/Doist/todoist-ai/compare/v8.12.1...v8.12.2) (2026-05-11)
 
 ### Bug Fixes
