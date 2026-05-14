@@ -5,8 +5,8 @@ import { dirname, join } from 'node:path'
 import { type CustomFetch, type CustomFetchResponse, TodoistApi } from '@doist/todoist-sdk'
 import packageJson from '../package.json' with { type: 'json' }
 
-const TODOIST_AI_NAME = 'todoist-ai'
-const TODOIST_AI_VERSION = packageJson.version
+const TODOIST_MCP_NAME = 'todoist-mcp'
+const TODOIST_MCP_VERSION = packageJson.version
 const toolContext = new AsyncLocalStorage<string>()
 const require = createRequire(import.meta.url)
 
@@ -29,7 +29,7 @@ const defaultDispatcherModuleLoader = async (): Promise<DispatcherModule> => {
 let dispatcherModuleLoader = defaultDispatcherModuleLoader
 
 function getUserAgent(): string {
-    return `${TODOIST_AI_NAME}/${TODOIST_AI_VERSION}`
+    return `${TODOIST_MCP_NAME}/${TODOIST_MCP_VERSION}`
 }
 
 export function normalizeUsageLabel(label: string): string {
@@ -54,7 +54,7 @@ export function buildUsageTrackingHeaders({
     return {
         'User-Agent': getUserAgent(),
         'doist-platform': platform,
-        'doist-version': TODOIST_AI_VERSION,
+        'doist-version': TODOIST_MCP_VERSION,
         'request-id': randomUUID(),
         'session-id': sessionId,
         'mcp-tool': normalizedLabel ?? 'unknown',
@@ -251,4 +251,4 @@ export function createTodoistClient(
     })
 }
 
-export { TODOIST_AI_VERSION }
+export { TODOIST_MCP_VERSION }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Schema Validation Script for Todoist AI MCP Server
+ * Schema Validation Script for Todoist MCP Server
  *
  * This script validates that all tool parameter schemas follow Gemini API compatibility rules.
  * Specifically, it checks that no Zod string schemas use both .nullable() and .optional().

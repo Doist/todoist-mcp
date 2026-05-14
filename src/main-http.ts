@@ -11,7 +11,7 @@
  * - TODOIST_BASE_URL: Optional. Custom Todoist API base URL.
  * - PORT: Optional. Server port (default: 3000).
  *
- * @see https://github.com/Doist/todoist-ai/issues/239
+ * @see https://github.com/Doist/todoist-mcp/issues/239
  */
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import dotenv from 'dotenv'

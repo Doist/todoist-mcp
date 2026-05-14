@@ -1,4 +1,4 @@
-# Todoist AI MCP Server - Development Guidelines
+# Todoist MCP Server - Development Guidelines
 
 ## Tool Schema Design Rules
 

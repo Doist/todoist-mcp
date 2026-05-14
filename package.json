@@ -1,13 +1,13 @@
 {
-    "name": "@doist/todoist-ai",
+    "name": "@doist/todoist-mcp",
     "version": "8.12.3",
     "type": "module",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "mcpName": "net.todoist/mcp",
     "bin": {
-        "todoist-ai": "dist/main.js",
-        "todoist-ai-http": "dist/main-http.js"
+        "todoist-mcp": "dist/main.js",
+        "todoist-mcp-http": "dist/main-http.js"
     },
     "files": [
         "dist",
@@ -18,13 +18,14 @@
         "README.md"
     ],
     "license": "MIT",
-    "description": "A collection of tools for Todoist using AI",
+    "description": "The official Todoist MCP server",
     "repository": {
         "type": "git",
-        "url": "https://github.com/Doist/todoist-ai"
+        "url": "https://github.com/Doist/todoist-mcp"
     },
     "keywords": [
         "todoist",
+        "mcp",
         "ai",
         "tools"
     ],

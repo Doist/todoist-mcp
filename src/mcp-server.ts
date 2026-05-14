@@ -54,7 +54,7 @@ import { updateSections } from './tools/update-sections.js'
 import { updateTasks } from './tools/update-tasks.js'
 import { userInfo } from './tools/user-info.js'
 import { viewAttachment } from './tools/view-attachment.js'
-import { TODOIST_AI_VERSION, createTodoistClient } from './usage-tracking.js'
+import { TODOIST_MCP_VERSION, createTodoistClient } from './usage-tracking.js'
 
 const instructions = `
 ## Todoist Task and Project Management Tools
@@ -172,7 +172,7 @@ function getMcpServer({
     features?: Features
 }) {
     const server = new McpServer(
-        { name: 'todoist-mcp-server', version: TODOIST_AI_VERSION },
+        { name: 'todoist-mcp-server', version: TODOIST_MCP_VERSION },
         {
             capabilities: {
                 tools: { listChanged: true },
