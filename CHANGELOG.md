@@ -1,3 +1,13 @@
+## [9.0.0](https://github.com/Doist/todoist-mcp/compare/v8.12.3...v9.0.0) (2026-05-14)
+
+### ⚠ BREAKING CHANGES
+
+* rename package to @doist/todoist-mcp (#479)
+
+### Features
+
+* rename package to @doist/todoist-mcp ([#479](https://github.com/Doist/todoist-mcp/issues/479)) ([2996e3c](https://github.com/Doist/todoist-mcp/commit/2996e3c6d9b81cadfe5f467b70afaf0ddd7d7e06))
+
 ## [8.12.3](https://github.com/Doist/todoist-ai/compare/v8.12.2...v8.12.3) (2026-05-13)
 
 ### Bug Fixes
