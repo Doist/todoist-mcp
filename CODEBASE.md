@@ -6,12 +6,12 @@
 
 ## What this project is
 
-`@doist/todoist-ai` is an **MCP (Model Context Protocol) server** that exposes
+`@doist/todoist-mcp` is an **MCP (Model Context Protocol) server** that exposes
 Todoist as tools for LLMs. It wraps `@doist/todoist-sdk` and publishes two
 binaries:
 
-- `todoist-ai` → `dist/main.js` — stdio MCP server (primary)
-- `todoist-ai-http` → `dist/main-http.js` — Express HTTP wrapper
+- `todoist-mcp` → `dist/main.js` — stdio MCP server (primary)
+- `todoist-mcp-http` → `dist/main-http.js` — Express HTTP wrapper
 
 TypeScript · ESM-only · Node 18+ · `zod` v4 for schemas · MCP SDK ≥1.25.
 

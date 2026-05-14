@@ -7,7 +7,7 @@ This document outlines the steps necessary to run this MCP server and connect to
 The easiest way to use this MCP server is with npx:
 
 ```bash
-npx @doist/todoist-ai
+npx @doist/todoist-mcp
 ```
 
 You'll need to set your Todoist API key as an environment variable `TODOIST_API_KEY`.
@@ -17,7 +17,7 @@ You'll need to set your Todoist API key as an environment variable `TODOIST_API_
 Start by cloning this repository and setting it up locally, if you haven't done so yet.
 
 ```sh
-git clone https://github.com/Doist/todoist-ai
+git clone https://github.com/Doist/todoist-mcp
 npm run setup
 ```
 
@@ -34,7 +34,7 @@ This will build the project and run the MCP inspector for manual testing.
 For convenience, we also include a function that initializes an MCP Server with all the tools available:
 
 ```js
-import { getMcpServer } from '@doist/todoist-ai'
+import { getMcpServer } from '@doist/todoist-mcp'
 
 async function main() {
     const server = getMcpServer({ todoistApiKey: process.env.TODOIST_API_KEY })
@@ -54,10 +54,10 @@ Add this section to your `mcp.json` config in Claude, Cursor, etc.:
 ```json
 {
     "mcpServers": {
-        "todoist-ai": {
+        "todoist-mcp": {
             "type": "stdio",
             "command": "npx",
-            "args": ["@doist/todoist-ai"],
+            "args": ["@doist/todoist-mcp"],
             "env": {
                 "TODOIST_API_KEY": "your-todoist-token-here"
             }
@@ -68,15 +68,15 @@ Add this section to your `mcp.json` config in Claude, Cursor, etc.:
 
 ### Using local installation
 
-Add this `todoist-ai-tools` section to your `mcp.json` config in Cursor, Claude, Raycast, etc.
+Add this `todoist-mcp-local` section to your `mcp.json` config in Cursor, Claude, Raycast, etc.
 
 ```json
 {
     "mcpServers": {
-        "todoist-ai-tools": {
+        "todoist-mcp-local": {
             "type": "stdio",
             "command": "node",
-            "args": ["/Users/<your_user_name>/code/todoist-ai-tools/dist/main.js"],
+            "args": ["/Users/<your_user_name>/code/todoist-mcp/dist/main.js"],
             "env": {
                 "TODOIST_API_KEY": "your-todoist-token-here"
             }
@@ -95,19 +95,19 @@ Update the configuration above as follows
 
 ## Using Streamable HTTP Server Transport
 
-You can run the MCP server as an HTTP service with configurable session timeouts. This is useful as an alternative to the hosted service at `ai.todoist.net/mcp`, especially if you experience frequent session disconnections ([#239](https://github.com/Doist/todoist-ai/issues/239)).
+You can run the MCP server as an HTTP service with configurable session timeouts. This is useful as an alternative to the hosted service at `ai.todoist.net/mcp`, especially if you experience frequent session disconnections ([#239](https://github.com/Doist/todoist-mcp/issues/239)).
 
 ### Quick Start with npx
 
 ```bash
 # Default: 30 minute session timeout
-TODOIST_API_KEY=your-key npx -p @doist/todoist-ai todoist-ai-http
+TODOIST_API_KEY=your-key npx -p @doist/todoist-mcp todoist-mcp-http
 
 # Custom timeout: 1 hour (3600000ms)
-TODOIST_API_KEY=your-key SESSION_TIMEOUT_MS=3600000 npx -p @doist/todoist-ai todoist-ai-http
+TODOIST_API_KEY=your-key SESSION_TIMEOUT_MS=3600000 npx -p @doist/todoist-mcp todoist-mcp-http
 
 # Custom port
-TODOIST_API_KEY=your-key PORT=8080 npx -p @doist/todoist-ai todoist-ai-http
+TODOIST_API_KEY=your-key PORT=8080 npx -p @doist/todoist-mcp todoist-mcp-http
 ```
 
 ### Running from Source

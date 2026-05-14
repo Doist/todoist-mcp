@@ -18,7 +18,7 @@ describe('Claude Code plugin manifests', () => {
         expect(plugin.version).toBe(pkg.version)
         expect(plugin.description).toMatch(/Todoist/)
         expect(plugin.author?.name).toBe('Doist')
-        expect(plugin.repository).toMatch(/todoist-ai/)
+        expect(plugin.repository).toMatch(/todoist-mcp/)
     })
 
     it('marketplace.json wires the todoist plugin to this repo', () => {
@@ -29,7 +29,7 @@ describe('Claude Code plugin manifests', () => {
         const [plugin] = marketplace.plugins
         expect(plugin.name).toBe('todoist')
         expect(plugin.source.source).toBe('url')
-        expect(plugin.source.url).toMatch(/todoist-ai/)
+        expect(plugin.source.url).toMatch(/todoist-mcp/)
     })
 
     it('.mcp.json declares the HTTP transport for the remote server', () => {

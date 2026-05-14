@@ -1,4 +1,6 @@
-# Todoist AI and MCP SDK
+# Todoist MCP Server
+
+> **Note:** This package was previously named `@doist/todoist-ai`. The old name continues to work as a thin shim that re-exports from `@doist/todoist-mcp`, but new installs should use `@doist/todoist-mcp` directly.
 
 Library for connecting AI agents to Todoist. Includes tools that can be integrated into LLMs,
 enabling them to access and modify a Todoist account on the user's behalf.
@@ -11,7 +13,7 @@ integrate them to your own AI conversational interfaces.
 ### 1. Add this repository as a dependency
 
 ```sh
-npm install @doist/todoist-ai
+npm install @doist/todoist-mcp
 ```
 
 ### 2. Import the tools and plug them to an AI
@@ -19,7 +21,7 @@ npm install @doist/todoist-ai
 Here's an example using [Vercel's AI SDK](https://ai-sdk.dev/docs/ai-sdk-core/generating-text#streamtext).
 
 ```js
-import { findTasksByDate, addTasks } from '@doist/todoist-ai'
+import { findTasksByDate, addTasks } from '@doist/todoist-mcp'
 import { TodoistApi } from '@doist/todoist-sdk'
 import { streamText } from 'ai'
 
@@ -53,12 +55,12 @@ const result = streamText({
 You can run the MCP server directly with npx:
 
 ```bash
-npx @doist/todoist-ai
+npx @doist/todoist-mcp
 ```
 
 ### Setup Guide
 
-The Todoist AI MCP server is available as a streamable HTTP service for easy integration with various AI clients:
+The Todoist MCP server is available as a streamable HTTP service for easy integration with various AI clients:
 
 **Primary URL (Streamable HTTP):** `https://ai.todoist.net/mcp`
 
@@ -92,7 +94,7 @@ Then enable the server in Cursor settings if prompted.
 The fastest setup is the official Todoist plugin, which wires up the MCP server for you:
 
 ```bash
-/plugin marketplace add doist/todoist-ai
+/plugin marketplace add doist/todoist-mcp
 /plugin install todoist@doist
 ```
 

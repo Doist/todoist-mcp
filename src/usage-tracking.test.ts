@@ -25,7 +25,7 @@ describe('usage tracking', () => {
             buildUsageTrackingHeaders({ sessionId: 'session-123' }),
         )
 
-        expect(headers['User-Agent']).toMatch(/^todoist-ai\/\d+\.\d+\.\d+$/)
+        expect(headers['User-Agent']).toMatch(/^todoist-mcp\/\d+\.\d+\.\d+$/)
         expect(headers['doist-platform']).toBe('mcp')
         expect(headers['doist-version']).toMatch(/^\d+\.\d+\.\d+$/)
         expect(headers['request-id']).toBeTruthy()

@@ -1,4 +1,4 @@
-# Todoist AI MCP Server - Development Guidelines
+# Todoist MCP Server - Development Guidelines
 
 > For repo structure, architecture, shared utilities, and where things live, read [`CODEBASE.md`](./CODEBASE.md) first. This file covers the _rules_; CODEBASE.md is the _map_.
 

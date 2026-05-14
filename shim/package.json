@@ -1,0 +1,35 @@
+{
+    "name": "@doist/todoist-ai",
+    "version": "9.0.0",
+    "description": "DEPRECATED: renamed to @doist/todoist-mcp. Install @doist/todoist-mcp instead.",
+    "type": "module",
+    "main": "./index.mjs",
+    "types": "./index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./index.d.ts",
+            "import": "./index.mjs"
+        }
+    },
+    "bin": {
+        "todoist-ai": "./bin/todoist-ai.js",
+        "todoist-ai-http": "./bin/todoist-ai-http.js"
+    },
+    "files": [
+        "index.mjs",
+        "index.d.ts",
+        "bin",
+        "README.md"
+    ],
+    "license": "MIT",
+    "dependencies": {
+        "@doist/todoist-mcp": "^9.0.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Doist/todoist-mcp"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}
