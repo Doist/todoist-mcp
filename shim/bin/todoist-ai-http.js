@@ -1,4 +1,4 @@
 #!/usr/bin/env node
-import { runEntry } from './_launcher.js'
+import { runBin } from './_launcher.js'
 
-await runEntry('main-http.js')
+await runBin('todoist-mcp-http')
