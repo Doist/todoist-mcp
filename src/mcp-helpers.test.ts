@@ -1,5 +1,46 @@
+import type { ContentBlock } from '@modelcontextprotocol/sdk/types.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { registerTool, stripEmailsFromObject, stripEmailsFromText } from './mcp-helpers.js'
+
+type RegisterToolArgs = Parameters<typeof registerTool>[0]
+type ToolFixture = RegisterToolArgs['tool']
+
+/**
+ * Build a minimal `TodoistTool` fixture for `registerTool` tests. Returns a
+ * shared scaffold (parameters, annotations, server/client casts) so individual
+ * tests only have to specify the bits they actually exercise.
+ */
+function buildToolFixture(overrides: {
+    name?: string
+    description?: string
+    outputSchema?: Record<string, unknown>
+    execute: ToolFixture['execute']
+}): ToolFixture {
+    const { name = 'test-tool', description = 'Test tool', outputSchema, execute } = overrides
+
+    return {
+        name,
+        description,
+        parameters: {},
+        ...(outputSchema ? { outputSchema } : {}),
+        annotations: {
+            readOnlyHint: true,
+            destructiveHint: false,
+            idempotentHint: true,
+        },
+        execute,
+    } as unknown as ToolFixture
+}
+
+/**
+ * Capture the callback `registerTool` registers with the MCP server.
+ */
+function captureRegisterToolMock() {
+    const mock = vi.fn()
+    const server = { registerTool: mock } as unknown as RegisterToolArgs['server']
+    const client = {} as RegisterToolArgs['client']
+    return { mock, server, client }
+}
 
 describe('stripEmailsFromObject', () => {
     it.each([
@@ -54,74 +95,50 @@ describe('stripEmailsFromText', () => {
 
 describe('registerTool config', () => {
     it('omits outputSchema when the tool does not declare one', () => {
-        const registerToolMock = vi.fn()
+        const { mock, server, client } = captureRegisterToolMock()
 
         registerTool({
-            tool: {
+            tool: buildToolFixture({
                 name: 'no-schema-tool',
                 description: 'Tool without output schema',
-                parameters: {},
-                annotations: {
-                    readOnlyHint: true,
-                    destructiveHint: false,
-                    idempotentHint: true,
-                },
                 execute: async () => ({ textContent: 'ok' }),
-            },
-            server: {
-                registerTool: registerToolMock,
-            } as unknown as Parameters<typeof registerTool>[0]['server'],
-            client: {} as Parameters<typeof registerTool>[0]['client'],
+            }),
+            server,
+            client,
         })
 
-        expect(registerToolMock).toHaveBeenCalledTimes(1)
-        const config = registerToolMock.mock.calls[0]?.[1] as Record<string, unknown>
+        expect(mock).toHaveBeenCalledTimes(1)
+        const config = mock.mock.calls[0]?.[1] as Record<string, unknown>
         expect(Object.hasOwn(config, 'outputSchema')).toBe(false)
     })
 
     it('includes outputSchema when the tool declares one', () => {
-        const registerToolMock = vi.fn()
+        const { mock, server, client } = captureRegisterToolMock()
         const outputSchema = {}
 
         registerTool({
-            tool: {
+            tool: buildToolFixture({
                 name: 'schema-tool',
                 description: 'Tool with output schema',
-                parameters: {},
                 outputSchema,
-                annotations: {
-                    readOnlyHint: true,
-                    destructiveHint: false,
-                    idempotentHint: true,
-                },
                 execute: async () => ({ textContent: 'ok' }),
-            },
-            server: {
-                registerTool: registerToolMock,
-            } as unknown as Parameters<typeof registerTool>[0]['server'],
-            client: {} as Parameters<typeof registerTool>[0]['client'],
+            }),
+            server,
+            client,
         })
 
-        const config = registerToolMock.mock.calls[0]?.[1] as Record<string, unknown>
+        const config = mock.mock.calls[0]?.[1] as Record<string, unknown>
         expect(config.outputSchema).toBe(outputSchema)
     })
 })
 
 describe('registerTool error path', () => {
     it('applies centralized API formatting in MCP callback errors', async () => {
-        const registerToolMock = vi.fn()
+        const { mock, server, client } = captureRegisterToolMock()
 
         registerTool({
-            tool: {
-                name: 'test-tool',
-                description: 'Test tool',
-                parameters: {},
+            tool: buildToolFixture({
                 outputSchema: {},
-                annotations: {
-                    readOnlyHint: true,
-                    destructiveHint: false,
-                    idempotentHint: true,
-                },
                 execute: async () => {
                     throw {
                         httpStatusCode: 500,
@@ -130,16 +147,14 @@ describe('registerTool error path', () => {
                         },
                     }
                 },
-            },
-            server: {
-                registerTool: registerToolMock,
-            } as unknown as Parameters<typeof registerTool>[0]['server'],
-            client: {} as Parameters<typeof registerTool>[0]['client'],
+            }),
+            server,
+            client,
         })
 
-        expect(registerToolMock).toHaveBeenCalledTimes(1)
+        expect(mock).toHaveBeenCalledTimes(1)
 
-        const callback = registerToolMock.mock.calls[0]?.[2] as (
+        const callback = mock.mock.calls[0]?.[2] as (
             args: Record<string, unknown>,
             context: unknown,
         ) => Promise<{
@@ -163,49 +178,43 @@ describe('registerTool content ordering', () => {
         vi.resetModules()
     })
 
-    async function invokeCallback({
-        textContent,
-        structuredContent,
-    }: {
+    type InvokeArgs = {
         textContent?: string
         structuredContent?: Record<string, unknown>
-    }) {
+        contentItems?: ContentBlock[]
+    }
+
+    async function invokeCallback({ textContent, structuredContent, contentItems }: InvokeArgs) {
+        // resetModules() before the import so the freshly-stubbed env vars
+        // are read at module evaluation (the USE_STRUCTURED_CONTENT and
+        // NODE_ENV checks both run at import time).
         vi.resetModules()
         const { registerTool: registerToolFresh } = await import('./mcp-helpers.js')
-        const registerToolMock = vi.fn()
+        const { mock, server, client } = captureRegisterToolMock()
 
         registerToolFresh({
-            tool: {
+            tool: buildToolFixture({
                 name: 'ordering-tool',
-                description: 'Tool for ordering tests',
-                parameters: {},
                 outputSchema: {},
-                annotations: {
-                    readOnlyHint: true,
-                    destructiveHint: false,
-                    idempotentHint: true,
-                },
-                execute: async () => ({ textContent, structuredContent }),
-            } as unknown as Parameters<typeof registerToolFresh>[0]['tool'],
-            server: {
-                registerTool: registerToolMock,
-            } as unknown as Parameters<typeof registerToolFresh>[0]['server'],
-            client: {} as Parameters<typeof registerToolFresh>[0]['client'],
+                execute: async () => ({ textContent, structuredContent, contentItems }),
+            }),
+            server,
+            client,
         })
 
-        const callback = registerToolMock.mock.calls[0]?.[2] as (
+        const callback = mock.mock.calls[0]?.[2] as (
             args: Record<string, unknown>,
             context: unknown,
         ) => Promise<{
-            content?: Array<{ type: string; text: string }>
+            content?: ContentBlock[]
             structuredContent?: Record<string, unknown>
         }>
 
         return callback({}, {})
     }
 
-    it('puts stringified JSON first and human summary last when legacy content mode is on', async () => {
-        // Simulate production default: USE_STRUCTURED_CONTENT unset, NODE_ENV != 'test'
+    it('puts stringified JSON first and human summary last in legacy content mode', async () => {
+        // Simulate production default: USE_STRUCTURED_CONTENT unset, NODE_ENV != 'test'.
         vi.stubEnv('NODE_ENV', 'production')
         vi.stubEnv('USE_STRUCTURED_CONTENT', '')
 
@@ -216,20 +225,55 @@ describe('registerTool content ordering', () => {
         })
 
         expect(output.structuredContent).toEqual(structuredContent)
-        expect(output.content).toBeDefined()
         const content = output.content ?? []
-        expect(content.length).toBe(2)
+        expect(content).toHaveLength(2)
 
         // content[0] is the stringified JSON — surfaces to clients that only
         // read the first block (e.g. OpenAI Responses API).
-        expect(content[0]?.type).toBe('text')
-        expect(JSON.parse(content[0]?.text ?? '')).toEqual(structuredContent)
+        const first = content[0] as { type: string; text: string }
+        expect(first.type).toBe('text')
+        expect(JSON.parse(first.text)).toEqual(structuredContent)
 
         // Last block is the prose summary.
-        expect(content[content.length - 1]?.text).toBe('Tasks matching filter: 1.')
+        const last = content[content.length - 1] as { type: string; text: string }
+        expect(last.text).toBe('Tasks matching filter: 1.')
+    })
+
+    it('keeps contentItems ahead of the JSON dup and summary in legacy content mode', async () => {
+        // Same production-default env: USE_STRUCTURED_CONTENT off, not in test mode.
+        vi.stubEnv('NODE_ENV', 'production')
+        vi.stubEnv('USE_STRUCTURED_CONTENT', '')
+
+        const structuredContent = { fileName: 'attachment.png' }
+        const image: ContentBlock = {
+            type: 'image',
+            data: 'base64data',
+            mimeType: 'image/png',
+        }
+
+        const output = await invokeCallback({
+            textContent: 'Attachment: attachment.png',
+            structuredContent,
+            contentItems: [image],
+        })
+
+        const content = output.content ?? []
+        expect(content).toHaveLength(3)
+
+        // Order: tool-authored contentItem first, then JSON dup, then prose summary.
+        expect(content[0]).toEqual(image)
+        const json = content[1] as { type: string; text: string }
+        expect(json.type).toBe('text')
+        expect(JSON.parse(json.text)).toEqual(structuredContent)
+        const summary = content[2] as { type: string; text: string }
+        expect(summary.text).toBe('Attachment: attachment.png')
     })
 
     it('omits the JSON dup block when USE_STRUCTURED_CONTENT mode is on', async () => {
+        // Stub NODE_ENV explicitly so the assertion exercises the env-flag
+        // branch (USE_STRUCTURED_CONTENT='true') rather than relying on the
+        // vitest default of NODE_ENV='test', which also enables the branch.
+        vi.stubEnv('NODE_ENV', 'production')
         vi.stubEnv('USE_STRUCTURED_CONTENT', 'true')
 
         const structuredContent = { tasks: [], totalCount: 0 }
@@ -240,7 +284,8 @@ describe('registerTool content ordering', () => {
 
         expect(output.structuredContent).toEqual(structuredContent)
         const content = output.content ?? []
-        expect(content.length).toBe(1)
-        expect(content[0]?.text).toBe('No tasks.')
+        expect(content).toHaveLength(1)
+        const only = content[0] as { type: string; text: string }
+        expect(only.text).toBe('No tasks.')
     })
 })
