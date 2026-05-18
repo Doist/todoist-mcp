@@ -1,3 +1,4 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { registerTool, stripEmailsFromObject, stripEmailsFromText } from './mcp-helpers.js'
 
 describe('stripEmailsFromObject', () => {
@@ -153,5 +154,93 @@ describe('registerTool error path', () => {
         expect(output.content[0]?.text).toContain(
             'Try next: Todoist API may be temporarily unavailable. Retry shortly.',
         )
+    })
+})
+
+describe('registerTool content ordering', () => {
+    afterEach(() => {
+        vi.unstubAllEnvs()
+        vi.resetModules()
+    })
+
+    async function invokeCallback({
+        textContent,
+        structuredContent,
+    }: {
+        textContent?: string
+        structuredContent?: Record<string, unknown>
+    }) {
+        vi.resetModules()
+        const { registerTool: registerToolFresh } = await import('./mcp-helpers.js')
+        const registerToolMock = vi.fn()
+
+        registerToolFresh({
+            tool: {
+                name: 'ordering-tool',
+                description: 'Tool for ordering tests',
+                parameters: {},
+                outputSchema: {},
+                annotations: {
+                    readOnlyHint: true,
+                    destructiveHint: false,
+                    idempotentHint: true,
+                },
+                execute: async () => ({ textContent, structuredContent }),
+            } as unknown as Parameters<typeof registerToolFresh>[0]['tool'],
+            server: {
+                registerTool: registerToolMock,
+            } as unknown as Parameters<typeof registerToolFresh>[0]['server'],
+            client: {} as Parameters<typeof registerToolFresh>[0]['client'],
+        })
+
+        const callback = registerToolMock.mock.calls[0]?.[2] as (
+            args: Record<string, unknown>,
+            context: unknown,
+        ) => Promise<{
+            content?: Array<{ type: string; text: string }>
+            structuredContent?: Record<string, unknown>
+        }>
+
+        return callback({}, {})
+    }
+
+    it('puts stringified JSON first and human summary last when legacy content mode is on', async () => {
+        // Simulate production default: USE_STRUCTURED_CONTENT unset, NODE_ENV != 'test'
+        vi.stubEnv('NODE_ENV', 'production')
+        vi.stubEnv('USE_STRUCTURED_CONTENT', '')
+
+        const structuredContent = { tasks: [{ id: '1', title: 'Buy milk' }], totalCount: 1 }
+        const output = await invokeCallback({
+            textContent: 'Tasks matching filter: 1.',
+            structuredContent,
+        })
+
+        expect(output.structuredContent).toEqual(structuredContent)
+        expect(output.content).toBeDefined()
+        const content = output.content ?? []
+        expect(content.length).toBe(2)
+
+        // content[0] is the stringified JSON — surfaces to clients that only
+        // read the first block (e.g. OpenAI Responses API).
+        expect(content[0]?.type).toBe('text')
+        expect(JSON.parse(content[0]?.text ?? '')).toEqual(structuredContent)
+
+        // Last block is the prose summary.
+        expect(content[content.length - 1]?.text).toBe('Tasks matching filter: 1.')
+    })
+
+    it('omits the JSON dup block when USE_STRUCTURED_CONTENT mode is on', async () => {
+        vi.stubEnv('USE_STRUCTURED_CONTENT', 'true')
+
+        const structuredContent = { tasks: [], totalCount: 0 }
+        const output = await invokeCallback({
+            textContent: 'No tasks.',
+            structuredContent,
+        })
+
+        expect(output.structuredContent).toEqual(structuredContent)
+        const content = output.content ?? []
+        expect(content.length).toBe(1)
+        expect(content[0]?.text).toBe('No tasks.')
     })
 })

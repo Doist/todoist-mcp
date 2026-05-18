@@ -92,8 +92,14 @@ function getToolOutput<StructuredContent extends Record<string, unknown>>({
 
     const contentArray: Array<Record<string, unknown>> = []
 
-    if (textContent) {
-        contentArray.push({ type: 'text' as const, text: textContent })
+    // Stringified JSON goes first so clients that only surface content[0]
+    // (e.g. OpenAI Responses API, which strips structuredContent) get the
+    // structured payload rather than the prose summary.
+    if (!USE_STRUCTURED_CONTENT && structuredContent) {
+        contentArray.push({
+            type: 'text' as const,
+            text: JSON.stringify(sanitizedContent),
+        })
     }
 
     // Append any extra content items (images, embedded resources, etc.)
@@ -101,23 +107,15 @@ function getToolOutput<StructuredContent extends Record<string, unknown>>({
         contentArray.push(...contentItems)
     }
 
+    if (textContent) {
+        contentArray.push({ type: 'text' as const, text: textContent })
+    }
+
     if (contentArray.length > 0) {
         result.content = contentArray
     }
 
     if (structuredContent) result.structuredContent = sanitizedContent
-
-    // Legacy support: also include JSON in content when USE_STRUCTURED_CONTENT is false
-    if (!USE_STRUCTURED_CONTENT && structuredContent) {
-        const json = JSON.stringify(sanitizedContent)
-        if (!result.content) {
-            result.content = []
-        }
-        ;(result.content as Array<{ type: 'text'; text: string }>).push({
-            type: 'text',
-            text: json,
-        })
-    }
 
     return result
 }
