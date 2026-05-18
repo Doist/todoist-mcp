@@ -1,3 +1,13 @@
+## [10.0.0](https://github.com/Doist/todoist-mcp/compare/v9.0.0...v10.0.0) (2026-05-18)
+
+### ⚠ BREAKING CHANGES
+
+* reorder MCP tool response content blocks (JSON first, summary last) (#484)
+
+### Features
+
+* reorder MCP tool response content blocks (JSON first, summary last) ([#484](https://github.com/Doist/todoist-mcp/issues/484)) ([1114754](https://github.com/Doist/todoist-mcp/commit/1114754371bb37e1965ffef1779e703622ccefa6))
+
 ## [9.0.0](https://github.com/Doist/todoist-mcp/compare/v8.12.3...v9.0.0) (2026-05-14)
 
 ### ⚠ BREAKING CHANGES
