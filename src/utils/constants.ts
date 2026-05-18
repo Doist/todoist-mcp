@@ -39,6 +39,10 @@ export const ApiLimits = {
     REMINDERS_DEFAULT: 50,
     /** Maximum limit for reminder search operations */
     REMINDERS_MAX: 200,
+    /** Default limit for goal listings */
+    GOALS_DEFAULT: 50,
+    /** Maximum limit for goal search and list operations */
+    GOALS_MAX: 200,
 } as const
 
 // UI Display Limits

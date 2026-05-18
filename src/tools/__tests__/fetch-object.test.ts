@@ -1,6 +1,6 @@
 import type { Comment, Section, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
-import { createMockProject, createMockTask } from '../../utils/test-helpers.js'
+import { createMockGoal, createMockProject, createMockTask } from '../../utils/test-helpers.js'
 import { ToolNames } from '../../utils/tool-names.js'
 import { fetchObject } from '../fetch-object.js'
 
@@ -10,6 +10,7 @@ const mockTodoistApi = {
     getProject: vi.fn(),
     getComment: vi.fn(),
     getSection: vi.fn(),
+    getGoal: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { FETCH_OBJECT } = ToolNames
@@ -235,6 +236,79 @@ describe(`${FETCH_OBJECT} tool`, () => {
             await expect(
                 fetchObject.execute({ type: 'section', id: 'section123' }, mockTodoistApi),
             ).rejects.toThrow('Failed to fetch section with id section123: API error')
+        })
+    })
+
+    describe('fetching goals', () => {
+        it('should fetch a goal by ID and map nullable fields', async () => {
+            mockTodoistApi.getGoal.mockResolvedValue(
+                createMockGoal({
+                    id: 'goal123',
+                    name: 'Ship MCP',
+                    description: 'Quarterly target',
+                    deadline: '2026-12-31',
+                    responsibleUid: 'user-42',
+                    progress: { totalTaskCount: 4, completedTaskCount: 2, percentage: 50 },
+                }),
+            )
+
+            const result = await fetchObject.execute(
+                { type: 'goal', id: 'goal123' },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getGoal).toHaveBeenCalledWith('goal123')
+            expect(result.textContent).toContain('Found goal: Ship MCP')
+            expect(result.textContent).toContain('id=goal123')
+            expect(result.textContent).toContain('progress=50%')
+
+            expect(result.structuredContent).toEqual({
+                type: 'goal',
+                id: 'goal123',
+                object: {
+                    id: 'goal123',
+                    name: 'Ship MCP',
+                    ownerType: 'USER',
+                    ownerId: expect.any(String),
+                    description: 'Quarterly target',
+                    deadline: '2026-12-31',
+                    responsibleUid: 'user-42',
+                    isCompleted: false,
+                    progress: { totalTaskCount: 4, completedTaskCount: 2, percentage: 50 },
+                },
+            })
+        })
+
+        it('should omit null fields and missing progress in the mapped output', async () => {
+            mockTodoistApi.getGoal.mockResolvedValue(
+                createMockGoal({
+                    id: 'goal456',
+                    name: 'Empty',
+                    description: null,
+                    deadline: null,
+                    responsibleUid: null,
+                    progress: undefined,
+                }),
+            )
+
+            const result = await fetchObject.execute(
+                { type: 'goal', id: 'goal456' },
+                mockTodoistApi,
+            )
+
+            expect(result.textContent).toContain('progress=0%')
+            const object = result.structuredContent.object as Record<string, unknown>
+            expect(object.description).toBeUndefined()
+            expect(object.deadline).toBeUndefined()
+            expect(object.responsibleUid).toBeUndefined()
+        })
+
+        it('should handle goal not found', async () => {
+            mockTodoistApi.getGoal.mockRejectedValue(new Error('Goal not found'))
+
+            await expect(
+                fetchObject.execute({ type: 'goal', id: 'invalid' }, mockTodoistApi),
+            ).rejects.toThrow('Failed to fetch goal with id invalid')
         })
     })
 

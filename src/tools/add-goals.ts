@@ -1,7 +1,10 @@
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { mapGoal } from '../tool-helpers.js'
 import { GoalSchema as GoalOutputSchema } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
+
+const MAX_GOALS_PER_OPERATION = 25
 
 const GoalInputSchema = z.object({
     name: z.string().min(1).describe('The name of the goal.'),
@@ -17,7 +20,11 @@ const GoalInputSchema = z.object({
 })
 
 const ArgsSchema = {
-    goals: z.array(GoalInputSchema).min(1).describe('The array of goals to create.'),
+    goals: z
+        .array(GoalInputSchema)
+        .min(1)
+        .max(MAX_GOALS_PER_OPERATION)
+        .describe(`The array of goals to create (max ${MAX_GOALS_PER_OPERATION}).`),
 }
 
 const OutputSchema = {
@@ -33,9 +40,10 @@ const addGoals = {
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     async execute({ goals }, client) {
         const newGoals = await Promise.all(goals.map((goal) => client.addGoal(goal)))
+        const mappedGoals = newGoals.map(mapGoal)
 
-        const count = newGoals.length
-        const goalList = newGoals
+        const count = mappedGoals.length
+        const goalList = mappedGoals
             .map((g) => `• ${g.name} (id=${g.id}, owner=${g.ownerType})`)
             .join('\n')
         const textContent = `Added ${count} goal${count === 1 ? '' : 's'}:\n${goalList}`
@@ -43,11 +51,11 @@ const addGoals = {
         return {
             textContent,
             structuredContent: {
-                goals: newGoals,
-                totalCount: newGoals.length,
+                goals: mappedGoals,
+                totalCount: count,
             },
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
 
-export { addGoals }
+export { addGoals, MAX_GOALS_PER_OPERATION }

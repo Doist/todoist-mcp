@@ -203,8 +203,9 @@ const GoalSchema = z.object({
     name: z.string().describe('The name of the goal.'),
     ownerType: z.string().describe('The owner type: USER or WORKSPACE.'),
     ownerId: z.string().describe('The owner ID (user ID or workspace ID).'),
-    description: z.string().nullable().describe('The description of the goal.'),
-    deadline: z.string().nullable().describe('The deadline (YYYY-MM-DD).'),
+    description: z.string().optional().describe('The description of the goal.'),
+    deadline: z.string().optional().describe('The deadline (YYYY-MM-DD).'),
+    responsibleUid: z.string().optional().describe('The user ID responsible for this goal.'),
     isCompleted: z.boolean().describe('Whether the goal is completed.'),
     progress: z
         .object({

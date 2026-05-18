@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { mapComment, mapProject, mapTask } from '../tool-helpers.js'
+import { mapComment, mapGoal, mapProject, mapTask } from '../tool-helpers.js'
 import {
     CommentSchema,
     GoalSchema,
@@ -99,16 +99,7 @@ const fetchObject = {
                 }
                 case 'goal': {
                     const goal = await client.getGoal(id)
-                    const mappedGoal = {
-                        id: goal.id,
-                        name: goal.name,
-                        ownerType: goal.ownerType,
-                        ownerId: goal.ownerId,
-                        description: goal.description,
-                        deadline: goal.deadline,
-                        isCompleted: goal.isCompleted,
-                        progress: goal.progress,
-                    }
+                    const mappedGoal = mapGoal(goal)
                     return {
                         textContent: `Found goal: ${mappedGoal.name} • id=${mappedGoal.id} • progress=${mappedGoal.progress?.percentage ?? 0}%`,
                         structuredContent: {

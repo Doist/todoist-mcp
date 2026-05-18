@@ -12,6 +12,7 @@ const mockTodoistApi = {
     deleteTask: vi.fn(),
     deleteComment: vi.fn(),
     deleteLabel: vi.fn(),
+    deleteGoal: vi.fn(),
     deleteReminder: vi.fn(),
     deleteLocationReminder: vi.fn(),
     sync: vi.fn(),
@@ -265,6 +266,35 @@ describe(`${DELETE_OBJECT} tool`, () => {
         })
     })
 
+    describe('deleting goals', () => {
+        it('should delete a goal by ID', async () => {
+            mockTodoistApi.deleteGoal.mockResolvedValue(true as never)
+
+            const result = await deleteObject.execute(
+                { type: 'goal', id: 'goal-123' },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.deleteGoal).toHaveBeenCalledWith('goal-123')
+            expect(mockTodoistApi.deleteProject).not.toHaveBeenCalled()
+            expect(mockTodoistApi.deleteTask).not.toHaveBeenCalled()
+
+            expect(result.textContent).toContain('Deleted goal: id=goal-123')
+            expect(result.structuredContent).toEqual({
+                deletedEntity: { type: 'goal', id: 'goal-123' },
+                success: true,
+            })
+        })
+
+        it('should propagate goal deletion errors', async () => {
+            mockTodoistApi.deleteGoal.mockRejectedValue(new Error('API Error: Goal not found'))
+
+            await expect(
+                deleteObject.execute({ type: 'goal', id: 'non-existent-goal' }, mockTodoistApi),
+            ).rejects.toThrow('API Error: Goal not found')
+        })
+    })
+
     describe('deleting reminders', () => {
         it('should delete a time-based reminder by ID', async () => {
             mockTodoistApi.deleteReminder.mockResolvedValue(true)
@@ -335,6 +365,7 @@ describe(`${DELETE_OBJECT} tool`, () => {
             mockTodoistApi.deleteTask.mockResolvedValue(true)
             mockTodoistApi.deleteComment.mockResolvedValue(true)
             mockTodoistApi.deleteLabel.mockResolvedValue(true)
+            mockTodoistApi.deleteGoal.mockResolvedValue(true as never)
             mockTodoistApi.sync.mockResolvedValue({})
 
             await deleteObject.execute({ type: 'project', id: 'proj-1' }, mockTodoistApi)
@@ -352,6 +383,9 @@ describe(`${DELETE_OBJECT} tool`, () => {
             await deleteObject.execute({ type: 'label', id: 'label-1' }, mockTodoistApi)
             expect(mockTodoistApi.deleteLabel).toHaveBeenCalledWith('label-1')
 
+            await deleteObject.execute({ type: 'goal', id: 'goal-1' }, mockTodoistApi)
+            expect(mockTodoistApi.deleteGoal).toHaveBeenCalledWith('goal-1')
+
             await deleteObject.execute({ type: 'filter', id: 'filter-1' }, mockTodoistApi)
             expect(mockTodoistApi.sync).toHaveBeenCalled()
 
@@ -360,6 +394,7 @@ describe(`${DELETE_OBJECT} tool`, () => {
             expect(mockTodoistApi.deleteTask).toHaveBeenCalledTimes(1)
             expect(mockTodoistApi.deleteComment).toHaveBeenCalledTimes(1)
             expect(mockTodoistApi.deleteLabel).toHaveBeenCalledTimes(1)
+            expect(mockTodoistApi.deleteGoal).toHaveBeenCalledTimes(1)
         })
     })
 })

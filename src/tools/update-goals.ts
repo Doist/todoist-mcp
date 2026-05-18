@@ -1,40 +1,69 @@
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { mapGoal } from '../tool-helpers.js'
 import { GoalSchema as GoalOutputSchema } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const REMOVE_SENTINEL = 'remove'
 const UNASSIGN_SENTINEL = 'unassign'
+const MAX_GOALS_PER_OPERATION = 25
 
 const GoalUpdateSchema = z.object({
     id: z.string().min(1).describe('The ID of the goal to update.'),
-    name: z.string().optional().describe('New goal name.'),
+    name: z.string().min(1).optional().describe('New goal name.'),
     description: z
-        .string()
-        .optional()
-        .describe(`New description. Use "${REMOVE_SENTINEL}" to clear.`),
+        .preprocess(
+            (value) => (value === null ? REMOVE_SENTINEL : value),
+            z.string().describe(`New description. Use "${REMOVE_SENTINEL}" to clear.`),
+        )
+        .optional(),
     deadline: z
-        .string()
-        .optional()
-        .describe(`New deadline (YYYY-MM-DD). Use "${REMOVE_SENTINEL}" to clear.`),
+        .preprocess(
+            (value) => (value === null ? REMOVE_SENTINEL : value),
+            z.string().describe(`New deadline (YYYY-MM-DD). Use "${REMOVE_SENTINEL}" to clear.`),
+        )
+        .optional(),
     responsibleUid: z
-        .string()
-        .optional()
-        .describe(`New responsible user ID. Use "${UNASSIGN_SENTINEL}" to clear.`),
+        .preprocess(
+            (value) => (value === null ? UNASSIGN_SENTINEL : value),
+            z.string().describe(`New responsible user ID. Use "${UNASSIGN_SENTINEL}" to clear.`),
+        )
+        .optional(),
 })
 
+type GoalUpdate = z.infer<typeof GoalUpdateSchema>
+type SkipReason = 'no-fields' | 'no-valid-values'
+
 const ArgsSchema = {
-    goals: z.array(GoalUpdateSchema).min(1).describe('The array of goals to update.'),
+    goals: z
+        .array(GoalUpdateSchema)
+        .min(1)
+        .max(MAX_GOALS_PER_OPERATION)
+        .describe(`The array of goals to update (max ${MAX_GOALS_PER_OPERATION}).`),
 }
 
 const OutputSchema = {
     goals: z.array(GoalOutputSchema).describe('The updated goals.'),
     totalCount: z.number().describe('The total number of goals updated.'),
+    updatedGoalIds: z.array(z.string()).describe('The IDs of the updated goals.'),
+    appliedOperations: z
+        .object({
+            updateCount: z.number().describe('The number of goals actually updated.'),
+            skippedCount: z.number().describe('The number of goals skipped (no changes).'),
+        })
+        .describe('Summary of operations performed.'),
 }
 
 function mapSentinelToNull(value: string | undefined, sentinel: string): string | null | undefined {
     if (value === sentinel) return null
     return value
+}
+
+function getSkipReason({ id: _id, ...rest }: GoalUpdate): SkipReason | null {
+    const values = Object.values(rest)
+    if (values.length === 0) return 'no-fields'
+    if (values.every((v) => v === undefined)) return 'no-valid-values'
+    return null
 }
 
 const updateGoals = {
@@ -44,29 +73,52 @@ const updateGoals = {
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     async execute({ goals }, client) {
-        const updatedGoals = await Promise.all(
-            goals.map(({ id, description, deadline, responsibleUid, ...rest }) =>
-                client.updateGoal(id, {
+        type Result = { kind: 'updated'; goal: ReturnType<typeof mapGoal> } | { kind: 'skipped' }
+
+        const results: Result[] = await Promise.all(
+            goals.map(async (goal): Promise<Result> => {
+                if (getSkipReason(goal) !== null) return { kind: 'skipped' }
+
+                const { id, description, deadline, responsibleUid, ...rest } = goal
+                const updated = await client.updateGoal(id, {
                     ...rest,
                     description: mapSentinelToNull(description, REMOVE_SENTINEL),
                     deadline: mapSentinelToNull(deadline, REMOVE_SENTINEL),
                     responsibleUid: mapSentinelToNull(responsibleUid, UNASSIGN_SENTINEL),
-                }),
-            ),
+                })
+                return { kind: 'updated', goal: mapGoal(updated) }
+            }),
         )
+
+        const updatedGoals = results
+            .filter(
+                (r): r is { kind: 'updated'; goal: ReturnType<typeof mapGoal> } =>
+                    r.kind === 'updated',
+            )
+            .map((r) => r.goal)
+        const skippedCount = results.filter((r) => r.kind === 'skipped').length
 
         const count = updatedGoals.length
         const goalList = updatedGoals.map((g) => `• ${g.name} (id=${g.id})`).join('\n')
-        const textContent = `Updated ${count} goal${count === 1 ? '' : 's'}:\n${goalList}`
+        const skipNote = skippedCount > 0 ? ` (${skippedCount} skipped — no changes)` : ''
+        const textContent =
+            count > 0
+                ? `Updated ${count} goal${count === 1 ? '' : 's'}${skipNote}:\n${goalList}`
+                : `Updated 0 goals${skipNote}`
 
         return {
             textContent,
             structuredContent: {
                 goals: updatedGoals,
-                totalCount: updatedGoals.length,
+                totalCount: count,
+                updatedGoalIds: updatedGoals.map((g) => g.id),
+                appliedOperations: {
+                    updateCount: count,
+                    skippedCount,
+                },
             },
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
 
-export { updateGoals }
+export { MAX_GOALS_PER_OPERATION, updateGoals }

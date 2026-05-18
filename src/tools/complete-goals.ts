@@ -4,11 +4,16 @@ import { FailureSchema } from '../utils/output-schemas.js'
 import { summarizeBatch } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
 
+const MAX_GOALS_PER_OPERATION = 25
+
 const ArgsSchema = {
     ids: z
         .array(z.string().min(1))
         .min(1)
-        .describe('The IDs of the goals to complete or uncomplete.'),
+        .max(MAX_GOALS_PER_OPERATION)
+        .describe(
+            `The IDs of the goals to complete or uncomplete (max ${MAX_GOALS_PER_OPERATION}).`,
+        ),
     action: z
         .enum(['complete', 'uncomplete'])
         .describe('Whether to complete or uncomplete the goals.'),
@@ -29,22 +34,29 @@ const completeGoals = {
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     async execute(args, client) {
-        const processed: string[] = []
-        const failures: Array<{ item: string; error: string; code?: string }> = []
-
-        for (const id of args.ids) {
-            try {
+        const settled = await Promise.allSettled(
+            args.ids.map(async (id) => {
                 if (args.action === 'complete') {
                     await client.completeGoal(id)
                 } else {
                     await client.uncompleteGoal(id)
                 }
+                return id
+            }),
+        )
+
+        const processed: string[] = []
+        const failures: Array<{ item: string; error: string; code?: string }> = []
+        settled.forEach((result, index) => {
+            const id = args.ids[index] as string
+            if (result.status === 'fulfilled') {
                 processed.push(id)
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+            } else {
+                const errorMessage =
+                    result.reason instanceof Error ? result.reason.message : 'Unknown error'
                 failures.push({ item: id, error: errorMessage })
             }
-        }
+        })
 
         const actionLabel = args.action === 'complete' ? 'Completed goals' : 'Reopened goals'
         const textContent = summarizeBatch({
@@ -68,4 +80,4 @@ const completeGoals = {
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
 
-export { completeGoals }
+export { completeGoals, MAX_GOALS_PER_OPERATION }
