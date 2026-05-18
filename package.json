@@ -98,7 +98,7 @@
         "snarkdown": "2.0.0",
         "tsx": "4.21.0",
         "typescript": "6.0.3",
-        "vite": "7.3.2",
+        "vite": "7.3.3",
         "vite-plugin-dts": "4.5.4",
         "vite-plugin-singlefile": "2.3.3",
         "vitest": "4.1.5"
