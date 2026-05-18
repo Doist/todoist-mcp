@@ -32,7 +32,6 @@ const GoalUpdateSchema = z.object({
 })
 
 type GoalUpdate = z.infer<typeof GoalUpdateSchema>
-type SkipReason = 'no-fields' | 'no-valid-values'
 
 const ArgsSchema = {
     goals: z
@@ -59,11 +58,8 @@ function mapSentinelToNull(value: string | undefined, sentinel: string): string 
     return value
 }
 
-function getSkipReason({ id: _id, ...rest }: GoalUpdate): SkipReason | null {
-    const values = Object.values(rest)
-    if (values.length === 0) return 'no-fields'
-    if (values.every((v) => v === undefined)) return 'no-valid-values'
-    return null
+function hasUpdatesToMake({ id: _id, ...rest }: GoalUpdate): boolean {
+    return Object.values(rest).some((v) => v !== undefined)
 }
 
 const updateGoals = {
@@ -77,7 +73,7 @@ const updateGoals = {
 
         const results: Result[] = await Promise.all(
             goals.map(async (goal): Promise<Result> => {
-                if (getSkipReason(goal) !== null) return { kind: 'skipped' }
+                if (!hasUpdatesToMake(goal)) return { kind: 'skipped' }
 
                 const { id, description, deadline, responsibleUid, ...rest } = goal
                 const updated = await client.updateGoal(id, {
