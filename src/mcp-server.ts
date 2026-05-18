@@ -11,12 +11,14 @@ import {
 import { productivityAnalysis } from './prompts/productivity-analysis.js'
 import { addComments } from './tools/add-comments.js'
 import { addFilters } from './tools/add-filters.js'
+import { addGoals } from './tools/add-goals.js'
 import { addLabels } from './tools/add-labels.js'
 import { addProjects } from './tools/add-projects.js'
 import { addReminders } from './tools/add-reminders.js'
 import { addSections } from './tools/add-sections.js'
 import { addTasks } from './tools/add-tasks.js'
 import { analyzeProjectHealth } from './tools/analyze-project-health.js'
+import { completeGoals } from './tools/complete-goals.js'
 import { completeTasks } from './tools/complete-tasks.js'
 import { deleteObject } from './tools/delete-object.js'
 import { fetchObject } from './tools/fetch-object.js'
@@ -25,6 +27,7 @@ import { findActivity } from './tools/find-activity.js'
 import { findComments } from './tools/find-comments.js'
 import { findCompletedTasks } from './tools/find-completed-tasks.js'
 import { findFilters } from './tools/find-filters.js'
+import { findGoals } from './tools/find-goals.js'
 import { findLabels } from './tools/find-labels.js'
 import { findProjectCollaborators } from './tools/find-project-collaborators.js'
 import { findProjects } from './tools/find-projects.js'
@@ -37,6 +40,7 @@ import { getProductivityStats } from './tools/get-productivity-stats.js'
 import { getProjectActivityStats } from './tools/get-project-activity-stats.js'
 import { getProjectHealth } from './tools/get-project-health.js'
 import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
+import { linkGoalTasks } from './tools/link-goal-tasks.js'
 import { listWorkspaces } from './tools/list-workspaces.js'
 import { manageAssignments } from './tools/manage-assignments.js'
 import { projectManagement } from './tools/project-management.js'
@@ -47,6 +51,7 @@ import { search } from './tools/search.js'
 import { uncompleteTasks } from './tools/uncomplete-tasks.js'
 import { updateComments } from './tools/update-comments.js'
 import { updateFilters } from './tools/update-filters.js'
+import { updateGoals } from './tools/update-goals.js'
 import { updateLabels } from './tools/update-labels.js'
 import { updateProjects } from './tools/update-projects.js'
 import { updateReminders } from './tools/update-reminders.js'
@@ -85,6 +90,9 @@ You have access to comprehensive Todoist management tools for personal productiv
 - **project-management**: Archive or unarchive projects by ID
 - **project-move**: Move projects between personal and workspace contexts
 - **add-sections/update-sections/find-sections**: Organize tasks within projects using sections
+- **find-goals/add-goals/update-goals**: Manage goals (personal or workspace). Goals track progress via linked tasks
+- **complete-goals**: Complete or uncomplete goals by ID
+- **link-goal-tasks**: Link or unlink tasks to/from a goal
 - **get-overview**: Get comprehensive Markdown overview of entire account or specific project with task hierarchies. Project data includes parentId (sub-projects), folderId (workspace folder membership), and childOrder (sibling ordering)
 - **list-workspaces**: Get all workspaces for the user with details like plan type, role, and settings
 
@@ -224,6 +232,13 @@ function getMcpServer({
     registerTool({ tool: addSections, ...toolArgs })
     registerTool({ tool: updateSections, ...toolArgs })
     registerTool({ tool: findSections, ...toolArgs })
+
+    // Goal management tools
+    registerTool({ tool: findGoals, ...toolArgs })
+    registerTool({ tool: addGoals, ...toolArgs })
+    registerTool({ tool: updateGoals, ...toolArgs })
+    registerTool({ tool: completeGoals, ...toolArgs })
+    registerTool({ tool: linkGoalTasks, ...toolArgs })
 
     // Comment management tools
     registerTool({ tool: addComments, ...toolArgs })

@@ -19,11 +19,13 @@ import { TodoistApi } from '@doist/todoist-sdk'
 import { config } from 'dotenv'
 import { addComments } from '../src/tools/add-comments.js'
 import { addFilters } from '../src/tools/add-filters.js'
+import { addGoals } from '../src/tools/add-goals.js'
 import { addLabels } from '../src/tools/add-labels.js'
 import { addProjects } from '../src/tools/add-projects.js'
 import { addSections } from '../src/tools/add-sections.js'
 import { addTasks } from '../src/tools/add-tasks.js'
 import { analyzeProjectHealth } from '../src/tools/analyze-project-health.js'
+import { completeGoals } from '../src/tools/complete-goals.js'
 import { completeTasks } from '../src/tools/complete-tasks.js'
 import { deleteObject } from '../src/tools/delete-object.js'
 import { fetchObject } from '../src/tools/fetch-object.js'
@@ -32,6 +34,7 @@ import { findActivity } from '../src/tools/find-activity.js'
 import { findComments } from '../src/tools/find-comments.js'
 import { findCompletedTasks } from '../src/tools/find-completed-tasks.js'
 import { findFilters } from '../src/tools/find-filters.js'
+import { findGoals } from '../src/tools/find-goals.js'
 import { findLabels } from '../src/tools/find-labels.js'
 import { findProjectCollaborators } from '../src/tools/find-project-collaborators.js'
 import { findProjects } from '../src/tools/find-projects.js'
@@ -42,6 +45,7 @@ import { getOverview } from '../src/tools/get-overview.js'
 import { getProjectActivityStats } from '../src/tools/get-project-activity-stats.js'
 import { getProjectHealth } from '../src/tools/get-project-health.js'
 import { getWorkspaceInsights } from '../src/tools/get-workspace-insights.js'
+import { linkGoalTasks } from '../src/tools/link-goal-tasks.js'
 import { listWorkspaces } from '../src/tools/list-workspaces.js'
 import { manageAssignments } from '../src/tools/manage-assignments.js'
 import { projectManagement } from '../src/tools/project-management.js'
@@ -52,6 +56,7 @@ import { search } from '../src/tools/search.js'
 import { uncompleteTasks } from '../src/tools/uncomplete-tasks.js'
 import { updateComments } from '../src/tools/update-comments.js'
 import { updateFilters } from '../src/tools/update-filters.js'
+import { updateGoals } from '../src/tools/update-goals.js'
 import { updateLabels } from '../src/tools/update-labels.js'
 import { updateProjects } from '../src/tools/update-projects.js'
 import { updateSections } from '../src/tools/update-sections.js'
@@ -78,8 +83,10 @@ const tools: Record<string, ExecutableTool> = {
     'add-projects': addProjects,
     'add-filters': addFilters,
     'add-sections': addSections,
+    'add-goals': addGoals,
     'add-comments': addComments,
     'add-labels': addLabels,
+    'complete-goals': completeGoals,
     'complete-tasks': completeTasks,
     'uncomplete-tasks': uncompleteTasks,
     'delete-object': deleteObject,
@@ -92,6 +99,7 @@ const tools: Record<string, ExecutableTool> = {
     'find-labels': findLabels,
     'find-project-collaborators': findProjectCollaborators,
     'find-projects': findProjects,
+    'find-goals': findGoals,
     'find-sections': findSections,
     'find-tasks': findTasks,
     'find-tasks-by-date': findTasksByDate,
@@ -100,6 +108,7 @@ const tools: Record<string, ExecutableTool> = {
     'get-project-activity-stats': getProjectActivityStats,
     'analyze-project-health': analyzeProjectHealth,
     'get-workspace-insights': getWorkspaceInsights,
+    'link-goal-tasks': linkGoalTasks,
     'list-workspaces': listWorkspaces,
     'manage-assignments': manageAssignments,
     'project-management': projectManagement,
@@ -111,6 +120,7 @@ const tools: Record<string, ExecutableTool> = {
     'update-filters': updateFilters,
     'update-labels': updateLabels,
     'update-projects': updateProjects,
+    'update-goals': updateGoals,
     'update-sections': updateSections,
     'update-tasks': updateTasks,
     'user-info': userInfo,
