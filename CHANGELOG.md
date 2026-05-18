@@ -1,3 +1,9 @@
+## [10.1.0](https://github.com/Doist/todoist-mcp/compare/v10.0.0...v10.1.0) (2026-05-18)
+
+### Features
+
+* Goal MCP tools ([#433](https://github.com/Doist/todoist-mcp/issues/433)) ([251d0d4](https://github.com/Doist/todoist-mcp/commit/251d0d45166e06a9f4f138cd10dbf092226f0f97))
+
 ## [10.0.0](https://github.com/Doist/todoist-mcp/compare/v9.0.0...v10.0.0) (2026-05-18)
 
 ### ⚠ BREAKING CHANGES
