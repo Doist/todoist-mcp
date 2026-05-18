@@ -33,6 +33,9 @@ const GoalUpdateSchema = z.object({
 
 type GoalUpdate = z.infer<typeof GoalUpdateSchema>
 
+const SKIP_REASONS = ['no-fields', 'no-valid-values'] as const
+type SkipReason = (typeof SKIP_REASONS)[number]
+
 const ArgsSchema = {
     goals: z
         .array(GoalUpdateSchema)
@@ -40,6 +43,15 @@ const ArgsSchema = {
         .max(MAX_GOALS_PER_OPERATION)
         .describe(`The array of goals to update (max ${MAX_GOALS_PER_OPERATION}).`),
 }
+
+const SkippedGoalSchema = z.object({
+    id: z.string().describe('The ID of the goal that was skipped.'),
+    reason: z
+        .enum(SKIP_REASONS)
+        .describe(
+            '"no-fields" = only the id was supplied; "no-valid-values" = all updatable fields were undefined.',
+        ),
+})
 
 const OutputSchema = {
     goals: z.array(GoalOutputSchema).describe('The updated goals.'),
@@ -49,6 +61,7 @@ const OutputSchema = {
         .object({
             updateCount: z.number().describe('The number of goals actually updated.'),
             skippedCount: z.number().describe('The number of goals skipped (no changes).'),
+            skipped: z.array(SkippedGoalSchema).describe('Per-goal skip details (id + reason).'),
         })
         .describe('Summary of operations performed.'),
 }
@@ -58,8 +71,11 @@ function mapSentinelToNull(value: string | undefined, sentinel: string): string 
     return value
 }
 
-function hasUpdatesToMake({ id: _id, ...rest }: GoalUpdate): boolean {
-    return Object.values(rest).some((v) => v !== undefined)
+function getSkipReason({ id: _id, ...rest }: GoalUpdate): SkipReason | null {
+    const values = Object.values(rest)
+    if (values.length === 0) return 'no-fields'
+    if (values.every((v) => v === undefined)) return 'no-valid-values'
+    return null
 }
 
 const updateGoals = {
@@ -69,11 +85,16 @@ const updateGoals = {
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     async execute({ goals }, client) {
-        type Result = { kind: 'updated'; goal: ReturnType<typeof mapGoal> } | { kind: 'skipped' }
+        type Result =
+            | { kind: 'updated'; goal: ReturnType<typeof mapGoal> }
+            | { kind: 'skipped'; id: string; reason: SkipReason }
 
         const results: Result[] = await Promise.all(
             goals.map(async (goal): Promise<Result> => {
-                if (!hasUpdatesToMake(goal)) return { kind: 'skipped' }
+                const skipReason = getSkipReason(goal)
+                if (skipReason !== null) {
+                    return { kind: 'skipped', id: goal.id, reason: skipReason }
+                }
 
                 const { id, description, deadline, responsibleUid, ...rest } = goal
                 const updated = await client.updateGoal(id, {
@@ -92,11 +113,16 @@ const updateGoals = {
                     r.kind === 'updated',
             )
             .map((r) => r.goal)
-        const skippedCount = results.filter((r) => r.kind === 'skipped').length
+        const skipped = results
+            .filter(
+                (r): r is { kind: 'skipped'; id: string; reason: SkipReason } =>
+                    r.kind === 'skipped',
+            )
+            .map(({ id, reason }) => ({ id, reason }))
 
         const count = updatedGoals.length
         const goalList = updatedGoals.map((g) => `• ${g.name} (id=${g.id})`).join('\n')
-        const skipNote = skippedCount > 0 ? ` (${skippedCount} skipped — no changes)` : ''
+        const skipNote = formatSkipNote(skipped)
         const textContent =
             count > 0
                 ? `Updated ${count} goal${count === 1 ? '' : 's'}${skipNote}:\n${goalList}`
@@ -110,11 +136,26 @@ const updateGoals = {
                 updatedGoalIds: updatedGoals.map((g) => g.id),
                 appliedOperations: {
                     updateCount: count,
-                    skippedCount,
+                    skippedCount: skipped.length,
+                    skipped,
                 },
             },
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
+
+function formatSkipNote(skipped: Array<{ id: string; reason: SkipReason }>): string {
+    if (skipped.length === 0) return ''
+    const byReason = new Map<SkipReason, string[]>()
+    for (const { id, reason } of skipped) {
+        const existing = byReason.get(reason) ?? []
+        existing.push(id)
+        byReason.set(reason, existing)
+    }
+    const parts = Array.from(byReason.entries()).map(
+        ([reason, ids]) => `${ids.length} skipped — ${reason} (${ids.join(', ')})`,
+    )
+    return ` (${parts.join('; ')})`
+}
 
 export { MAX_GOALS_PER_OPERATION, updateGoals }

@@ -34,6 +34,7 @@ describe(`${UPDATE_GOALS} tool`, () => {
         expect(result.structuredContent.appliedOperations).toEqual({
             updateCount: 1,
             skippedCount: 0,
+            skipped: [],
         })
     })
 
@@ -95,12 +96,56 @@ describe(`${UPDATE_GOALS} tool`, () => {
         }
     })
 
-    it('should skip goals with only an id (no fields to update)', async () => {
+    it('should skip goals with only an id and surface the reason', async () => {
         const result = await updateGoals.execute({ goals: [{ id: 'g-1' }] }, mockTodoistApi)
 
         expect(mockTodoistApi.updateGoal).not.toHaveBeenCalled()
-        expect(result.structuredContent.appliedOperations.skippedCount).toBe(1)
+        expect(result.structuredContent.appliedOperations).toEqual({
+            updateCount: 0,
+            skippedCount: 1,
+            skipped: [{ id: 'g-1', reason: 'no-fields' }],
+        })
         expect(result.structuredContent.totalCount).toBe(0)
+        expect(result.textContent).toContain('no-fields')
+        expect(result.textContent).toContain('g-1')
+    })
+
+    it('should report "no-valid-values" when fields are present but all undefined', async () => {
+        const result = await updateGoals.execute(
+            { goals: [{ id: 'g-2', name: undefined, description: undefined }] },
+            mockTodoistApi,
+        )
+
+        expect(mockTodoistApi.updateGoal).not.toHaveBeenCalled()
+        expect(result.structuredContent.appliedOperations.skipped).toEqual([
+            { id: 'g-2', reason: 'no-valid-values' },
+        ])
+    })
+
+    it('should group skip reasons in textContent when multiple goals are skipped', async () => {
+        mockTodoistApi.updateGoal.mockResolvedValue(createMockGoal({ id: 'g-3', name: 'Kept' }))
+
+        const result = await updateGoals.execute(
+            {
+                goals: [
+                    { id: 'g-1' },
+                    { id: 'g-2', description: undefined },
+                    { id: 'g-3', name: 'Kept' },
+                ],
+            },
+            mockTodoistApi,
+        )
+
+        expect(result.structuredContent.appliedOperations).toMatchObject({
+            updateCount: 1,
+            skippedCount: 2,
+            skipped: expect.arrayContaining([
+                { id: 'g-1', reason: 'no-fields' },
+                { id: 'g-2', reason: 'no-valid-values' },
+            ]),
+        })
+        expect(result.textContent).toContain('no-fields (g-1)')
+        expect(result.textContent).toContain('no-valid-values (g-2)')
     })
 
     it(`should reject batches larger than ${MAX_GOALS_PER_OPERATION}`, () => {
