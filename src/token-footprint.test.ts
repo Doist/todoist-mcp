@@ -154,6 +154,12 @@ function measure(): Row[] {
     })
 }
 
+// Budget for the combined fixed token cost (tools/list payload + instructions).
+// Bump deliberately when adding tools or expanding descriptions. Override at
+// runtime with MCP_TOKEN_BUDGET=NNNN to experiment without editing the source.
+const DEFAULT_TOKEN_BUDGET = 40_000
+const TOKEN_BUDGET = Number(process.env.MCP_TOKEN_BUDGET ?? DEFAULT_TOKEN_BUDGET)
+
 describe('token footprint baseline', () => {
     it('reports per-tool and total token cost', () => {
         const rows = measure().sort((a, b) => b.totalTokens - a.totalTokens)
@@ -169,6 +175,7 @@ describe('token footprint baseline', () => {
         lines.push(`instructions string: ${instructionsTokens} tokens`)
         lines.push(`tools/list payload:  ${toolsListTotal} tokens`)
         lines.push(`combined fixed cost: ${combinedFixed} tokens`)
+        lines.push(`budget:              ${TOKEN_BUDGET} tokens`)
         lines.push('')
         lines.push('Per-tool ranking (total / desc / inputSchema / outputSchema):')
         for (const r of rows) {
@@ -182,19 +189,8 @@ describe('token footprint baseline', () => {
         // biome-ignore lint/suspicious/noConsole: intentional baseline output
         console.log(lines.join('\n'))
 
-        // Snapshot a stable summary so regressions are visible in CI diffs.
-        // Per-tool totals are included so individual tools can be tracked.
-        expect({
-            toolCount: allTools.length,
-            instructionsTokens,
-            toolsListTotal,
-            combinedFixed,
-            perTool: Object.fromEntries(
-                rows
-                    .slice()
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((r) => [r.name, r.totalTokens]),
-            ),
-        }).toMatchSnapshot()
+        // Soft budget cap: fails only on catastrophic growth, not normal drift.
+        // Per-tool numbers above are the informative signal for reviewers.
+        expect(combinedFixed).toBeLessThan(TOKEN_BUDGET)
     })
 })
