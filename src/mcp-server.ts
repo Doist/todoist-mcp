@@ -56,7 +56,7 @@ import { userInfo } from './tools/user-info.js'
 import { viewAttachment } from './tools/view-attachment.js'
 import { TODOIST_AI_VERSION, createTodoistClient } from './usage-tracking.js'
 
-const instructions = `
+export const instructions = `
 ## Todoist Task and Project Management Tools
 
 You have access to comprehensive Todoist management tools for personal productivity and team collaboration. Use these tools to help users manage tasks, projects, sections, comments, and assignments effectively.
