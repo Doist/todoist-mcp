@@ -1,3 +1,9 @@
+## [10.1.1](https://github.com/Doist/todoist-mcp/compare/v10.1.0...v10.1.1) (2026-05-25)
+
+### Bug Fixes
+
+* **deps:** pin dependency @doist/todoist-mcp to 9.0.0 ([#486](https://github.com/Doist/todoist-mcp/issues/486)) ([d2e320d](https://github.com/Doist/todoist-mcp/commit/d2e320db571512fb49b3740719273bdf2ae87a4f))
+
 ## [10.1.0](https://github.com/Doist/todoist-mcp/compare/v10.0.0...v10.1.0) (2026-05-18)
 
 ### Features
