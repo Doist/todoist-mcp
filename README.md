@@ -186,6 +186,81 @@ This confirms which Todoist account the current `TODOIST_API_KEY` is connected t
 
 `run-tool` uses `TODOIST_API_KEY` from your `.env` file (created from `.env.example` by `npm run setup`). Use a test account or a temporary project when running write operations to avoid modifying real data.
 
+
+## FAQ
+
+### What is Todoist MCP Server?
+
+Todoist MCP Server is a library for connecting AI agents to Todoist. It provides tools that can be integrated into LLMs, enabling them to access and modify a Todoist account on behalf of the user through MCP (Model Context Protocol).
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **MCP Server** | Streamable HTTP service for AI clients |
+| **Reusable Tools** | Tools work in MCP server or other AI interfaces |
+| **Multi-Client Support** | Claude Desktop, Cursor, Claude Code, VS Code |
+| **OpenAI MCP Compatible** | Search/fetch tools follow OpenAI MCP spec |
+| **MCP Apps** | Interactive UI widgets in AI chat interfaces |
+
+### Installation
+
+```bash
+npm install @doist/todoist-mcp
+```
+
+### MCP Server URL
+
+**Primary URL (Streamable HTTP):** `https://ai.todoist.net/mcp`
+
+### Client Setup
+
+| Client | Setup Method |
+|--------|--------------|
+| **Claude Desktop** | Settings → Connectors → Add `https://ai.todoist.net/mcp` |
+| **Cursor** | `~/.cursor/mcp.json` with `mcp-remote` command |
+| **Claude Code** | `/plugin install todoist@doist` or `claude mcp add` |
+| **VS Code** | Command Palette → MCP: Add Server |
+| **Other MCP Clients** | `npx -y mcp-remote https://ai.todoist.net/mcp` |
+
+### Available Tools
+
+Tools are located in `src/tools` directory. Key features include:
+- Task management (create, update, complete)
+- Date-based task search
+- Project and label management
+
+### Requirements
+
+- Node.js
+- TODOIST_API_KEY (from Todoist account)
+- MCP-compatible AI client (Claude Desktop, Cursor, etc.)
+
+### Dependencies
+
+- [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk)
+- [@doist/todoist-sdk](https://github.com/Doist/todoist-sdk)
+
+### Local Development
+
+```bash
+npm start           # Build and run MCP inspector
+npm run dev         # Development mode with auto-reload
+npm run tool:list   # List available tools
+```
+
+### License
+
+MIT License
+
+### Help Resources
+
+- [MCP Server Docs](docs/mcp-server.md)
+- [Tool Design Docs](docs/tool-design.md)
+- [Development Setup](docs/dev-setup.md)
+- [Contributing Guide](CONTRIBUTING.md)
+- [Issues](https://github.com/Doist/todoist-mcp/issues)
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for:
