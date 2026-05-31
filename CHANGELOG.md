@@ -1,3 +1,9 @@
+## [10.1.2](https://github.com/Doist/todoist-mcp/compare/v10.1.1...v10.1.2) (2026-05-31)
+
+### Bug Fixes
+
+* resolve project from section when assigning tasks with sectionId ([#491](https://github.com/Doist/todoist-mcp/issues/491)) ([da7f9e3](https://github.com/Doist/todoist-mcp/commit/da7f9e33ab6339c2c12436419ef1322861841efa))
+
 ## [10.1.1](https://github.com/Doist/todoist-mcp/compare/v10.1.0...v10.1.1) (2026-05-25)
 
 ### Bug Fixes
