@@ -741,10 +741,51 @@ describe(`${ADD_TASKS} tool`, () => {
                     sectionId: TEST_IDS.SECTION_1,
                 }),
             )
+            validateSpy.mockRestore()
         })
 
-        it('should throw a clear error when the section cannot be found', async () => {
-            mockTodoistApi.getSection.mockRejectedValue(new Error('Section not found'))
+        it('should resolve the section only once when batching tasks in the same section', async () => {
+            mockTodoistApi.getSection.mockResolvedValue(
+                createMockSection({ id: TEST_IDS.SECTION_1, projectId: TEST_IDS.PROJECT_WORK }),
+            )
+            const validateSpy = vi
+                .spyOn(assignmentValidator, 'validateTaskCreationAssignment')
+                .mockResolvedValue({
+                    isValid: true,
+                    resolvedUser: {
+                        userId: 'assignee-1',
+                        displayName: 'Assignee One',
+                        email: 'user@example.com',
+                    },
+                })
+            mockTodoistApi.addTask.mockResolvedValue(
+                createMockTask({ id: '8485099002', content: 'Section task' }),
+            )
+
+            await addTasks.execute(
+                {
+                    tasks: [
+                        {
+                            content: 'Section task 1',
+                            sectionId: TEST_IDS.SECTION_1,
+                            responsibleUser: 'user@example.com',
+                        },
+                        {
+                            content: 'Section task 2',
+                            sectionId: TEST_IDS.SECTION_1,
+                            responsibleUser: 'user@example.com',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getSection).toHaveBeenCalledTimes(1)
+            validateSpy.mockRestore()
+        })
+
+        it('should throw a clear error when the section does not exist', async () => {
+            mockTodoistApi.getSection.mockResolvedValue(null as unknown as never)
 
             await expect(
                 addTasks.execute(
@@ -760,6 +801,25 @@ describe(`${ADD_TASKS} tool`, () => {
                     mockTodoistApi,
                 ),
             ).rejects.toThrow('Task "Section task": Section "missing-section" not found')
+        })
+
+        it('should propagate non-not-found errors when resolving the section', async () => {
+            mockTodoistApi.getSection.mockRejectedValue(new Error('Service Unavailable'))
+
+            await expect(
+                addTasks.execute(
+                    {
+                        tasks: [
+                            {
+                                content: 'Section task',
+                                sectionId: TEST_IDS.SECTION_1,
+                                responsibleUser: 'user@example.com',
+                            },
+                        ],
+                    },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow('Service Unavailable')
         })
     })
 
