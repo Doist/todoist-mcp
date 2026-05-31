@@ -1,7 +1,14 @@
 import type { Task, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
+import { assignmentValidator } from '../../utils/assignment-validator.js'
 import { convertPriorityToNumber } from '../../utils/priorities.js'
-import { createMockProject, createMockTask, TEST_IDS, TODAY } from '../../utils/test-helpers.js'
+import {
+    createMockProject,
+    createMockSection,
+    createMockTask,
+    TEST_IDS,
+    TODAY,
+} from '../../utils/test-helpers.js'
 import { ToolNames } from '../../utils/tool-names.js'
 import { addTasks, MAX_TASKS_PER_OPERATION } from '../add-tasks.js'
 
@@ -9,6 +16,7 @@ import { addTasks, MAX_TASKS_PER_OPERATION } from '../add-tasks.js'
 const mockTodoistApi = {
     addTask: vi.fn(),
     getProject: vi.fn(),
+    getSection: vi.fn(),
     getUser: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
@@ -687,6 +695,131 @@ describe(`${ADD_TASKS} tool`, () => {
             ).rejects.toThrow(
                 'Task "Task with assignment but no project": Cannot assign tasks without specifying project context. Please specify a projectId, sectionId, or parentId.',
             )
+        })
+
+        it('should resolve project from section when assigning with sectionId but no projectId', async () => {
+            mockTodoistApi.getSection.mockResolvedValue(
+                createMockSection({ id: TEST_IDS.SECTION_1, projectId: TEST_IDS.PROJECT_WORK }),
+            )
+            const validateSpy = vi
+                .spyOn(assignmentValidator, 'validateTaskCreationAssignment')
+                .mockResolvedValue({
+                    isValid: true,
+                    resolvedUser: {
+                        userId: 'assignee-1',
+                        displayName: 'Assignee One',
+                        email: 'user@example.com',
+                    },
+                })
+            mockTodoistApi.addTask.mockResolvedValue(
+                createMockTask({ id: '8485099001', content: 'Section task' }),
+            )
+
+            await addTasks.execute(
+                {
+                    tasks: [
+                        {
+                            content: 'Section task',
+                            sectionId: TEST_IDS.SECTION_1,
+                            responsibleUser: 'user@example.com',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getSection).toHaveBeenCalledWith(TEST_IDS.SECTION_1)
+            // Project for assignment validation is taken from the section, not required as input
+            expect(validateSpy).toHaveBeenCalledWith(
+                mockTodoistApi,
+                TEST_IDS.PROJECT_WORK,
+                'user@example.com',
+            )
+            expect(mockTodoistApi.addTask).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    assigneeId: 'assignee-1',
+                    sectionId: TEST_IDS.SECTION_1,
+                }),
+            )
+            validateSpy.mockRestore()
+        })
+
+        it('should resolve the section only once when batching tasks in the same section', async () => {
+            mockTodoistApi.getSection.mockResolvedValue(
+                createMockSection({ id: TEST_IDS.SECTION_1, projectId: TEST_IDS.PROJECT_WORK }),
+            )
+            const validateSpy = vi
+                .spyOn(assignmentValidator, 'validateTaskCreationAssignment')
+                .mockResolvedValue({
+                    isValid: true,
+                    resolvedUser: {
+                        userId: 'assignee-1',
+                        displayName: 'Assignee One',
+                        email: 'user@example.com',
+                    },
+                })
+            mockTodoistApi.addTask.mockResolvedValue(
+                createMockTask({ id: '8485099002', content: 'Section task' }),
+            )
+
+            await addTasks.execute(
+                {
+                    tasks: [
+                        {
+                            content: 'Section task 1',
+                            sectionId: TEST_IDS.SECTION_1,
+                            responsibleUser: 'user@example.com',
+                        },
+                        {
+                            content: 'Section task 2',
+                            sectionId: TEST_IDS.SECTION_1,
+                            responsibleUser: 'user@example.com',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getSection).toHaveBeenCalledTimes(1)
+            validateSpy.mockRestore()
+        })
+
+        it('should throw a clear error when the section does not exist', async () => {
+            mockTodoistApi.getSection.mockResolvedValue(null as unknown as never)
+
+            await expect(
+                addTasks.execute(
+                    {
+                        tasks: [
+                            {
+                                content: 'Section task',
+                                sectionId: 'missing-section',
+                                responsibleUser: 'user@example.com',
+                            },
+                        ],
+                    },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow('Task "Section task": Section "missing-section" not found')
+        })
+
+        it('should propagate non-not-found errors when resolving the section', async () => {
+            mockTodoistApi.getSection.mockRejectedValue(new Error('Service Unavailable'))
+
+            await expect(
+                addTasks.execute(
+                    {
+                        tasks: [
+                            {
+                                content: 'Section task',
+                                sectionId: TEST_IDS.SECTION_1,
+                                responsibleUser: 'user@example.com',
+                            },
+                        ],
+                    },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow('Service Unavailable')
         })
     })
 

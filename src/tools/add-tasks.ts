@@ -97,6 +97,9 @@ const addTasks = {
             }
         })
 
+        // Resolve each section's project at most once across the whole batch
+        const sectionProjectCache = new Map<string, string>()
+
         // Process groups in parallel; within each group, process sequentially
         type IndexedResult = { index: number; result: PromiseSettledResult<Task> }
         const groupResults = await Promise.all(
@@ -104,7 +107,7 @@ const addTasks = {
                 const results: IndexedResult[] = []
                 for (const { task, index } of group) {
                     try {
-                        const created = await processTask(task, client)
+                        const created = await processTask(task, client, sectionProjectCache)
                         results.push({ index, result: { status: 'fulfilled', value: created } })
                     } catch (error) {
                         results.push({
@@ -173,7 +176,11 @@ function destinationKey(task: z.infer<typeof TaskSchema>): string {
     return `${task.projectId ?? ''}|${task.sectionId ?? ''}|${task.parentId ?? ''}`
 }
 
-async function processTask(task: z.infer<typeof TaskSchema>, client: TodoistApi): Promise<Task> {
+async function processTask(
+    task: z.infer<typeof TaskSchema>,
+    client: TodoistApi,
+    sectionProjectCache: Map<string, string>,
+): Promise<Task> {
     const {
         duration: durationStr,
         projectId,
@@ -252,11 +259,17 @@ async function processTask(task: z.infer<typeof TaskSchema>, client: TodoistApi)
                 throw new Error(`Task "${task.content}": Parent task "${parentId}" not found`)
             }
         } else if (!targetProjectId && sectionId) {
-            // For section tasks, we need to find the project - this is a limitation
-            // For now, we'll require explicit projectId when using assignments with sections
-            throw new Error(
-                `Task "${task.content}": When assigning tasks to sections, please also specify projectId`,
-            )
+            // For section tasks, resolve the project from the section (cached per batch).
+            // Let real API/network errors propagate; only a missing section is "not found".
+            targetProjectId = sectionProjectCache.get(sectionId)
+            if (!targetProjectId) {
+                const section = await client.getSection(sectionId)
+                if (!section) {
+                    throw new Error(`Task "${task.content}": Section "${sectionId}" not found`)
+                }
+                targetProjectId = section.projectId
+                sectionProjectCache.set(sectionId, section.projectId)
+            }
         }
 
         if (!targetProjectId) {
