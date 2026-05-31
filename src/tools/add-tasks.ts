@@ -252,11 +252,13 @@ async function processTask(task: z.infer<typeof TaskSchema>, client: TodoistApi)
                 throw new Error(`Task "${task.content}": Parent task "${parentId}" not found`)
             }
         } else if (!targetProjectId && sectionId) {
-            // For section tasks, we need to find the project - this is a limitation
-            // For now, we'll require explicit projectId when using assignments with sections
-            throw new Error(
-                `Task "${task.content}": When assigning tasks to sections, please also specify projectId`,
-            )
+            // For section tasks, resolve the project from the section
+            try {
+                const section = await client.getSection(sectionId)
+                targetProjectId = section.projectId
+            } catch (_error) {
+                throw new Error(`Task "${task.content}": Section "${sectionId}" not found`)
+            }
         }
 
         if (!targetProjectId) {
