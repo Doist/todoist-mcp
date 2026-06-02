@@ -4,13 +4,13 @@ import { fetchAllPages } from '../tool-helpers.js'
 export type ResolvedUser = {
     userId: string
     displayName: string
-    email: string
+    email: string | null
 }
 
 export type ProjectCollaborator = {
     id: string
     name: string
-    email: string
+    email: string | null
 }
 
 // User resolution cache for performance with TTL
@@ -133,7 +133,7 @@ export class UserResolver {
             }
 
             // Try exact email match
-            match = allCollaborators.find((c) => c.email.toLowerCase() === searchTerm)
+            match = allCollaborators.find((c) => c.email?.toLowerCase() === searchTerm)
             if (match) {
                 const result = { userId: match.id, displayName: match.name, email: match.email }
                 userResolutionCache.set(trimmedInput, { result, timestamp: Date.now() })
@@ -149,7 +149,7 @@ export class UserResolver {
             }
 
             // Try partial email match
-            match = allCollaborators.find((c) => c.email.toLowerCase().includes(searchTerm))
+            match = allCollaborators.find((c) => c.email?.toLowerCase().includes(searchTerm))
             if (match) {
                 const result = { userId: match.id, displayName: match.name, email: match.email }
                 userResolutionCache.set(trimmedInput, { result, timestamp: Date.now() })
@@ -203,7 +203,7 @@ export class UserResolver {
             // API returns { results: [...], nextCursor: null } or just array
             const collaborators = Array.isArray(response) ? response : response.results || []
 
-            const validCollaborators = collaborators.filter((c) => c?.id && c.name && c.email)
+            const validCollaborators = collaborators.filter((c) => c?.id && c.name)
 
             collaboratorsCache.set(cacheKey, {
                 result: validCollaborators,

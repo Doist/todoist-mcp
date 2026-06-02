@@ -219,7 +219,7 @@ function filterBySearchTerm(
     return collaborators.filter(
         (collaborator) =>
             collaborator.name.toLowerCase().includes(searchLower) ||
-            collaborator.email.toLowerCase().includes(searchLower),
+            collaborator.email?.toLowerCase().includes(searchLower),
     )
 }
 
