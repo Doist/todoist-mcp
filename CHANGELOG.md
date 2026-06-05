@@ -1,3 +1,9 @@
+## [10.1.3](https://github.com/Doist/todoist-mcp/compare/v10.1.2...v10.1.3) (2026-06-05)
+
+### Bug Fixes
+
+* Always serve the most recent app resource ([#494](https://github.com/Doist/todoist-mcp/issues/494)) ([f650305](https://github.com/Doist/todoist-mcp/commit/f6503059ab4ed4bc915188eb5d0ea5bd52897184))
+
 ## [10.1.2](https://github.com/Doist/todoist-mcp/compare/v10.1.1...v10.1.2) (2026-05-31)
 
 ### Bug Fixes
