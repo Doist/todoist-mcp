@@ -11,6 +11,10 @@ const ProjectUpdateSchema = z.object({
     name: z.string().min(1).optional().describe('The new name of the project.'),
     isFavorite: z.boolean().optional().describe('Whether the project is a favorite.'),
     viewStyle: z.enum(['list', 'board', 'calendar']).optional().describe('The project view style.'),
+    description: z
+        .string()
+        .optional()
+        .describe('The description of the project. Supports Markdown. Pass "" to clear it.'),
     color: ColorSchema,
 })
 

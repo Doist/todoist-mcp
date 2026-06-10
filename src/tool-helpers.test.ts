@@ -179,6 +179,7 @@ End of description.`)
             expect(mapProject(mockWorkspaceProject)).toEqual({
                 id: 'proj-2',
                 name: 'Workspace Project',
+                description: '',
                 color: 'red',
                 isFavorite: true,
                 isShared: true,
@@ -207,6 +208,7 @@ End of description.`)
             expect(mapProject(mockWorkspaceProject)).toEqual({
                 id: 'proj-3',
                 name: 'Folder Project',
+                description: '',
                 color: 'green',
                 isFavorite: false,
                 isShared: true,

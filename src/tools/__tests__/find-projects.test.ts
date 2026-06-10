@@ -262,6 +262,7 @@ describe(`${FIND_PROJECTS} tool`, () => {
                 const project = {
                     id: 'proj-1',
                     name: 'Inbox',
+                    description: '',
                     color: 'gray', // unrecognised
                     isFavorite: false,
                     isShared: false,
@@ -280,6 +281,7 @@ describe(`${FIND_PROJECTS} tool`, () => {
                 const project = {
                     id: 'proj-1',
                     name: 'Inbox',
+                    description: '',
                     color: 'gray',
                     isFavorite: false,
                     isShared: false,

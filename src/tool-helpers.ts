@@ -274,6 +274,7 @@ function mapProject(project: Project) {
     return {
         id: project.id,
         name: project.name,
+        description: project.description,
         color: project.color as ColorKey,
         isFavorite: project.isFavorite,
         isShared: project.isShared,

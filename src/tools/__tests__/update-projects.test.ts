@@ -78,6 +78,28 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
             )
         })
 
+        it('should forward description to the API and map it back', async () => {
+            const mockApiResponse = createMockProject({
+                id: 'project-123',
+                name: 'Docs',
+                description: 'Revised scope',
+            })
+            mockTodoistApi.updateProject.mockResolvedValue(mockApiResponse)
+
+            const result = await updateProjects.execute(
+                { projects: [{ id: 'project-123', description: 'Revised scope' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.updateProject).toHaveBeenCalledWith(
+                'project-123',
+                expect.objectContaining({ description: 'Revised scope' }),
+            )
+            expect(result.structuredContent.projects[0]).toEqual(
+                expect.objectContaining({ description: 'Revised scope' }),
+            )
+        })
+
         it('should update project with isFavorite and viewStyle options', async () => {
             const mockApiResponse: PersonalProject = {
                 url: 'https://todoist.com/projects/project-123',
@@ -369,6 +391,7 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
             const allowedKeys = [
                 'id',
                 'name',
+                'description',
                 'color',
                 'isFavorite',
                 'isShared',
@@ -387,7 +410,6 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
                 'createdAt',
                 'updatedAt',
                 'defaultOrder',
-                'description',
                 'isArchived',
                 'isCollapsed',
                 'isDeleted',

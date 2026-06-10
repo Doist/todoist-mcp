@@ -21,6 +21,10 @@ const ProjectSchema = z.object({
         .enum(['list', 'board', 'calendar'])
         .optional()
         .describe('The project view style. Defaults to "list".'),
+    description: z
+        .string()
+        .optional()
+        .describe('The description of the project. Supports Markdown.'),
     color: ColorSchema,
     workspace: z
         .string()
@@ -63,7 +67,15 @@ const addProjects = {
         const newProjects = await Promise.all(
             projects.map(({ workspace, ...rest }) => {
                 const workspaceId = workspace ? resolvedWorkspaces.get(workspace) : undefined
-                return client.addProject({ ...rest, ...(workspaceId ? { workspaceId } : {}) })
+                // Keep the SDK signature so the rest of the payload stays
+                // compile-checked; only `description` escapes the types until
+                // the SDK adds it to AddProjectArgs.
+                const addArgs: Parameters<typeof client.addProject>[0] & { description?: string } =
+                    {
+                        ...rest,
+                        ...(workspaceId ? { workspaceId } : {}),
+                    }
+                return client.addProject(addArgs)
             }),
         )
         const textContent = generateTextContent({ projects: newProjects })

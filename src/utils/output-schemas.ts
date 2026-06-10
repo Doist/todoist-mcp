@@ -45,6 +45,7 @@ const TaskSchema = z.object({
 const ProjectSchema = z.object({
     id: z.string().describe('The unique ID of the project.'),
     name: z.string().describe('The name of the project.'),
+    description: z.string().describe('The description of the project (empty string if none).'),
     color: ColorOutputSchema,
     isFavorite: z.boolean().describe('Whether the project is marked as favorite.'),
     isShared: z.boolean().describe('Whether the project is shared.'),
