@@ -6,7 +6,11 @@ import { ToolNames } from '../utils/tool-names.js'
 
 const SectionUpdateSchema = z.object({
     id: z.string().min(1).describe('The ID of the section to update.'),
-    name: z.string().min(1).describe('The new name of the section.'),
+    name: z.string().min(1).optional().describe('The new name of the section.'),
+    description: z
+        .string()
+        .optional()
+        .describe('The description of the section. Supports Markdown. Pass "" to clear it.'),
 })
 
 const ArgsSchema = {
@@ -27,7 +31,13 @@ const updateSections = {
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     async execute({ sections }, client) {
         const updatedSections = await Promise.all(
-            sections.map((section) => client.updateSection(section.id, { name: section.name })),
+            sections.map(({ id, ...rest }) => {
+                // SDK dependency: UpdateSectionArgs requires `name` and omits
+                // `description`. The REST client forwards the extra fields; the
+                // cast covers the gap until the SDK models them.
+                const updateArgs = rest as Parameters<typeof client.updateSection>[1]
+                return client.updateSection(id, updateArgs)
+            }),
         )
 
         const textContent = generateTextContent({

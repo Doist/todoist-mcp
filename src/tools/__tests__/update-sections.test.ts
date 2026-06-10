@@ -67,6 +67,24 @@ describe(`${UPDATE_SECTIONS} tool`, () => {
                 }),
             )
         })
+
+        it('should update description only, without a name change', async () => {
+            const mockApiResponse = createMockSection({
+                id: 'sec-1',
+                name: 'Planning',
+            })
+            mockTodoistApi.updateSection.mockResolvedValue(mockApiResponse)
+
+            await updateSections.execute(
+                { sections: [{ id: 'sec-1', description: 'Sprint backlog' }] },
+                mockTodoistApi,
+            )
+
+            // No `name` is sent when only the description changes.
+            expect(mockTodoistApi.updateSection).toHaveBeenCalledWith('sec-1', {
+                description: 'Sprint backlog',
+            })
+        })
     })
 
     describe('updating multiple sections', () => {

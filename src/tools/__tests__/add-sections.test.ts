@@ -64,6 +64,38 @@ describe(`${ADD_SECTIONS} tool`, () => {
             )
         })
 
+        it('should forward description to the API and map it back', async () => {
+            const mockApiResponse = {
+                ...createMockSection({
+                    id: TEST_IDS.SECTION_1,
+                    projectId: TEST_IDS.PROJECT_TEST,
+                    name: 'QA',
+                }),
+                description: 'Bugs to verify',
+            } as Section
+            mockTodoistApi.addSection.mockResolvedValue(mockApiResponse)
+
+            const result = await addSections.execute(
+                {
+                    sections: [
+                        {
+                            name: 'QA',
+                            projectId: TEST_IDS.PROJECT_TEST,
+                            description: 'Bugs to verify',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.addSection).toHaveBeenCalledWith(
+                expect.objectContaining({ name: 'QA', description: 'Bugs to verify' }),
+            )
+            expect(result.structuredContent.sections[0]).toEqual(
+                expect.objectContaining({ description: 'Bugs to verify' }),
+            )
+        })
+
         it('should handle different section properties from API', async () => {
             const mockApiResponse = createMockSection({
                 id: TEST_IDS.SECTION_2,
