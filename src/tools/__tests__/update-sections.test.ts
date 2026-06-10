@@ -1,5 +1,6 @@
 import type { Section, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
+import { z } from 'zod'
 import { createMockSection } from '../../utils/test-helpers.js'
 import { ToolNames } from '../../utils/tool-names.js'
 import { updateSections } from '../update-sections.js'
@@ -82,6 +83,38 @@ describe(`${UPDATE_SECTIONS} tool`, () => {
             // No `name` is sent when only the description changes.
             expect(mockTodoistApi.updateSection).toHaveBeenCalledWith('sec-1', {
                 description: 'Sprint backlog',
+            })
+        })
+
+        it('clears the description when passed the "remove" sentinel', async () => {
+            mockTodoistApi.updateSection.mockResolvedValue(
+                createMockSection({ id: 'sec-1', name: 'Planning' }),
+            )
+
+            await updateSections.execute(
+                { sections: [{ id: 'sec-1', description: 'remove' }] },
+                mockTodoistApi,
+            )
+
+            // "remove" maps to null, the section clear value (backend NULL_CLEARS).
+            expect(mockTodoistApi.updateSection).toHaveBeenCalledWith('sec-1', {
+                description: null,
+            })
+        })
+
+        it('treats legacy null as a clear (via the schema preprocess)', async () => {
+            mockTodoistApi.updateSection.mockResolvedValue(
+                createMockSection({ id: 'sec-1', name: 'Planning' }),
+            )
+
+            // Parse through the schema so the null -> "remove" preprocess runs.
+            const parsed = z.object(updateSections.parameters).parse({
+                sections: [{ id: 'sec-1', description: null }],
+            })
+            await updateSections.execute(parsed, mockTodoistApi)
+
+            expect(mockTodoistApi.updateSection).toHaveBeenCalledWith('sec-1', {
+                description: null,
             })
         })
     })
