@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
     buildUsageTrackingHeaders,
+    createTodoistClient,
     createTrackedFetch,
     resetDispatcherModuleLoaderForTests,
     resetDefaultDispatcherForTests,
@@ -307,5 +308,62 @@ describe('usage tracking', () => {
         expect(headers.get('doist-platform')).toBeNull()
         expect(headers.get('mcp-tool')).toBeNull()
         expect(headers.get('session-id')).toBeNull()
+    })
+})
+
+// Regression guard for Doist/Issues#20430. The host allowlist and redirect
+// auth-stripping live in @doist/todoist-sdk, but these exercise the full
+// createTodoistClient -> createTrackedFetch -> SDK path so a future SDK bump
+// that loosens the behaviour fails loudly in this repo.
+describe('createTodoistClient viewAttachment safety (Doist/Issues#20430)', () => {
+    afterEach(() => {
+        vi.restoreAllMocks()
+    })
+
+    it('rejects non-attachment Todoist hosts without making a request', async () => {
+        const fetchSpy = vi.spyOn(globalThis, 'fetch')
+        const client = createTodoistClient('test-token')
+
+        await expect(client.viewAttachment('https://api.todoist.com/api/v1/tasks')).rejects.toThrow(
+            /known Todoist attachment host/i,
+        )
+        await expect(client.viewAttachment('https://app.todoist.com/app')).rejects.toThrow(
+            /known Todoist attachment host/i,
+        )
+
+        expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it('does not forward the auth token to the CDN on an attachment redirect', async () => {
+        const cdnUrl = 'https://todoist.b-cdn.net/uploads/file.png'
+        const fetchMock = vi
+            .fn<typeof fetch>()
+            // files.todoist.com authorizes, then redirects to the CDN...
+            .mockResolvedValueOnce(
+                new Response(null, { status: 302, headers: { location: cdnUrl } }),
+            )
+            // ...and the CDN serves the file.
+            .mockResolvedValueOnce(
+                new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+                    status: 200,
+                    headers: { 'content-type': 'image/png' },
+                }),
+            )
+        vi.spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
+
+        const client = createTodoistClient('test-token')
+        await client.viewAttachment('https://files.todoist.com/user_upload/file.png')
+
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        const [firstUrl, firstInit] = fetchMock.mock.calls[0] ?? []
+        const [secondUrl, secondInit] = fetchMock.mock.calls[1] ?? []
+
+        // The authenticated host gets the token.
+        expect(firstUrl).toBe('https://files.todoist.com/user_upload/file.png')
+        expect(new Headers(firstInit?.headers).get('authorization')).toBe('Bearer test-token')
+
+        // The cross-origin CDN hop must not carry the token.
+        expect(secondUrl).toBe(cdnUrl)
+        expect(new Headers(secondInit?.headers).get('authorization')).toBeNull()
     })
 })
