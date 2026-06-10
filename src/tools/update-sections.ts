@@ -4,14 +4,28 @@ import type { TodoistTool } from '../todoist-tool.js'
 import { SectionSchema as SectionOutputSchema, toSectionSummary } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
 
+const REMOVE_SENTINEL = 'remove'
+
 const SectionUpdateSchema = z.object({
     id: z.string().min(1).describe('The ID of the section to update.'),
     name: z.string().min(1).optional().describe('The new name of the section.'),
     description: z
-        .string()
-        .optional()
-        .describe('The description of the section. Supports Markdown. Pass "" to clear it.'),
+        .preprocess(
+            (value) => (value === null ? REMOVE_SENTINEL : value),
+            z
+                .string()
+                .describe(
+                    `The description of the section (Markdown). Use "${REMOVE_SENTINEL}" to clear it.`,
+                ),
+        )
+        .optional(),
 })
+
+/** Translate the `"remove"` sentinel (and legacy `null`) to the API's clear value. */
+function mapSentinelToNull(value: string | undefined, sentinel: string): string | null | undefined {
+    if (value === sentinel) return null
+    return value
+}
 
 const ArgsSchema = {
     sections: z.array(SectionUpdateSchema).min(1).describe('The sections to update.'),
@@ -31,11 +45,17 @@ const updateSections = {
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     async execute({ sections }, client) {
         const updatedSections = await Promise.all(
-            sections.map(({ id, ...rest }) => {
+            sections.map(({ id, name, description }) => {
                 // SDK dependency: UpdateSectionArgs requires `name` and omits
                 // `description`. The REST client forwards the extra fields; the
-                // cast covers the gap until the SDK models them.
-                const updateArgs = rest as Parameters<typeof client.updateSection>[1]
+                // cast covers the gap until the SDK models them. `"remove"`
+                // (and legacy `null`) clears the description via `null`.
+                const updateArgs = {
+                    ...(name !== undefined ? { name } : {}),
+                    ...(description !== undefined
+                        ? { description: mapSentinelToNull(description, REMOVE_SENTINEL) }
+                        : {}),
+                } as Parameters<typeof client.updateSection>[1]
                 return client.updateSection(id, updateArgs)
             }),
         )
