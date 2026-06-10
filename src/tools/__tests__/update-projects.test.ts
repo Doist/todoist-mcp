@@ -100,6 +100,37 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
             )
         })
 
+        it('clears the description via the "remove" sentinel (empty string on the wire)', async () => {
+            mockTodoistApi.updateProject.mockResolvedValue(
+                createMockProject({ id: 'project-123', name: 'Docs', description: '' }),
+            )
+
+            await updateProjects.execute(
+                { projects: [{ id: 'project-123', description: 'remove' }] },
+                mockTodoistApi,
+            )
+
+            // "remove" maps to "", the project clear value (backend NULL_KEEPS_UNCHANGED).
+            expect(mockTodoistApi.updateProject).toHaveBeenCalledWith('project-123', {
+                description: '',
+            })
+        })
+
+        it('treats legacy null as a clear (via the schema preprocess)', async () => {
+            mockTodoistApi.updateProject.mockResolvedValue(
+                createMockProject({ id: 'project-123', name: 'Docs', description: '' }),
+            )
+
+            const parsed = z.object(updateProjects.parameters).parse({
+                projects: [{ id: 'project-123', description: null }],
+            })
+            await updateProjects.execute(parsed, mockTodoistApi)
+
+            expect(mockTodoistApi.updateProject).toHaveBeenCalledWith('project-123', {
+                description: '',
+            })
+        })
+
         it('should update project with isFavorite and viewStyle options', async () => {
             const mockApiResponse: PersonalProject = {
                 url: 'https://todoist.com/projects/project-123',

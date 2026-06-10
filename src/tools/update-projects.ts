@@ -6,15 +6,23 @@ import { ColorSchema } from '../utils/colors.js'
 import { ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
 
+const REMOVE_SENTINEL = 'remove'
+
 const ProjectUpdateSchema = z.object({
     id: z.string().min(1).describe('The ID of the project to update.'),
     name: z.string().min(1).optional().describe('The new name of the project.'),
     isFavorite: z.boolean().optional().describe('Whether the project is a favorite.'),
     viewStyle: z.enum(['list', 'board', 'calendar']).optional().describe('The project view style.'),
     description: z
-        .string()
-        .optional()
-        .describe('The description of the project. Supports Markdown. Pass "" to clear it.'),
+        .preprocess(
+            (value) => (value === null ? REMOVE_SENTINEL : value),
+            z
+                .string()
+                .describe(
+                    `The description of the project (Markdown). Use "${REMOVE_SENTINEL}" to clear it.`,
+                ),
+        )
+        .optional(),
     color: ColorSchema,
 })
 
@@ -55,7 +63,19 @@ const updateProjects = {
                 const skipReason = getSkipReason(project)
                 if (skipReason !== null) return { kind: 'skipped', reason: skipReason }
 
-                const { id, ...updateArgs } = project
+                const { id, description, ...rest } = project
+                // Keep the SDK signature so the rest of the payload stays
+                // checked; only `description` escapes the types until the SDK
+                // adds it. `"remove"` (and legacy `null`) clears via an empty
+                // string, the project clear value (backend NULL_KEEPS_UNCHANGED).
+                const updateArgs: Parameters<typeof client.updateProject>[1] & {
+                    description?: string
+                } = {
+                    ...rest,
+                    ...(description !== undefined
+                        ? { description: description === REMOVE_SENTINEL ? '' : description }
+                        : {}),
+                }
                 const updated = await client.updateProject(id, updateArgs)
                 return { kind: 'updated', project: updated }
             }),
