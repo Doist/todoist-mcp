@@ -101,7 +101,7 @@ const OutputSchema = {
     failures: z
         .array(FailureSchema)
         .describe(
-            'Tasks that could not be updated, with the reason for each. A failure here does not affect the other tasks in the batch — do not retry the whole batch; address or drop the failed items.',
+            'Tasks that could not be updated, with the reason for each. A failure here does not affect the other tasks in the batch.',
         ),
     appliedOperations: z
         .object({
@@ -136,17 +136,25 @@ const updateTasks = {
         let skippedCount = 0
 
         settled.forEach((result, index) => {
+            const item = tasks[index]?.id ?? `Task ${index + 1}`
+
             if (result.status === 'fulfilled') {
-                if (result.value === undefined) {
+                const outcome = result.value
+                if (outcome.kind === 'skipped') {
                     skippedCount++
-                } else {
-                    updatedTasks.push(result.value)
+                    return
+                }
+                // Both 'applied' and 'partial' changed the task, so it's part of the
+                // results; a partial additionally records what still needs retrying.
+                updatedTasks.push(outcome.task)
+                if (outcome.kind === 'partial') {
+                    failures.push({ item, error: outcome.error })
                 }
                 return
             }
 
             failures.push({
-                item: tasks[index]?.id ?? `Task ${index + 1}`,
+                item,
                 error:
                     result.reason instanceof Error ? result.reason.message : String(result.reason),
             })
@@ -187,14 +195,26 @@ const updateTasks = {
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
 
 /**
- * Applies a single task's update and/or move. Returns the resulting task, or
- * `undefined` when the task carries no changes to make (skipped). Throws on API or
- * validation errors so the caller can record a per-task failure without aborting the
- * rest of the batch.
+ * Outcome of applying a single task's changes:
+ * - `skipped`: the task carried no changes to make.
+ * - `applied`: every requested change succeeded; `task` is the final state.
+ * - `partial`: the move succeeded but the follow-up field update failed. `task` is the
+ *   moved task (so the completed move isn't discarded) and `error` explains what still
+ *   needs retrying. Anything else throws, so a pure failure is recorded by the caller.
  */
-async function processTaskUpdate(task: TaskUpdate, client: TodoistApi): Promise<Task | undefined> {
+type TaskOutcome =
+    | { kind: 'skipped' }
+    | { kind: 'applied'; task: Task }
+    | { kind: 'partial'; task: Task; error: string }
+
+/**
+ * Applies a single task's update and/or move. Throws on API or validation errors that
+ * left nothing applied, so the caller can record a per-task failure without aborting the
+ * rest of the batch. See {@link TaskOutcome} for the success/skip/partial cases.
+ */
+async function processTaskUpdate(task: TaskUpdate, client: TodoistApi): Promise<TaskOutcome> {
     if (!hasUpdatesToMake(task)) {
-        return undefined
+        return { kind: 'skipped' }
     }
 
     const {
@@ -286,17 +306,31 @@ async function processTaskUpdate(task: TaskUpdate, client: TodoistApi): Promise<
 
     // If no move parameters are provided, use updateTask without moveTask
     if (!resolvedProjectId && !sectionId && !parentId) {
-        return await client.updateTask(id, updateArgs)
+        return { kind: 'applied', task: await client.updateTask(id, updateArgs) }
     }
 
+    // Move first: a forbidden move (e.g. out of a workspace) fails here before any field
+    // update runs, keeping that common case a clean "nothing applied" failure.
     const moveArgs = createMoveTaskArgs(id, resolvedProjectId, sectionId, parentId)
     const movedTask = await client.moveTask(id, moveArgs)
 
-    if (Object.keys(updateArgs).length > 0) {
-        return await client.updateTask(id, updateArgs)
+    if (Object.keys(updateArgs).length === 0) {
+        return { kind: 'applied', task: movedTask }
     }
 
-    return movedTask
+    // The move is now applied server-side. If the follow-up field update fails, report a
+    // partial success rather than a pure failure — otherwise the completed move would be
+    // discarded and the caller told to replay the whole item (re-doing the move).
+    try {
+        return { kind: 'applied', task: await client.updateTask(id, updateArgs) }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return {
+            kind: 'partial',
+            task: movedTask,
+            error: `Move applied, but updating the other fields failed: ${message}. The move is already done; only the field changes did not apply.`,
+        }
+    }
 }
 
 function generateTextContent({
