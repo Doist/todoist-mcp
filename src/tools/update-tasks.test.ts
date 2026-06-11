@@ -1193,12 +1193,13 @@ describe(`${UPDATE_TASKS} tool`, () => {
             expect(structuredContent.totalCount).toBe(1)
             expect(structuredContent.updatedTaskIds).toEqual(['ok-task'])
 
-            // The failure is reported per-task, with the specific API objection surfaced.
+            // The failure is reported per-task, surfacing the error's message (matching the
+            // add-tasks/complete-tasks pattern). The SDK's moveTask puts the generic status
+            // text in error.message; the API objection lives in responseData and is not
+            // echoed per item.
             expect(structuredContent.failures).toHaveLength(1)
             expect(structuredContent.failures[0]?.item).toBe('bad-task')
-            expect(structuredContent.failures[0]?.error).toContain(
-                'Not allowed to move objects out of a workspace',
-            )
+            expect(structuredContent.failures[0]?.error).toBe('Request failed with status code 403')
             expect(structuredContent.appliedOperations).toEqual({
                 updateCount: 1,
                 skippedCount: 0,
