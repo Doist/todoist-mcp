@@ -1161,6 +1161,105 @@ describe(`${UPDATE_TASKS} tool`, () => {
         })
     })
 
+    describe('partial batch failures', () => {
+        it('keeps successful updates when one task in the batch fails', async () => {
+            const okTask = createMockTask({ id: 'ok-task', content: 'Updated ok' })
+            mockTodoistApi.updateTask.mockResolvedValue(okTask)
+            // The forbidden cross-workspace move shape the API rejects with 403.
+            mockTodoistApi.moveTask.mockRejectedValue(
+                Object.assign(new Error('Request failed with status code 403'), {
+                    httpStatusCode: 403,
+                    responseData: {
+                        error: 'Not allowed to move objects out of a workspace',
+                        error_tag: 'FORBIDDEN',
+                        http_code: 403,
+                    },
+                }),
+            )
+
+            const result = await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'ok-task', content: 'Updated ok' },
+                        { id: 'bad-task', projectId: 'personal-project' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const { structuredContent } = result
+            // The valid update is preserved instead of being discarded by the failure.
+            expect(structuredContent.tasks).toHaveLength(1)
+            expect(structuredContent.totalCount).toBe(1)
+            expect(structuredContent.updatedTaskIds).toEqual(['ok-task'])
+
+            // The failure is reported per-task, with the specific API objection surfaced.
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('bad-task')
+            expect(structuredContent.failures[0]?.error).toContain(
+                'Not allowed to move objects out of a workspace',
+            )
+            expect(structuredContent.appliedOperations).toEqual({
+                updateCount: 1,
+                skippedCount: 0,
+                failureCount: 1,
+            })
+
+            // The text content tells the model not to retry the whole batch.
+            expect(result.textContent).toContain('Updated 1 task')
+            expect(result.textContent).toContain('Failed (1)')
+            expect(result.textContent).toContain('not retried automatically')
+        })
+
+        it('throws when every task in the batch fails', async () => {
+            mockTodoistApi.moveTask.mockRejectedValue(
+                Object.assign(new Error('Request failed with status code 403'), {
+                    httpStatusCode: 403,
+                    responseData: {
+                        error: 'Not allowed to move objects out of a workspace',
+                        http_code: 403,
+                    },
+                }),
+            )
+
+            await expect(
+                updateTasks.execute(
+                    {
+                        tasks: [
+                            { id: 'bad-1', projectId: 'personal-project' },
+                            { id: 'bad-2', projectId: 'personal-project' },
+                        ],
+                    },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow('All 2 task update(s) failed')
+        })
+
+        it('counts skipped (no-change) tasks separately from failures', async () => {
+            const okTask = createMockTask({ id: 'ok-task', content: 'Updated ok' })
+            mockTodoistApi.updateTask.mockResolvedValue(okTask)
+
+            const result = await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'ok-task', content: 'Updated ok' },
+                        { id: 'noop-task' }, // only id -> skipped, not a failure
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const { structuredContent } = result
+            expect(structuredContent.tasks).toHaveLength(1)
+            expect(structuredContent.failures).toHaveLength(0)
+            expect(structuredContent.appliedOperations).toEqual({
+                updateCount: 1,
+                skippedCount: 1,
+                failureCount: 0,
+            })
+        })
+    })
+
     describe('isUncompletable parameter', () => {
         it('should pass isUncompletable parameter to SDK', async () => {
             // Mock API response - minimal mock just to prevent errors
