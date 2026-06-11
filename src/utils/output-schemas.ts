@@ -70,16 +70,22 @@ const ProjectSchema = z.object({
 const SectionSchema = z.object({
     id: z.string().describe('The unique ID of the section.'),
     name: z.string().describe('The name of the section.'),
+    description: z
+        .string()
+        .optional()
+        .describe('The description of the section. Supports Markdown.'),
 })
 
 type SectionSummary = z.infer<typeof SectionSchema>
 
 /**
- * Strip an SDK Section (or any object with id/name) down to the fields
- * declared in SectionSchema. Keeps tool responses aligned with the schema.
+ * Strip an SDK Section down to the fields declared in SectionSchema. Keeps tool
+ * responses aligned with the schema. The output schema uses an optional string
+ * (Gemini-compatible), so the read's `string | null` description maps `null` to
+ * `undefined`.
  */
-function toSectionSummary({ id, name }: Section): SectionSummary {
-    return { id, name }
+function toSectionSummary({ id, name, description }: Section): SectionSummary {
+    return { id, name, description: description ?? undefined }
 }
 
 /**

@@ -19,6 +19,7 @@ const { FETCH_OBJECT } = ToolNames
 const MOCK_SECTION: Section = {
     id: 'section123',
     name: 'My Section',
+    description: 'Section notes',
     projectId: 'project123',
     sectionOrder: 1,
     userId: 'user123',
@@ -218,6 +219,7 @@ describe(`${FETCH_OBJECT} tool`, () => {
                 object: {
                     id: 'section123',
                     name: 'My Section',
+                    description: 'Section notes',
                 },
             })
         })

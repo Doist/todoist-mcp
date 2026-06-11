@@ -1,5 +1,6 @@
 import type { Section, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
+import { z } from 'zod'
 import { createMockSection } from '../../utils/test-helpers.js'
 import { ToolNames } from '../../utils/tool-names.js'
 import { updateSections } from '../update-sections.js'
@@ -30,6 +31,7 @@ describe(`${UPDATE_SECTIONS} tool`, () => {
                 isDeleted: false,
                 isCollapsed: false,
                 name: 'Updated Section Name',
+                description: null,
                 url: 'https://todoist.com/sections/existing-section-123',
             }
 
@@ -65,6 +67,78 @@ describe(`${UPDATE_SECTIONS} tool`, () => {
                     updatedSectionIds: ['existing-section-123'],
                 }),
             )
+        })
+
+        it('should update description only, without a name change', async () => {
+            const mockApiResponse = createMockSection({
+                id: 'sec-1',
+                name: 'Planning',
+            })
+            mockTodoistApi.updateSection.mockResolvedValue(mockApiResponse)
+
+            await updateSections.execute(
+                { sections: [{ id: 'sec-1', description: 'Sprint backlog' }] },
+                mockTodoistApi,
+            )
+
+            // No `name` is sent when only the description changes.
+            expect(mockTodoistApi.updateSection).toHaveBeenCalledWith('sec-1', {
+                description: 'Sprint backlog',
+            })
+        })
+
+        it('clears the description with an empty string (sends null per NULL_CLEARS)', async () => {
+            mockTodoistApi.updateSection.mockResolvedValue(
+                createMockSection({ id: 'sec-1', name: 'Planning' }),
+            )
+
+            await updateSections.execute(
+                { sections: [{ id: 'sec-1', description: '' }] },
+                mockTodoistApi,
+            )
+
+            // "" is the clear input; the section wire clear value is null.
+            expect(mockTodoistApi.updateSection).toHaveBeenCalledWith('sec-1', {
+                description: null,
+            })
+        })
+
+        it('treats legacy null as a clear (preprocessed to "")', async () => {
+            mockTodoistApi.updateSection.mockResolvedValue(
+                createMockSection({ id: 'sec-1', name: 'Planning' }),
+            )
+
+            // Parse through the schema so the null -> "" preprocess runs.
+            const parsed = z.object(updateSections.parameters).parse({
+                sections: [{ id: 'sec-1', description: null }],
+            })
+            await updateSections.execute(parsed, mockTodoistApi)
+
+            expect(mockTodoistApi.updateSection).toHaveBeenCalledWith('sec-1', {
+                description: null,
+            })
+        })
+
+        it('saves the literal string "remove" as a description (no sentinel)', async () => {
+            mockTodoistApi.updateSection.mockResolvedValue(
+                createMockSection({ id: 'sec-1', name: 'Planning' }),
+            )
+
+            await updateSections.execute(
+                { sections: [{ id: 'sec-1', description: 'remove' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.updateSection).toHaveBeenCalledWith('sec-1', {
+                description: 'remove',
+            })
+        })
+
+        it('rejects a no-op update with neither name nor description', () => {
+            const result = z.object(updateSections.parameters).safeParse({
+                sections: [{ id: 'sec-1' }],
+            })
+            expect(result.success).toBe(false)
         })
     })
 

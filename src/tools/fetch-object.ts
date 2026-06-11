@@ -7,6 +7,7 @@ import {
     ProjectSchema,
     SectionSchema,
     TaskSchema,
+    toSectionSummary,
 } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
 
@@ -84,10 +85,7 @@ const fetchObject = {
                         throw new Error(`Section ${id} not found.`)
                     }
 
-                    const mappedSection = {
-                        id: section.id,
-                        name: section.name,
-                    }
+                    const mappedSection = toSectionSummary(section)
                     return {
                         textContent: `Found section: ${mappedSection.name} • id=${mappedSection.id}`,
                         structuredContent: {

@@ -4,10 +4,28 @@ import type { TodoistTool } from '../todoist-tool.js'
 import { SectionSchema as SectionOutputSchema, toSectionSummary } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
 
-const SectionUpdateSchema = z.object({
-    id: z.string().min(1).describe('The ID of the section to update.'),
-    name: z.string().min(1).describe('The new name of the section.'),
-})
+const SectionUpdateSchema = z
+    .object({
+        id: z.string().min(1).describe('The ID of the section to update.'),
+        name: z.string().min(1).optional().describe('The new name of the section.'),
+        description: z
+            .preprocess(
+                // `null` is the advertised clear value; the param schema stays a
+                // plain string (Gemini forbids nullable schemas, not preprocessing),
+                // so `null` is normalised to "" and then mapped to the section
+                // wire clear (`null`) at execute.
+                (value) => (value === null ? '' : value),
+                z
+                    .string()
+                    .describe(
+                        'The description of the section (Markdown). Pass null (or an empty string) to clear it.',
+                    ),
+            )
+            .optional(),
+    })
+    .refine((data) => data.name !== undefined || data.description !== undefined, {
+        message: 'Provide at least one of "name" or "description" to update.',
+    })
 
 const ArgsSchema = {
     sections: z.array(SectionUpdateSchema).min(1).describe('The sections to update.'),
@@ -27,7 +45,20 @@ const updateSections = {
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     async execute({ sections }, client) {
         const updatedSections = await Promise.all(
-            sections.map((section) => client.updateSection(section.id, { name: section.name })),
+            sections.map(({ id, name, description }) => {
+                // The SDK's UpdateSectionArgs is RequireAtLeastOne, which a
+                // dynamically-built partial can't satisfy statically; the schema
+                // refine guarantees at least one field. An empty `description`
+                // clears it, which the section wire represents as `null`
+                // (backend NULL_CLEARS).
+                const updateArgs = {
+                    ...(name !== undefined ? { name } : {}),
+                    ...(description !== undefined
+                        ? { description: description === '' ? null : description }
+                        : {}),
+                } as Parameters<typeof client.updateSection>[1]
+                return client.updateSection(id, updateArgs)
+            }),
         )
 
         const textContent = generateTextContent({
