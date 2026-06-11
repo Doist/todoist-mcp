@@ -6,20 +6,27 @@ import { ToolNames } from '../utils/tool-names.js'
 
 const REMOVE_SENTINEL = 'remove'
 
-const SectionUpdateSchema = z.object({
-    id: z.string().min(1).describe('The ID of the section to update.'),
-    name: z.string().min(1).optional().describe('The new name of the section.'),
-    description: z
-        .preprocess(
-            (value) => (value === null ? REMOVE_SENTINEL : value),
-            z
-                .string()
-                .describe(
-                    `The description of the section (Markdown). Use "${REMOVE_SENTINEL}" to clear it.`,
-                ),
-        )
-        .optional(),
-})
+const SectionUpdateSchema = z
+    .object({
+        id: z.string().min(1).describe('The ID of the section to update.'),
+        name: z.string().min(1).optional().describe('The new name of the section.'),
+        description: z
+            .preprocess(
+                (value) => (value === null ? REMOVE_SENTINEL : value),
+                // Reject "" so `"remove"` is the single documented clear path
+                // (matching update-goals/update-tasks); `null` is preprocessed above.
+                z
+                    .string()
+                    .min(1)
+                    .describe(
+                        `The description of the section (Markdown). Use "${REMOVE_SENTINEL}" to clear it.`,
+                    ),
+            )
+            .optional(),
+    })
+    .refine((data) => data.name !== undefined || data.description !== undefined, {
+        message: 'Provide at least one of "name" or "description" to update.',
+    })
 
 /** Translate the `"remove"` sentinel (and legacy `null`) to the API's clear value. */
 function mapSentinelToNull(value: string | undefined, sentinel: string): string | null | undefined {
