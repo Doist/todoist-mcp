@@ -16,8 +16,11 @@ const ProjectUpdateSchema = z.object({
     description: z
         .preprocess(
             (value) => (value === null ? REMOVE_SENTINEL : value),
+            // Reject "" so `"remove"` is the single documented clear path
+            // (matching update-goals/update-tasks); `null` is preprocessed above.
             z
                 .string()
+                .min(1)
                 .describe(
                     `The description of the project (Markdown). Use "${REMOVE_SENTINEL}" to clear it.`,
                 ),

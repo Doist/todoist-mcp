@@ -131,6 +131,13 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
             })
         })
 
+        it('rejects an empty-string description ("remove" is the only clear path)', () => {
+            const result = z.object(updateProjects.parameters).safeParse({
+                projects: [{ id: 'project-123', description: '' }],
+            })
+            expect(result.success).toBe(false)
+        })
+
         it('should update project with isFavorite and viewStyle options', async () => {
             const mockApiResponse: PersonalProject = {
                 url: 'https://todoist.com/projects/project-123',
