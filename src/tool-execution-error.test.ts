@@ -74,6 +74,49 @@ describe('formatToolExecutionError', () => {
         expect(output).toContain('Try next: Check parameter values and formats, then retry.')
     })
 
+    it('advises against retrying on 403 forbidden responses', () => {
+        const output = formatToolExecutionError({
+            httpStatusCode: 403,
+            responseData: {
+                error: 'Not allowed to move objects out of a workspace',
+                error_tag: 'FORBIDDEN',
+                http_code: 403,
+            },
+        })
+
+        expect(output).toContain('Message: Not allowed to move objects out of a workspace')
+        expect(output).toContain("retrying the same request won't help")
+        expect(output).not.toContain('then retry')
+    })
+
+    it('covers both the scope/access and permission-decision remediations on 403', () => {
+        const output = formatToolExecutionError({
+            httpStatusCode: 403,
+            responseData: {
+                error: 'Insufficient token scope',
+                error_tag: 'FORBIDDEN',
+                http_code: 403,
+            },
+        })
+
+        // A scope/access-denied 403 cannot be fixed by changing the request — the hint
+        // must point the caller toward a token/account with the required access too.
+        expect(output).toContain('insufficient token scope')
+        expect(output).toContain('required access')
+        expect(output).toContain('change the request or target')
+    })
+
+    it('keeps token guidance distinct on 401 unauthorized responses', () => {
+        const output = formatToolExecutionError({
+            httpStatusCode: 401,
+            responseData: { error: 'Unauthorized', http_code: 401 },
+        })
+
+        expect(output).toContain(
+            'Try next: Authentication failed. Verify your API token, then retry.',
+        )
+    })
+
     it('redacts secret values in API errors', () => {
         const output = formatToolExecutionError({
             httpStatusCode: 401,

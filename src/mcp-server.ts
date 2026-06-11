@@ -146,7 +146,7 @@ You have access to comprehensive Todoist management tools for personal productiv
 
 7. **Pagination**: Large result sets use cursor-based pagination. Use limit parameter to control result size (default varies by tool).
 
-8. **Error Handling**: All tools provide detailed error messages and next-step suggestions. Pay attention to validation feedback for corrective actions.
+8. **Error Handling**: All tools provide detailed error messages and next-step suggestions. Pay attention to validation feedback for corrective actions. A \`403 Forbidden\` is not a transient/rate-limit error — retrying it will keep failing and can trip server-side abuse penalties. It has two causes that need different fixes: a scope/access denial (e.g. "Insufficient Token scope") means the token or account lacks the required access, so a different token/account is needed; otherwise it is a permission decision (for example, "Not allowed to move objects out of a workspace" — tasks cannot be moved from a workspace project into a personal project or a different workspace), which means the request or target must change.
 
 ### Common Workflows:
 
