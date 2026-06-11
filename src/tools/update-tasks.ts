@@ -1,7 +1,6 @@
 import type { Task, TodoistApi, UpdateTaskArgs } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { formatToolExecutionError } from '../tool-execution-error.js'
 import { createMoveTaskArgs, mapTask, resolveInboxProjectId } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
 import { DisplayLimits } from '../utils/constants.js'
@@ -148,7 +147,8 @@ const updateTasks = {
 
             failures.push({
                 item: tasks[index]?.id ?? `Task ${index + 1}`,
-                error: formatToolExecutionError(result.reason),
+                error:
+                    result.reason instanceof Error ? result.reason.message : String(result.reason),
             })
         })
 
