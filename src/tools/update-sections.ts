@@ -10,13 +10,14 @@ const SectionUpdateSchema = z
         name: z.string().min(1).optional().describe('The new name of the section.'),
         description: z
             .preprocess(
-                // Accept legacy `null` as a clear; Gemini forbids nullable schemas, not preprocessing.
+                // `null` is the advertised clear value; the param schema stays a
+                // plain string (Gemini forbids nullable schemas, not preprocessing),
+                // so `null` is normalised to "" and then mapped to the section
+                // wire clear (`null`) at execute.
                 (value) => (value === null ? '' : value),
                 z
                     .string()
-                    .describe(
-                        'The description of the section (Markdown). Pass an empty string to clear it.',
-                    ),
+                    .describe('The description of the section (Markdown). Pass null to clear it.'),
             )
             .optional(),
     })
