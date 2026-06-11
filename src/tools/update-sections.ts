@@ -4,22 +4,18 @@ import type { TodoistTool } from '../todoist-tool.js'
 import { SectionSchema as SectionOutputSchema, toSectionSummary } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
 
-const REMOVE_SENTINEL = 'remove'
-
 const SectionUpdateSchema = z
     .object({
         id: z.string().min(1).describe('The ID of the section to update.'),
         name: z.string().min(1).optional().describe('The new name of the section.'),
         description: z
             .preprocess(
-                (value) => (value === null ? REMOVE_SENTINEL : value),
-                // Reject "" so `"remove"` is the single documented clear path
-                // (matching update-goals/update-tasks); `null` is preprocessed above.
+                // Accept legacy `null` as a clear; Gemini forbids nullable schemas, not preprocessing.
+                (value) => (value === null ? '' : value),
                 z
                     .string()
-                    .min(1)
                     .describe(
-                        `The description of the section (Markdown). Use "${REMOVE_SENTINEL}" to clear it.`,
+                        'The description of the section (Markdown). Pass an empty string to clear it.',
                     ),
             )
             .optional(),
@@ -27,12 +23,6 @@ const SectionUpdateSchema = z
     .refine((data) => data.name !== undefined || data.description !== undefined, {
         message: 'Provide at least one of "name" or "description" to update.',
     })
-
-/** Translate the `"remove"` sentinel (and legacy `null`) to the API's clear value. */
-function mapSentinelToNull(value: string | undefined, sentinel: string): string | null | undefined {
-    if (value === sentinel) return null
-    return value
-}
 
 const ArgsSchema = {
     sections: z.array(SectionUpdateSchema).min(1).describe('The sections to update.'),
@@ -54,13 +44,14 @@ const updateSections = {
         const updatedSections = await Promise.all(
             sections.map(({ id, name, description }) => {
                 // The SDK's UpdateSectionArgs is RequireAtLeastOne, which a
-                // dynamically-built partial can't satisfy statically; we always
-                // include at least one field here. `"remove"` (and legacy `null`)
-                // clears the description via `null` (backend NULL_CLEARS).
+                // dynamically-built partial can't satisfy statically; the schema
+                // refine guarantees at least one field. An empty `description`
+                // clears it, which the section wire represents as `null`
+                // (backend NULL_CLEARS).
                 const updateArgs = {
                     ...(name !== undefined ? { name } : {}),
                     ...(description !== undefined
-                        ? { description: mapSentinelToNull(description, REMOVE_SENTINEL) }
+                        ? { description: description === '' ? null : description }
                         : {}),
                 } as Parameters<typeof client.updateSection>[1]
                 return client.updateSection(id, updateArgs)
