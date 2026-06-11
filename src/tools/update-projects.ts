@@ -6,8 +6,6 @@ import { ColorSchema } from '../utils/colors.js'
 import { ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
 
-const REMOVE_SENTINEL = 'remove'
-
 const ProjectUpdateSchema = z.object({
     id: z.string().min(1).describe('The ID of the project to update.'),
     name: z.string().min(1).optional().describe('The new name of the project.'),
@@ -15,14 +13,12 @@ const ProjectUpdateSchema = z.object({
     viewStyle: z.enum(['list', 'board', 'calendar']).optional().describe('The project view style.'),
     description: z
         .preprocess(
-            (value) => (value === null ? REMOVE_SENTINEL : value),
-            // Reject "" so `"remove"` is the single documented clear path
-            // (matching update-goals/update-tasks); `null` is preprocessed above.
+            // Accept legacy `null` as a clear; Gemini forbids nullable schemas, not preprocessing.
+            (value) => (value === null ? '' : value),
             z
                 .string()
-                .min(1)
                 .describe(
-                    `The description of the project (Markdown). Use "${REMOVE_SENTINEL}" to clear it.`,
+                    'The description of the project (Markdown). Pass an empty string to clear it.',
                 ),
         )
         .optional(),
@@ -66,15 +62,9 @@ const updateProjects = {
                 const skipReason = getSkipReason(project)
                 if (skipReason !== null) return { kind: 'skipped', reason: skipReason }
 
-                const { id, description, ...rest } = project
-                // `"remove"` (and legacy `null`) clears via an empty string, the
-                // project clear value (backend NULL_KEEPS_UNCHANGED).
-                const updateArgs: Parameters<typeof client.updateProject>[1] = {
-                    ...rest,
-                    ...(description !== undefined
-                        ? { description: description === REMOVE_SENTINEL ? '' : description }
-                        : {}),
-                }
+                // An empty `description` clears it. That is already the project
+                // wire value (backend NULL_KEEPS_UNCHANGED), so forward as-is.
+                const { id, ...updateArgs } = project
                 const updated = await client.updateProject(id, updateArgs)
                 return { kind: 'updated', project: updated }
             }),

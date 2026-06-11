@@ -100,23 +100,23 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
             )
         })
 
-        it('clears the description via the "remove" sentinel (empty string on the wire)', async () => {
+        it('clears the description with an empty string', async () => {
             mockTodoistApi.updateProject.mockResolvedValue(
                 createMockProject({ id: 'project-123', name: 'Docs', description: '' }),
             )
 
             await updateProjects.execute(
-                { projects: [{ id: 'project-123', description: 'remove' }] },
+                { projects: [{ id: 'project-123', description: '' }] },
                 mockTodoistApi,
             )
 
-            // "remove" maps to "", the project clear value (backend NULL_KEEPS_UNCHANGED).
+            // "" is the project wire clear value (backend NULL_KEEPS_UNCHANGED).
             expect(mockTodoistApi.updateProject).toHaveBeenCalledWith('project-123', {
                 description: '',
             })
         })
 
-        it('treats legacy null as a clear (via the schema preprocess)', async () => {
+        it('treats legacy null as a clear (preprocessed to "")', async () => {
             mockTodoistApi.updateProject.mockResolvedValue(
                 createMockProject({ id: 'project-123', name: 'Docs', description: '' }),
             )
@@ -131,11 +131,19 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
             })
         })
 
-        it('rejects an empty-string description ("remove" is the only clear path)', () => {
-            const result = z.object(updateProjects.parameters).safeParse({
-                projects: [{ id: 'project-123', description: '' }],
+        it('saves the literal string "remove" as a description (no sentinel)', async () => {
+            mockTodoistApi.updateProject.mockResolvedValue(
+                createMockProject({ id: 'project-123', name: 'Docs', description: 'remove' }),
+            )
+
+            await updateProjects.execute(
+                { projects: [{ id: 'project-123', description: 'remove' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.updateProject).toHaveBeenCalledWith('project-123', {
+                description: 'remove',
             })
-            expect(result.success).toBe(false)
         })
 
         it('should update project with isFavorite and viewStyle options', async () => {
