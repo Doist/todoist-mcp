@@ -135,14 +135,14 @@ const updateTasks = {
         const failures: Array<{ item: string; error: string }> = []
         let skippedCount = 0
 
-        settled.forEach((result, index) => {
+        for (const [index, result] of settled.entries()) {
             if (result.status === 'fulfilled') {
                 if (result.value === undefined) {
                     skippedCount++
                 } else {
                     updatedTasks.push(result.value)
                 }
-                return
+                continue
             }
 
             failures.push({
@@ -150,7 +150,7 @@ const updateTasks = {
                 error:
                     result.reason instanceof Error ? result.reason.message : String(result.reason),
             })
-        })
+        }
 
         // Never throw for per-item problems — even when every task fails. Returning the
         // structured result (empty `tasks`, populated `failures`) keeps total and partial
@@ -257,25 +257,9 @@ async function processTaskUpdate(task: TaskUpdate, client: TodoistApi): Promise<
 
     // Handle assignment changes if provided
     if (responsibleUser !== undefined) {
-        if (responsibleUser === null || responsibleUser === 'unassign') {
-            // Unassign task - no validation needed
-            updateArgs = { ...updateArgs, assigneeId: null }
-        } else {
-            // Validate assignment using comprehensive validator
-            const validation = await assignmentValidator.validateTaskUpdateAssignment(
-                client,
-                id,
-                responsibleUser,
-            )
-
-            if (!validation.isValid) {
-                const errorMsg = validation.error?.message || 'Assignment validation failed'
-                const suggestions = validation.error?.suggestions?.join('. ') || ''
-                throw new Error(`Task ${id}: ${errorMsg}${suggestions ? `. ${suggestions}` : ''}`)
-            }
-
-            // Use the validated assignee ID
-            updateArgs = { ...updateArgs, assigneeId: validation.resolvedUser?.userId }
+        updateArgs = {
+            ...updateArgs,
+            assigneeId: await resolveAssigneeId(client, id, responsibleUser),
         }
     }
 
@@ -292,6 +276,35 @@ async function processTaskUpdate(task: TaskUpdate, client: TodoistApi): Promise<
     }
 
     return movedTask
+}
+
+/**
+ * Resolves the `assigneeId` for a task update from a `responsibleUser` value: `null` to
+ * unassign, or the validated collaborator's user ID. Throws if the requested assignee
+ * fails validation.
+ */
+async function resolveAssigneeId(
+    client: TodoistApi,
+    id: string,
+    responsibleUser: string | null,
+): Promise<string | null | undefined> {
+    if (responsibleUser === null || responsibleUser === 'unassign') {
+        return null
+    }
+
+    const validation = await assignmentValidator.validateTaskUpdateAssignment(
+        client,
+        id,
+        responsibleUser,
+    )
+
+    if (!validation.isValid) {
+        const errorMsg = validation.error?.message || 'Assignment validation failed'
+        const suggestions = validation.error?.suggestions?.join('. ') || ''
+        throw new Error(`Task ${id}: ${errorMsg}${suggestions ? `. ${suggestions}` : ''}`)
+    }
+
+    return validation.resolvedUser?.userId
 }
 
 function generateTextContent({
