@@ -19,6 +19,7 @@ const { FETCH_OBJECT } = ToolNames
 const MOCK_SECTION: Section = {
     id: 'section123',
     name: 'My Section',
+    description: null,
     projectId: 'project123',
     sectionOrder: 1,
     userId: 'user123',
