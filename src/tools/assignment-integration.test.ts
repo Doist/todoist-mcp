@@ -258,13 +258,19 @@ describe('Assignment Integration Tests', () => {
                 },
             })
 
-            await expect(
-                updateTasks.execute(
-                    { tasks: [{ id: 'task-123', responsibleUser: 'invalid@example.com' }] },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('Task task-123: User cannot be assigned to this project')
+            const result = await updateTasks.execute(
+                { tasks: [{ id: 'task-123', responsibleUser: 'invalid@example.com' }] },
+                mockTodoistApi,
+            )
 
+            // Invalid assignment is reported per-item in `failures`, not thrown.
+            const { structuredContent } = result
+            expect(structuredContent.tasks).toHaveLength(0)
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('task-123')
+            expect(structuredContent.failures[0]?.error).toContain(
+                'Task task-123: User cannot be assigned to this project',
+            )
             expect(mockTodoistApi.updateTask).not.toHaveBeenCalled()
         })
     })

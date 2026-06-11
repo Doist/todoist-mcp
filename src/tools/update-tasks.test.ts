@@ -742,75 +742,51 @@ describe(`${UPDATE_TASKS} tool`, () => {
     })
 
     describe('error handling', () => {
-        it('should throw error for invalid duration format', async () => {
-            await expect(
-                updateTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                id: '8485093756',
-                                duration: 'invalid',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('Task 8485093756: Invalid duration format "invalid"')
+        // The tool never throws for per-item problems — even a single failing task is
+        // reported in the structured `failures` rather than rejecting the whole call.
+        async function expectSingleFailure(
+            params: Parameters<typeof updateTasks.execute>[0]['tasks'][number],
+            expectedError: string,
+        ) {
+            const result = await updateTasks.execute({ tasks: [params] }, mockTodoistApi)
+            const { structuredContent } = result
+            expect(structuredContent.tasks).toHaveLength(0)
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe(params.id)
+            expect(structuredContent.failures[0]?.error).toContain(expectedError)
+            expect(structuredContent.appliedOperations).toEqual({
+                updateCount: 0,
+                skippedCount: 0,
+                failureCount: 1,
+            })
+            return result
+        }
+
+        it('reports invalid duration format as a failure', async () => {
+            await expectSingleFailure(
+                { id: '8485093756', duration: 'invalid' },
+                'Task 8485093756: Invalid duration format "invalid"',
+            )
         })
 
-        it('should throw error for duration exceeding 24 hours', async () => {
-            await expect(
-                updateTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                id: '8485093757',
-                                duration: '25h',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(
+        it('reports duration exceeding 24 hours as a failure', async () => {
+            await expectSingleFailure(
+                { id: '8485093757', duration: '25h' },
                 'Task 8485093757: Invalid duration format "25h": Duration cannot exceed 24 hours (1440 minutes)',
             )
         })
-        it('should throw error when multiple move parameters are provided', async () => {
-            await expect(
-                updateTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                id: '8485093748',
-                                projectId: 'new-project',
-                                sectionId: 'new-section',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(
+
+        it('reports multiple move parameters as a failure', async () => {
+            await expectSingleFailure(
+                { id: '8485093748', projectId: 'new-project', sectionId: 'new-section' },
                 'Only one of projectId, sectionId, or parentId can be specified at a time. ' +
                     'The Todoist API requires exactly one destination for move operations.',
             )
         })
 
-        it('should throw error when all three move parameters are provided', async () => {
-            await expect(
-                updateTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                id: '8485093748',
-                                projectId: 'p1',
-                                sectionId: 's1',
-                                parentId: 't1',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(
+        it('reports all three move parameters as a failure', async () => {
+            await expectSingleFailure(
+                { id: '8485093748', projectId: 'p1', sectionId: 's1', parentId: 't1' },
                 'Only one of projectId, sectionId, or parentId can be specified at a time',
             )
         })
@@ -824,16 +800,9 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 error: 'API Error: Invalid priority value',
                 params: { id: '8485093748', content: 'Test task' },
             },
-        ])('should propagate $error', async ({ error, params }) => {
+        ])('reports $error as a failure', async ({ error, params }) => {
             mockTodoistApi.updateTask.mockRejectedValue(new Error(error))
-            await expect(
-                updateTasks.execute(
-                    {
-                        tasks: [params],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(error)
+            await expectSingleFailure(params, error)
         })
     })
 
@@ -1083,80 +1052,67 @@ describe(`${UPDATE_TASKS} tool`, () => {
         })
 
         describe('error handling', () => {
-            it('should throw error when task has multiple move parameters', async () => {
-                await expect(
-                    updateTasks.execute(
-                        {
-                            tasks: [
-                                {
-                                    id: 'task-1',
-                                    projectId: 'new-project',
-                                    sectionId: 'new-section',
-                                },
-                            ],
-                        },
-                        mockTodoistApi,
-                    ),
-                ).rejects.toThrow(
+            // A move failure on the only task is reported in `failures`, not thrown.
+            async function expectSingleMoveFailure(
+                params: Parameters<typeof updateTasks.execute>[0]['tasks'][number],
+                expectedError: string,
+            ) {
+                const result = await updateTasks.execute({ tasks: [params] }, mockTodoistApi)
+                const { structuredContent } = result
+                expect(structuredContent.tasks).toHaveLength(0)
+                expect(structuredContent.failures).toHaveLength(1)
+                expect(structuredContent.failures[0]?.item).toBe(params.id)
+                expect(structuredContent.failures[0]?.error).toContain(expectedError)
+                expect(structuredContent.appliedOperations).toEqual({
+                    updateCount: 0,
+                    skippedCount: 0,
+                    failureCount: 1,
+                })
+            }
+
+            it('reports a task with multiple move parameters as a failure', async () => {
+                await expectSingleMoveFailure(
+                    { id: 'task-1', projectId: 'new-project', sectionId: 'new-section' },
                     'Task task-1: Only one of projectId, sectionId, or parentId can be specified at a time',
                 )
             })
 
-            it('should propagate API errors for individual task moves', async () => {
-                const apiError = new Error('API Error: Task not found')
-                mockTodoistApi.moveTask.mockRejectedValue(apiError)
-
-                await expect(
-                    updateTasks.execute(
-                        { tasks: [{ id: 'non-existent-task', projectId: 'some-project' }] },
-                        mockTodoistApi,
-                    ),
-                ).rejects.toThrow('API Error: Task not found')
+            it('reports API errors for individual task moves as failures', async () => {
+                mockTodoistApi.moveTask.mockRejectedValue(new Error('API Error: Task not found'))
+                await expectSingleMoveFailure(
+                    { id: 'non-existent-task', projectId: 'some-project' },
+                    'API Error: Task not found',
+                )
             })
 
-            it('should handle validation errors', async () => {
-                const validationError = new Error('API Error: Invalid section ID')
-                mockTodoistApi.moveTask.mockRejectedValue(validationError)
-
-                await expect(
-                    updateTasks.execute(
-                        { tasks: [{ id: 'task-1', sectionId: 'invalid-section-format' }] },
-                        mockTodoistApi,
-                    ),
-                ).rejects.toThrow('API Error: Invalid section ID')
+            it('reports validation errors as failures', async () => {
+                mockTodoistApi.moveTask.mockRejectedValue(
+                    new Error('API Error: Invalid section ID'),
+                )
+                await expectSingleMoveFailure(
+                    { id: 'task-1', sectionId: 'invalid-section-format' },
+                    'API Error: Invalid section ID',
+                )
             })
 
-            it('should handle permission errors', async () => {
-                const permissionError = new Error(
+            it('reports permission errors as failures', async () => {
+                mockTodoistApi.moveTask.mockRejectedValue(
+                    new Error('API Error: Insufficient permissions to move task'),
+                )
+                await expectSingleMoveFailure(
+                    { id: 'restricted-task', projectId: 'restricted-project' },
                     'API Error: Insufficient permissions to move task',
                 )
-                mockTodoistApi.moveTask.mockRejectedValue(permissionError)
-
-                await expect(
-                    updateTasks.execute(
-                        { tasks: [{ id: 'restricted-task', projectId: 'restricted-project' }] },
-                        mockTodoistApi,
-                    ),
-                ).rejects.toThrow('API Error: Insufficient permissions to move task')
             })
 
-            it('should handle circular parent dependency errors', async () => {
-                const circularError = new Error('API Error: Circular dependency detected')
-                mockTodoistApi.moveTask.mockRejectedValue(circularError)
-
-                await expect(
-                    updateTasks.execute(
-                        {
-                            tasks: [
-                                {
-                                    id: 'task-parent',
-                                    parentId: 'task-child', // This would create a circular dependency
-                                },
-                            ],
-                        },
-                        mockTodoistApi,
-                    ),
-                ).rejects.toThrow('API Error: Circular dependency detected')
+            it('reports circular parent dependency errors as failures', async () => {
+                mockTodoistApi.moveTask.mockRejectedValue(
+                    new Error('API Error: Circular dependency detected'),
+                )
+                await expectSingleMoveFailure(
+                    { id: 'task-parent', parentId: 'task-child' },
+                    'API Error: Circular dependency detected',
+                )
             })
         })
     })
@@ -1212,7 +1168,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
             expect(result.textContent).toContain('address or drop these items')
         })
 
-        it('throws when every task in the batch fails', async () => {
+        it('returns a structured result (does not throw) when every task fails', async () => {
             mockTodoistApi.moveTask.mockRejectedValue(
                 Object.assign(new Error('Request failed with status code 403'), {
                     httpStatusCode: 403,
@@ -1223,17 +1179,31 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 }),
             )
 
-            await expect(
-                updateTasks.execute(
-                    {
-                        tasks: [
-                            { id: 'bad-1', projectId: 'personal-project' },
-                            { id: 'bad-2', projectId: 'personal-project' },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('All 2 task update(s) failed')
+            const result = await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'bad-1', projectId: 'personal-project' },
+                        { id: 'bad-2', projectId: 'personal-project' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            // A total failure is reported structurally, not thrown — so the per-item
+            // reasons survive instead of being flattened into one opaque error.
+            const { structuredContent } = result
+            expect(structuredContent.tasks).toHaveLength(0)
+            expect(structuredContent.totalCount).toBe(0)
+            expect(structuredContent.updatedTaskIds).toEqual([])
+            expect(structuredContent.failures).toHaveLength(2)
+            expect(structuredContent.failures.map((f) => f.item)).toEqual(['bad-1', 'bad-2'])
+            expect(structuredContent.appliedOperations).toEqual({
+                updateCount: 0,
+                skippedCount: 0,
+                failureCount: 2,
+            })
+            expect(result.textContent).toContain('Updated 0 tasks')
+            expect(result.textContent).toContain('Failed (2)')
         })
 
         it('counts skipped (no-change) tasks separately from failures', async () => {

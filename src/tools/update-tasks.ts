@@ -160,15 +160,10 @@ const updateTasks = {
             })
         })
 
-        // If every attempted task failed (nothing updated, nothing skipped), surface a
-        // hard error so the caller sees a failure rather than a misleading success. A
-        // skipped task is a successful no-op, so a batch with at least one skip is not a
-        // total failure and returns normally with the failures listed.
-        if (updatedTasks.length === 0 && skippedCount === 0 && failures.length > 0) {
-            const details = failures.map((f) => `"${f.item}": ${f.error}`).join('; ')
-            throw new Error(`All ${failures.length} task update(s) failed: ${details}`)
-        }
-
+        // Never throw for per-item problems — even when every task fails. Returning the
+        // structured result (empty `tasks`, populated `failures`) keeps total and partial
+        // failures uniform and preserves the per-item reason for each task, rather than
+        // collapsing them into one opaque error.
         const mappedTasks = updatedTasks.map(mapTask)
 
         const textContent = generateTextContent({
