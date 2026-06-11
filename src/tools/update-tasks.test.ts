@@ -1206,10 +1206,10 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 failureCount: 1,
             })
 
-            // The text content tells the model not to retry the whole batch.
+            // The text content surfaces the per-task failure alongside the success.
             expect(result.textContent).toContain('Updated 1 task')
             expect(result.textContent).toContain('Failed (1)')
-            expect(result.textContent).toContain('not retried automatically')
+            expect(result.textContent).toContain('address or drop these items')
         })
 
         it('throws when every task in the batch fails', async () => {
@@ -1346,6 +1346,48 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 skippedCount: 0,
                 failureCount: 1,
             })
+        })
+
+        it('truncates the failure list to 3 and shows "+N more"', async () => {
+            // A non-throwing batch (one success keeps it from being a total failure) with
+            // more than MAX_FAILURES_SHOWN (3) failures must cap the displayed list and
+            // append "+N more" so the truncation isn't silently dropped by a refactor.
+            mockTodoistApi.updateTask.mockImplementation((id: string) => {
+                if (id === 'ok-task') {
+                    return Promise.resolve(createMockTask({ id: 'ok-task', content: 'ok' }))
+                }
+                return Promise.reject(new Error('API Error: boom'))
+            })
+
+            const result = await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'ok-task', content: 'ok' },
+                        { id: 'bad-1', content: 'x' },
+                        { id: 'bad-2', content: 'x' },
+                        { id: 'bad-3', content: 'x' },
+                        { id: 'bad-4', content: 'x' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const { structuredContent, textContent } = result
+            // All 4 failures are retained in the structured output...
+            expect(structuredContent.failures).toHaveLength(4)
+            expect(structuredContent.appliedOperations).toEqual({
+                updateCount: 1,
+                skippedCount: 0,
+                failureCount: 4,
+            })
+
+            // ...but the text summary shows only the first 3 and notes the remainder.
+            expect(textContent).toContain('Failed (4)')
+            expect(textContent).toContain('bad-1')
+            expect(textContent).toContain('bad-2')
+            expect(textContent).toContain('bad-3')
+            expect(textContent).not.toContain('bad-4')
+            expect(textContent).toContain('+1 more')
         })
 
         it('does not throw when the only outcome is a partial success', async () => {

@@ -365,7 +365,7 @@ function generateTextContent({
     const failureLines = shown.map((f) => `    ${f.item}: ${f.error}`).join('\n')
     const moreInfo = remaining > 0 ? `\n    +${remaining} more` : ''
 
-    return `${summary}\nFailed (${failures.length}) - not retried automatically; address or drop these items:\n${failureLines}${moreInfo}`
+    return `${summary}\nFailed (${failures.length}) - address or drop these items:\n${failureLines}${moreInfo}`
 }
 
 function hasUpdatesToMake({ id: _id, ...otherUpdateArgs }: TaskUpdate) {
