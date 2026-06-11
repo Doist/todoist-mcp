@@ -13,13 +13,13 @@ const ProjectUpdateSchema = z.object({
     viewStyle: z.enum(['list', 'board', 'calendar']).optional().describe('The project view style.'),
     description: z
         .preprocess(
-            // Accept legacy `null` as a clear; Gemini forbids nullable schemas, not preprocessing.
+            // `null` is the advertised clear value; the param schema stays a
+            // plain string (Gemini forbids nullable schemas, not preprocessing),
+            // so `null` is normalised to "" before the project wire clear.
             (value) => (value === null ? '' : value),
             z
                 .string()
-                .describe(
-                    'The description of the project (Markdown). Pass an empty string to clear it.',
-                ),
+                .describe('The description of the project (Markdown). Pass null to clear it.'),
         )
         .optional(),
     color: ColorSchema,
