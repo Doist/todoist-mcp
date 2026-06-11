@@ -1258,6 +1258,42 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 failureCount: 0,
             })
         })
+
+        it('does not throw when the batch is only skipped and failed tasks', async () => {
+            // No task is actually updated: one is a no-op skip, the other fails. A skip is
+            // a successful no-op, so this is NOT a total failure and must return normally
+            // with the failure listed — rather than throwing a batch-wide error.
+            mockTodoistApi.moveTask.mockRejectedValue(
+                Object.assign(new Error('Request failed with status code 403'), {
+                    httpStatusCode: 403,
+                    responseData: {
+                        error: 'Not allowed to move objects out of a workspace',
+                        http_code: 403,
+                    },
+                }),
+            )
+
+            const result = await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'noop-task' }, // only id -> skipped
+                        { id: 'bad-task', projectId: 'personal-project' }, // move -> fails
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const { structuredContent } = result
+            expect(structuredContent.tasks).toHaveLength(0)
+            expect(structuredContent.totalCount).toBe(0)
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('bad-task')
+            expect(structuredContent.appliedOperations).toEqual({
+                updateCount: 0,
+                skippedCount: 1,
+                failureCount: 1,
+            })
+        })
     })
 
     describe('isUncompletable parameter', () => {
