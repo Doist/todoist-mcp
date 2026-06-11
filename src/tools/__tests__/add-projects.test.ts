@@ -550,7 +550,7 @@ describe(`${ADD_PROJECTS} tool`, () => {
             ).rejects.toThrow('API Error: Project name is required')
         })
 
-        it('should handle partial failures in multiple projects', async () => {
+        it('should keep successful projects when one in the batch fails', async () => {
             const mockProject = createMockProject({
                 id: 'project-1',
                 name: 'First Project',
@@ -560,14 +560,46 @@ describe(`${ADD_PROJECTS} tool`, () => {
                 .mockResolvedValueOnce(mockProject)
                 .mockRejectedValueOnce(new Error('API Error: Invalid project name'))
 
+            const result = await addProjects.execute(
+                {
+                    projects: [{ name: 'First Project' }, { name: 'Invalid' }],
+                },
+                mockTodoistApi,
+            )
+
+            // The successful project is preserved instead of being discarded by the failure.
+            const { structuredContent } = result
+            expect(structuredContent.projects).toHaveLength(1)
+            expect(structuredContent.totalCount).toBe(1)
+            expect(structuredContent.successCount).toBe(1)
+            expect(structuredContent.totalRequested).toBe(2)
+
+            // The failure is reported per-item with the offending project identified by name.
+            expect(structuredContent.failureCount).toBe(1)
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('Invalid')
+            expect(structuredContent.failures[0]?.error).toContain(
+                'API Error: Invalid project name',
+            )
+
+            expect(result.textContent).toContain('Added 1 project:')
+            expect(result.textContent).toContain('Failed (1)')
+            expect(result.textContent).toContain('not retried automatically')
+        })
+
+        it('should throw when every project in the batch fails', async () => {
+            mockTodoistApi.addProject
+                .mockRejectedValueOnce(new Error('API Error: Invalid project name'))
+                .mockRejectedValueOnce(new Error('API Error: Invalid project name'))
+
             await expect(
                 addProjects.execute(
                     {
-                        projects: [{ name: 'First Project' }, { name: 'Invalid' }],
+                        projects: [{ name: 'Invalid 1' }, { name: 'Invalid 2' }],
                     },
                     mockTodoistApi,
                 ),
-            ).rejects.toThrow('API Error: Invalid project name')
+            ).rejects.toThrow('All 2 project(s) failed to create')
         })
     })
 })

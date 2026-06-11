@@ -1,9 +1,11 @@
 import type { PersonalProject, WorkspaceProject } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { formatToolExecutionError } from '../tool-execution-error.js'
 import { mapProject } from '../tool-helpers.js'
 import { ColorSchema } from '../utils/colors.js'
-import { ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
+import { DisplayLimits } from '../utils/constants.js'
+import { FailureSchema, ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const ProjectUpdateSchema = z.object({
@@ -25,10 +27,16 @@ const OutputSchema = {
     projects: z.array(ProjectOutputSchema).describe('The updated projects.'),
     totalCount: z.number().describe('The total number of projects updated.'),
     updatedProjectIds: z.array(z.string()).describe('The IDs of the updated projects.'),
+    failures: z
+        .array(FailureSchema)
+        .describe(
+            'Projects that could not be updated, with the reason for each. A failure here does not affect the other projects in the batch — do not retry the whole batch; address or drop the failed items.',
+        ),
     appliedOperations: z
         .object({
             updateCount: z.number().describe('The number of projects actually updated.'),
             skippedCount: z.number().describe('The number of projects skipped (no changes).'),
+            failureCount: z.number().describe('The number of projects that failed to update.'),
         })
         .describe('Summary of operations performed.'),
 }
@@ -42,12 +50,16 @@ const updateProjects = {
     async execute(args, client) {
         const { projects } = args
 
-        type Result =
+        type Outcome =
             | { kind: 'updated'; project: PersonalProject | WorkspaceProject }
             | { kind: 'skipped'; reason: SkipReason }
+            | { kind: 'failed'; item: string; error: string }
 
-        const results: Result[] = await Promise.all(
-            projects.map(async (project): Promise<Result> => {
+        // Each project is updated independently: a failure on one (for example, the API
+        // rejecting it with a 403 permission error) must not discard the projects that
+        // succeeded nor collapse into one opaque batch error that invites a full retry.
+        const settled = await Promise.allSettled(
+            projects.map(async (project): Promise<Outcome> => {
                 const skipReason = getSkipReason(project)
                 if (skipReason !== null) return { kind: 'skipped', reason: skipReason }
 
@@ -57,27 +69,48 @@ const updateProjects = {
             }),
         )
 
-        const updatedProjects = results
+        const outcomes: Outcome[] = settled.map((result, index) => {
+            if (result.status === 'fulfilled') return result.value
+            return {
+                kind: 'failed',
+                item: projects[index]?.id ?? `Project ${index + 1}`,
+                error: formatToolExecutionError(result.reason),
+            }
+        })
+
+        const updatedProjects = outcomes
             .filter(
-                (r): r is { kind: 'updated'; project: PersonalProject | WorkspaceProject } =>
-                    r.kind === 'updated',
+                (o): o is { kind: 'updated'; project: PersonalProject | WorkspaceProject } =>
+                    o.kind === 'updated',
             )
-            .map((r) => mapProject(r.project))
+            .map((o) => mapProject(o.project))
 
-        const skippedNoFields = results.filter(
-            (r): r is { kind: 'skipped'; reason: SkipReason } =>
-                r.kind === 'skipped' && r.reason === 'no-fields',
+        const failures = outcomes
+            .filter(
+                (o): o is { kind: 'failed'; item: string; error: string } => o.kind === 'failed',
+            )
+            .map(({ item, error }) => ({ item, error }))
+
+        const skippedNoFields = outcomes.filter(
+            (o) => o.kind === 'skipped' && o.reason === 'no-fields',
         ).length
 
-        const skippedNoValidValues = results.filter(
-            (r): r is { kind: 'skipped'; reason: SkipReason } =>
-                r.kind === 'skipped' && r.reason === 'no-valid-values',
+        const skippedNoValidValues = outcomes.filter(
+            (o) => o.kind === 'skipped' && o.reason === 'no-valid-values',
         ).length
+
+        // If nothing was updated but real failures occurred, surface a hard error instead
+        // of a misleading success. (Skip-only batches still return normally.)
+        if (updatedProjects.length === 0 && failures.length > 0) {
+            const details = failures.map((f) => `"${f.item}": ${f.error}`).join('; ')
+            throw new Error(`All ${failures.length} project update(s) failed: ${details}`)
+        }
 
         const textContent = generateTextContent({
             projects: updatedProjects,
             skippedNoFields,
             skippedNoValidValues,
+            failures,
         })
 
         return {
@@ -86,9 +119,11 @@ const updateProjects = {
                 projects: updatedProjects,
                 totalCount: updatedProjects.length,
                 updatedProjectIds: updatedProjects.map((project) => project.id),
+                failures,
                 appliedOperations: {
                     updateCount: updatedProjects.length,
                     skippedCount: skippedNoFields + skippedNoValidValues,
+                    failureCount: failures.length,
                 },
             },
         }
@@ -99,10 +134,12 @@ function generateTextContent({
     projects,
     skippedNoFields,
     skippedNoValidValues,
+    failures,
 }: {
     projects: Array<{ id: string; name: string }>
     skippedNoFields: number
     skippedNoValidValues: number
+    failures: Array<{ item: string; error: string }>
 }) {
     const count = projects.length
     const projectList = projects.map((project) => `• ${project.name} (id=${project.id})`).join('\n')
@@ -125,7 +162,16 @@ function generateTextContent({
         summary += `:\n${projectList}`
     }
 
-    return summary
+    if (failures.length === 0) {
+        return summary
+    }
+
+    const shown = failures.slice(0, DisplayLimits.MAX_FAILURES_SHOWN)
+    const remaining = failures.length - shown.length
+    const failureLines = shown.map((f) => `    ${f.item}: ${f.error}`).join('\n')
+    const moreInfo = remaining > 0 ? `\n    +${remaining} more` : ''
+
+    return `${summary}\nFailed (${failures.length}) - not retried automatically; address or drop these items:\n${failureLines}${moreInfo}`
 }
 
 function getSkipReason({ id: _id, ...otherUpdateArgs }: ProjectUpdate): SkipReason | null {
