@@ -118,6 +118,20 @@ describe(`${UPDATE_SECTIONS} tool`, () => {
                 description: null,
             })
         })
+
+        it('rejects an empty-string description ("remove" is the only clear path)', () => {
+            const result = z.object(updateSections.parameters).safeParse({
+                sections: [{ id: 'sec-1', description: '' }],
+            })
+            expect(result.success).toBe(false)
+        })
+
+        it('rejects a no-op update with neither name nor description', () => {
+            const result = z.object(updateSections.parameters).safeParse({
+                sections: [{ id: 'sec-1' }],
+            })
+            expect(result.success).toBe(false)
+        })
     })
 
     describe('updating multiple sections', () => {
