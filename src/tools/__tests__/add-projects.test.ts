@@ -550,7 +550,36 @@ describe(`${ADD_PROJECTS} tool`, () => {
             ).rejects.toThrow('API Error: Project name is required')
         })
 
-        it('should handle partial failures in multiple projects', async () => {
+        it('retries a transient 5xx failure on a per-item call via the retry helper', async () => {
+            // A per-item transient error must still get backoff+retry (it used to bubble
+            // up to the registerTool wrapper before the batch was settled per item). The
+            // first attempt fails with 503, the retry succeeds, so the item is reported as
+            // a success rather than a permanent failure.
+            vi.useFakeTimers()
+            try {
+                const okProject = createMockProject({ id: 'p-retry', name: 'Eventually OK' })
+                mockTodoistApi.addProject
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    .mockResolvedValueOnce(okProject)
+
+                const promise = addProjects.execute(
+                    { projects: [{ name: 'Eventually OK' }] },
+                    mockTodoistApi,
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.addProject).toHaveBeenCalledTimes(2)
+                expect(result.structuredContent.projects).toHaveLength(1)
+                expect(result.structuredContent.failureCount).toBe(0)
+            } finally {
+                vi.useRealTimers()
+            }
+        })
+
+        it('should keep successful projects when one in the batch fails', async () => {
             const mockProject = createMockProject({
                 id: 'project-1',
                 name: 'First Project',
@@ -560,14 +589,46 @@ describe(`${ADD_PROJECTS} tool`, () => {
                 .mockResolvedValueOnce(mockProject)
                 .mockRejectedValueOnce(new Error('API Error: Invalid project name'))
 
+            const result = await addProjects.execute(
+                {
+                    projects: [{ name: 'First Project' }, { name: 'Invalid' }],
+                },
+                mockTodoistApi,
+            )
+
+            // The successful project is preserved instead of being discarded by the failure.
+            const { structuredContent } = result
+            expect(structuredContent.projects).toHaveLength(1)
+            expect(structuredContent.totalCount).toBe(1)
+            expect(structuredContent.successCount).toBe(1)
+            expect(structuredContent.totalRequested).toBe(2)
+
+            // The failure is reported per-item with the offending project identified by name.
+            expect(structuredContent.failureCount).toBe(1)
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('Invalid')
+            expect(structuredContent.failures[0]?.error).toContain(
+                'API Error: Invalid project name',
+            )
+
+            expect(result.textContent).toContain('Added 1 project:')
+            expect(result.textContent).toContain('Failed (1)')
+            expect(result.textContent).toContain('not retried automatically')
+        })
+
+        it('should throw when every project in the batch fails', async () => {
+            mockTodoistApi.addProject
+                .mockRejectedValueOnce(new Error('API Error: Invalid project name'))
+                .mockRejectedValueOnce(new Error('API Error: Invalid project name'))
+
             await expect(
                 addProjects.execute(
                     {
-                        projects: [{ name: 'First Project' }, { name: 'Invalid' }],
+                        projects: [{ name: 'Invalid 1' }, { name: 'Invalid 2' }],
                     },
                     mockTodoistApi,
                 ),
-            ).rejects.toThrow('API Error: Invalid project name')
+            ).rejects.toThrow('All 2 project(s) failed to create')
         })
     })
 })
