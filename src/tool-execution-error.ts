@@ -270,8 +270,16 @@ function hasKnownApiErrorKeys(responseData: Record<string, unknown> | undefined)
 }
 
 function getNextStepHint(statusCode: number | undefined, hasFieldHints: boolean): string {
-    if (statusCode === 401 || statusCode === 403) {
-        return 'Verify your API token and access permissions, then retry.'
+    if (statusCode === 401) {
+        return 'Authentication failed. Verify your API token, then retry.'
+    }
+
+    if (statusCode === 403) {
+        // 403 is a permission decision (e.g. moving objects out of a workspace, or
+        // insufficient token scope), not a transient failure. Retrying the same
+        // request will keep failing — and can trip server-side abuse penalties — so
+        // steer the caller toward changing the request instead of retrying it.
+        return 'This action is not permitted (for example, moving items out of a workspace, or insufficient token scope). Do not retry the same request — change the request or target instead.'
     }
 
     if (statusCode === 404) {
