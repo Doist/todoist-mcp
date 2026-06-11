@@ -64,13 +64,9 @@ const updateProjects = {
                 if (skipReason !== null) return { kind: 'skipped', reason: skipReason }
 
                 const { id, description, ...rest } = project
-                // Keep the SDK signature so the rest of the payload stays
-                // checked; only `description` escapes the types until the SDK
-                // adds it. `"remove"` (and legacy `null`) clears via an empty
-                // string, the project clear value (backend NULL_KEEPS_UNCHANGED).
-                const updateArgs: Parameters<typeof client.updateProject>[1] & {
-                    description?: string
-                } = {
+                // `"remove"` (and legacy `null`) clears via an empty string, the
+                // project clear value (backend NULL_KEEPS_UNCHANGED).
+                const updateArgs: Parameters<typeof client.updateProject>[1] = {
                     ...rest,
                     ...(description !== undefined
                         ? { description: description === REMOVE_SENTINEL ? '' : description }

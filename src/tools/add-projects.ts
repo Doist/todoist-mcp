@@ -67,15 +67,7 @@ const addProjects = {
         const newProjects = await Promise.all(
             projects.map(({ workspace, ...rest }) => {
                 const workspaceId = workspace ? resolvedWorkspaces.get(workspace) : undefined
-                // Keep the SDK signature so the rest of the payload stays
-                // compile-checked; only `description` escapes the types until
-                // the SDK adds it to AddProjectArgs.
-                const addArgs: Parameters<typeof client.addProject>[0] & { description?: string } =
-                    {
-                        ...rest,
-                        ...(workspaceId ? { workspaceId } : {}),
-                    }
-                return client.addProject(addArgs)
+                return client.addProject({ ...rest, ...(workspaceId ? { workspaceId } : {}) })
             }),
         )
         const textContent = generateTextContent({ projects: newProjects })

@@ -411,6 +411,7 @@ End of description.`)
         const createMockSection = (overrides: Partial<Section> = {}): Section => ({
             id: 'section-id',
             name: 'Section Name',
+            description: null,
             projectId: 'project-id',
             sectionOrder: 1,
             url: 'https://todoist.com/app/section/section-id',

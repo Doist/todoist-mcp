@@ -30,6 +30,7 @@ describe(`${UPDATE_SECTIONS} tool`, () => {
                 isDeleted: false,
                 isCollapsed: false,
                 name: 'Updated Section Name',
+                description: null,
                 url: 'https://todoist.com/sections/existing-section-123',
             }
 
