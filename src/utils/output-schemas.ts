@@ -80,18 +80,12 @@ const SectionSchema = z.object({
 type SectionSummary = z.infer<typeof SectionSchema>
 
 /**
- * Strip an SDK Section (or any object with id/name/description) down to the
- * fields declared in SectionSchema. Keeps tool responses aligned with the schema.
- *
- * SDK dependency: the SDK's `Section` type does not yet model `description`, so
- * it is read through a widened type. The SDK strips it from section reads today,
- * so this is undefined until the SDK adds it to the section read schema.
+ * Strip an SDK Section down to the fields declared in SectionSchema. Keeps tool
+ * responses aligned with the schema. The output schema uses an optional string
+ * (Gemini-compatible), so the read's `string | null` description maps `null` to
+ * `undefined`.
  */
-function toSectionSummary({
-    id,
-    name,
-    description,
-}: Section & { description?: string | null }): SectionSummary {
+function toSectionSummary({ id, name, description }: Section): SectionSummary {
     return { id, name, description: description ?? undefined }
 }
 

@@ -46,10 +46,10 @@ const updateSections = {
     async execute({ sections }, client) {
         const updatedSections = await Promise.all(
             sections.map(({ id, name, description }) => {
-                // SDK dependency: UpdateSectionArgs requires `name` and omits
-                // `description`. The REST client forwards the extra fields; the
-                // cast covers the gap until the SDK models them. `"remove"`
-                // (and legacy `null`) clears the description via `null`.
+                // The SDK's UpdateSectionArgs is RequireAtLeastOne, which a
+                // dynamically-built partial can't satisfy statically; we always
+                // include at least one field here. `"remove"` (and legacy `null`)
+                // clears the description via `null` (backend NULL_CLEARS).
                 const updateArgs = {
                     ...(name !== undefined ? { name } : {}),
                     ...(description !== undefined
