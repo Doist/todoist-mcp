@@ -19,7 +19,9 @@ const ProjectUpdateSchema = z.object({
             (value) => (value === null ? '' : value),
             z
                 .string()
-                .describe('The description of the project (Markdown). Pass null to clear it.'),
+                .describe(
+                    'The description of the project (Markdown). Pass null (or an empty string) to clear it.',
+                ),
         )
         .optional(),
     color: ColorSchema,
