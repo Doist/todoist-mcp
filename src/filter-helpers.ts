@@ -14,7 +14,7 @@ export type ResponsibleUserFiltering = (typeof RESPONSIBLE_USER_FILTERING)[numbe
 export async function resolveResponsibleUser(
     client: TodoistApi,
     responsibleUser: string | undefined,
-): Promise<{ userId: string; email: string } | undefined> {
+): Promise<{ userId: string; email: string | undefined } | undefined> {
     if (!responsibleUser) {
         return undefined
     }
@@ -26,7 +26,7 @@ export async function resolveResponsibleUser(
         )
     }
 
-    return { userId: resolved.userId, email: resolved.email }
+    return { userId: resolved.userId, email: resolved.email ?? undefined }
 }
 
 /**
