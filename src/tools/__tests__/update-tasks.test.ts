@@ -1295,6 +1295,75 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 failureCount: 1,
             })
         })
+
+        it('reports a partial success when the move applies but the field update fails', async () => {
+            // Combined move + field update: the move succeeds, then updateTask rejects.
+            // The move is already applied server-side, so the task must NOT be dropped as a
+            // pure failure — it appears in tasks (moved) and the failure names what still
+            // needs retrying (the field change only, not the move).
+            const movedTask = createMockTask({
+                id: 'move-update-task',
+                content: 'Original content',
+                projectId: 'new-project-id',
+            })
+            mockTodoistApi.moveTask.mockResolvedValue(movedTask)
+            mockTodoistApi.updateTask.mockRejectedValue(new Error('API Error: Invalid priority'))
+
+            const result = await updateTasks.execute(
+                {
+                    tasks: [
+                        {
+                            id: 'move-update-task',
+                            projectId: 'new-project-id',
+                            content: 'New content',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.moveTask).toHaveBeenCalledWith('move-update-task', {
+                projectId: 'new-project-id',
+            })
+
+            const { structuredContent } = result
+            // The completed move is surfaced, not discarded.
+            expect(structuredContent.tasks).toHaveLength(1)
+            expect(structuredContent.tasks[0]?.id).toBe('move-update-task')
+            expect(structuredContent.updatedTaskIds).toEqual(['move-update-task'])
+
+            // The field-update failure is reported as a partial: the move is surfaced as
+            // already applied, without advising a retry.
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('move-update-task')
+            expect(structuredContent.failures[0]?.error).toContain('Move applied')
+            expect(structuredContent.failures[0]?.error).toContain('The move is already done')
+            expect(structuredContent.failures[0]?.error).toContain('API Error: Invalid priority')
+
+            // Counts reflect both facts: the move applied AND a field update failed.
+            expect(structuredContent.appliedOperations).toEqual({
+                updateCount: 1,
+                skippedCount: 0,
+                failureCount: 1,
+            })
+        })
+
+        it('does not throw when the only outcome is a partial success', async () => {
+            // A partial means the move applied, so it is not a total failure even though a
+            // field update failed — the batch returns normally.
+            const movedTask = createMockTask({ id: 'only-partial', projectId: 'new-project-id' })
+            mockTodoistApi.moveTask.mockResolvedValue(movedTask)
+            mockTodoistApi.updateTask.mockRejectedValue(new Error('boom'))
+
+            await expect(
+                updateTasks.execute(
+                    {
+                        tasks: [{ id: 'only-partial', projectId: 'new-project-id', content: 'x' }],
+                    },
+                    mockTodoistApi,
+                ),
+            ).resolves.toBeDefined()
+        })
     })
 
     describe('isUncompletable parameter', () => {
