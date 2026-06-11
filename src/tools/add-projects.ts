@@ -4,8 +4,9 @@ import type { TodoistTool } from '../todoist-tool.js'
 import { formatToolExecutionError } from '../tool-execution-error.js'
 import { mapProject } from '../tool-helpers.js'
 import { ColorSchema } from '../utils/colors.js'
-import { DisplayLimits } from '../utils/constants.js'
 import { FailureSchema, ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
+import { appendFailureSummary } from '../utils/response-builders.js'
+import { executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { workspaceResolver } from '../utils/workspace-resolver.js'
 
@@ -75,10 +76,14 @@ const addProjects = {
         // Each project is created independently: a failure on one (for example, the API
         // rejecting it with a 403 permission error) must not discard the projects that
         // succeeded nor collapse into one opaque batch error that invites a full retry.
+        // Per-item calls go through executeWithRetry so transient 5xx failures still get
+        // the same backoff the registerTool() wrapper applies to single-call tools.
         const settled = await Promise.allSettled(
             projects.map(({ workspace, ...rest }) => {
                 const workspaceId = workspace ? resolvedWorkspaces.get(workspace) : undefined
-                return client.addProject({ ...rest, ...(workspaceId ? { workspaceId } : {}) })
+                return executeWithRetry(() =>
+                    client.addProject({ ...rest, ...(workspaceId ? { workspaceId } : {}) }),
+                )
             }),
         )
 
@@ -131,16 +136,7 @@ function generateTextContent({
 
     const summary = `Added ${count} project${count === 1 ? '' : 's'}:\n${projectList}`
 
-    if (failures.length === 0) {
-        return summary
-    }
-
-    const shown = failures.slice(0, DisplayLimits.MAX_FAILURES_SHOWN)
-    const remaining = failures.length - shown.length
-    const failureLines = shown.map((f) => `    ${f.item}: ${f.error}`).join('\n')
-    const moreInfo = remaining > 0 ? `\n    +${remaining} more` : ''
-
-    return `${summary}\nFailed (${failures.length}) - not retried automatically; address or drop these items:\n${failureLines}${moreInfo}`
+    return appendFailureSummary(summary, failures)
 }
 
 export { addProjects }

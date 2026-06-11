@@ -550,6 +550,35 @@ describe(`${ADD_PROJECTS} tool`, () => {
             ).rejects.toThrow('API Error: Project name is required')
         })
 
+        it('retries a transient 5xx failure on a per-item call via the retry helper', async () => {
+            // A per-item transient error must still get backoff+retry (it used to bubble
+            // up to the registerTool wrapper before the batch was settled per item). The
+            // first attempt fails with 503, the retry succeeds, so the item is reported as
+            // a success rather than a permanent failure.
+            vi.useFakeTimers()
+            try {
+                const okProject = createMockProject({ id: 'p-retry', name: 'Eventually OK' })
+                mockTodoistApi.addProject
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    .mockResolvedValueOnce(okProject)
+
+                const promise = addProjects.execute(
+                    { projects: [{ name: 'Eventually OK' }] },
+                    mockTodoistApi,
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.addProject).toHaveBeenCalledTimes(2)
+                expect(result.structuredContent.projects).toHaveLength(1)
+                expect(result.structuredContent.failureCount).toBe(0)
+            } finally {
+                vi.useRealTimers()
+            }
+        })
+
         it('should keep successful projects when one in the batch fails', async () => {
             const mockProject = createMockProject({
                 id: 'project-1',

@@ -523,5 +523,35 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
                 ),
             ).rejects.toThrow('All 2 project update(s) failed')
         })
+
+        it('does not throw when the batch is only skipped and failed projects', async () => {
+            // No project is actually updated: one is a no-op skip, the other fails. A skip
+            // is a successful no-op, so this is NOT a total failure and must return normally
+            // with the failure listed — rather than throwing a batch-wide error.
+            mockTodoistApi.updateProject.mockRejectedValueOnce(
+                new Error('API Error: Project not found'),
+            )
+
+            const result = await updateProjects.execute(
+                {
+                    projects: [
+                        { id: 'noop-project' }, // no fields -> skipped
+                        { id: 'nonexistent', name: 'New Name' }, // update -> fails
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const { structuredContent } = result
+            expect(structuredContent.projects).toHaveLength(0)
+            expect(structuredContent.totalCount).toBe(0)
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('nonexistent')
+            expect(structuredContent.appliedOperations).toEqual({
+                updateCount: 0,
+                skippedCount: 1,
+                failureCount: 1,
+            })
+        })
     })
 })

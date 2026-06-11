@@ -3,12 +3,13 @@ import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatToolExecutionError } from '../tool-execution-error.js'
 import { isInboxProjectId, resolveInboxProjectId } from '../tool-helpers.js'
-import { DisplayLimits } from '../utils/constants.js'
 import {
     FailureSchema,
     SectionSchema as SectionOutputSchema,
     toSectionSummary,
 } from '../utils/output-schemas.js'
+import { appendFailureSummary } from '../utils/response-builders.js'
+import { executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const SectionSchema = z.object({
@@ -52,6 +53,8 @@ const addSections = {
         // Each section is created independently: a failure on one (for example, the API
         // rejecting it with a 403 permission error) must not discard the sections that
         // succeeded nor collapse into one opaque batch error that invites a full retry.
+        // Per-item calls go through executeWithRetry so transient 5xx failures still get
+        // the same backoff the registerTool() wrapper applies to single-call tools.
         const settled = await Promise.allSettled(
             sections.map(async (section) => {
                 const projectId =
@@ -60,7 +63,7 @@ const addSections = {
                         user: todoistUser,
                         client: todoistUser ? undefined : client,
                     })) ?? section.projectId
-                return client.addSection({ ...section, projectId })
+                return executeWithRetry(() => client.addSection({ ...section, projectId }))
             }),
         )
 
@@ -114,23 +117,7 @@ function generateTextContent({
 
     const summary = `Added ${count} section${count === 1 ? '' : 's'}:\n${sectionList}`
 
-    return failures.length === 0 ? summary : appendFailureSummary(summary, failures)
-}
-
-/**
- * Appends a per-item failure block to a success summary, telling the caller these
- * items were not retried automatically so it does not blindly resend the whole batch.
- */
-function appendFailureSummary(
-    summary: string,
-    failures: Array<{ item: string; error: string }>,
-): string {
-    const shown = failures.slice(0, DisplayLimits.MAX_FAILURES_SHOWN)
-    const remaining = failures.length - shown.length
-    const failureLines = shown.map((f) => `    ${f.item}: ${f.error}`).join('\n')
-    const moreInfo = remaining > 0 ? `\n    +${remaining} more` : ''
-
-    return `${summary}\nFailed (${failures.length}) - not retried automatically; address or drop these items:\n${failureLines}${moreInfo}`
+    return appendFailureSummary(summary, failures)
 }
 
 export { addSections }
