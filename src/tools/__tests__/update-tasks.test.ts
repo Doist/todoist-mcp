@@ -1,5 +1,6 @@
 import type { Task, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
+import { z } from 'zod'
 import { convertPriorityToNumber } from '../../utils/priorities.js'
 import { createMockTask, createMockUser, TEST_IDS } from '../../utils/test-helpers.js'
 import { ToolNames } from '../../utils/tool-names.js'
@@ -1344,6 +1345,37 @@ describe(`${UPDATE_TASKS} tool`, () => {
             expect(textContent).not.toContain('bad-4')
             expect(textContent).toContain('+1 more')
         })
+
+        it('retries a transient 5xx response on a per-item call', async () => {
+            // A per-item 503 must be retried (the registerTool wrapper no longer fires now
+            // that we settle each task, and the SDK transport doesn't retry 5xx responses).
+            // The first attempt fails with 503, the retry succeeds, so the task is reported
+            // as updated rather than a permanent failure.
+            vi.useFakeTimers()
+            try {
+                const okTask = createMockTask({ id: 'retry-task', projectId: 'new-project-id' })
+                mockTodoistApi.moveTask
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('HTTP 503: Service Unavailable'), {
+                            httpStatusCode: 503,
+                        }),
+                    )
+                    .mockResolvedValueOnce(okTask)
+
+                const promise = updateTasks.execute(
+                    { tasks: [{ id: 'retry-task', projectId: 'new-project-id' }] },
+                    mockTodoistApi,
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.moveTask).toHaveBeenCalledTimes(2)
+                expect(result.structuredContent.tasks).toHaveLength(1)
+                expect(result.structuredContent.failures).toHaveLength(0)
+            } finally {
+                vi.useRealTimers()
+            }
+        })
     })
 
     describe('isUncompletable parameter', () => {
@@ -1372,6 +1404,23 @@ describe(`${UPDATE_TASKS} tool`, () => {
             expect(mockTodoistApi.updateTask).toHaveBeenCalledWith('task123', {
                 isUncompletable: true,
             })
+        })
+    })
+
+    describe('batch limits', () => {
+        // The cap is enforced by the schema at the MCP input boundary, bounding the
+        // concurrent fan-out and the size of the failures response.
+        const makeTasks = (count: number) =>
+            Array.from({ length: count }, (_, i) => ({ id: `task-${i}`, content: 'x' }))
+
+        it('accepts a batch at the cap (25)', () => {
+            const result = z.object(updateTasks.parameters).safeParse({ tasks: makeTasks(25) })
+            expect(result.success).toBe(true)
+        })
+
+        it('rejects a batch larger than the cap', () => {
+            const result = z.object(updateTasks.parameters).safeParse({ tasks: makeTasks(26) })
+            expect(result.success).toBe(false)
         })
     })
 })

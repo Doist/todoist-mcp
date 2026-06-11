@@ -12,6 +12,7 @@ import {
     PrioritySchema,
 } from '../utils/priorities.js'
 import { summarizeTaskOperation } from '../utils/response-builders.js'
+import { executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const TasksUpdateSchema = z.object({
@@ -90,8 +91,16 @@ const DUE_DATE_REMOVAL_ALIASES = ['remove', 'no date'] as const
 const DEADLINE_REMOVAL_ALIASES = ['remove', 'no date', 'no deadline'] as const
 const DUE_DATE_REMOVAL_VALUE = 'no date' as const
 
+// Cap the batch size (matching add-tasks) so a single call can't fan out an unbounded
+// number of concurrent SDK requests or buffer an unbounded failures response.
+const MAX_TASKS_PER_OPERATION = 25
+
 const ArgsSchema = {
-    tasks: z.array(TasksUpdateSchema).min(1).describe('The tasks to update.'),
+    tasks: z
+        .array(TasksUpdateSchema)
+        .min(1)
+        .max(MAX_TASKS_PER_OPERATION)
+        .describe(`The tasks to update (max ${MAX_TASKS_PER_OPERATION}).`),
 }
 
 const OutputSchema = {
@@ -263,16 +272,21 @@ async function processTaskUpdate(task: TaskUpdate, client: TodoistApi): Promise<
         }
     }
 
+    // Each SDK call goes through executeWithRetry so transient 5xx responses (502/503/504)
+    // are retried per item. The registerTool() wrapper's retry only fires when execute()
+    // throws, which never happens now that we settle each task — and the SDK transport
+    // only retries network/timeout errors, not 5xx responses.
+
     // If no move parameters are provided, use updateTask without moveTask
     if (!resolvedProjectId && !sectionId && !parentId) {
-        return await client.updateTask(id, updateArgs)
+        return await executeWithRetry(() => client.updateTask(id, updateArgs))
     }
 
     const moveArgs = createMoveTaskArgs(id, resolvedProjectId, sectionId, parentId)
-    const movedTask = await client.moveTask(id, moveArgs)
+    const movedTask = await executeWithRetry(() => client.moveTask(id, moveArgs))
 
     if (Object.keys(updateArgs).length > 0) {
-        return await client.updateTask(id, updateArgs)
+        return await executeWithRetry(() => client.updateTask(id, updateArgs))
     }
 
     return movedTask
