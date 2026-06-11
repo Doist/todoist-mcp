@@ -74,6 +74,32 @@ describe('formatToolExecutionError', () => {
         expect(output).toContain('Try next: Check parameter values and formats, then retry.')
     })
 
+    it('advises against retrying on 403 forbidden responses', () => {
+        const output = formatToolExecutionError({
+            httpStatusCode: 403,
+            responseData: {
+                error: 'Not allowed to move objects out of a workspace',
+                error_tag: 'FORBIDDEN',
+                http_code: 403,
+            },
+        })
+
+        expect(output).toContain('Message: Not allowed to move objects out of a workspace')
+        expect(output).toContain('Do not retry the same request')
+        expect(output).not.toContain('then retry')
+    })
+
+    it('keeps token guidance distinct on 401 unauthorized responses', () => {
+        const output = formatToolExecutionError({
+            httpStatusCode: 401,
+            responseData: { error: 'Unauthorized', http_code: 401 },
+        })
+
+        expect(output).toContain(
+            'Try next: Authentication failed. Verify your API token, then retry.',
+        )
+    })
+
     it('redacts secret values in API errors', () => {
         const output = formatToolExecutionError({
             httpStatusCode: 401,
@@ -133,16 +159,14 @@ describe('formatToolExecutionError', () => {
             expect(output).not.toContain('Verify your API token')
         })
 
-        it('keeps the auth hint for plain 403s without item-limit signals', () => {
+        it('advises against retrying plain 403s without item-limit signals', () => {
             const output = formatToolExecutionError({
                 httpStatusCode: 403,
                 responseData: { error: 'Forbidden' },
             })
 
             expect(output).toContain('Todoist API request failed (HTTP 403).')
-            expect(output).toContain(
-                'Try next: Verify your API token and access permissions, then retry.',
-            )
+            expect(output).toContain('Try next: Access denied. Retrying the same request will not help')
             expect(output).not.toContain('maximum number of active tasks')
         })
 
