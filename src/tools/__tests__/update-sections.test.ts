@@ -87,28 +87,28 @@ describe(`${UPDATE_SECTIONS} tool`, () => {
             })
         })
 
-        it('clears the description when passed the "remove" sentinel', async () => {
+        it('clears the description with an empty string (sends null per NULL_CLEARS)', async () => {
             mockTodoistApi.updateSection.mockResolvedValue(
                 createMockSection({ id: 'sec-1', name: 'Planning' }),
             )
 
             await updateSections.execute(
-                { sections: [{ id: 'sec-1', description: 'remove' }] },
+                { sections: [{ id: 'sec-1', description: '' }] },
                 mockTodoistApi,
             )
 
-            // "remove" maps to null, the section clear value (backend NULL_CLEARS).
+            // "" is the clear input; the section wire clear value is null.
             expect(mockTodoistApi.updateSection).toHaveBeenCalledWith('sec-1', {
                 description: null,
             })
         })
 
-        it('treats legacy null as a clear (via the schema preprocess)', async () => {
+        it('treats legacy null as a clear (preprocessed to "")', async () => {
             mockTodoistApi.updateSection.mockResolvedValue(
                 createMockSection({ id: 'sec-1', name: 'Planning' }),
             )
 
-            // Parse through the schema so the null -> "remove" preprocess runs.
+            // Parse through the schema so the null -> "" preprocess runs.
             const parsed = z.object(updateSections.parameters).parse({
                 sections: [{ id: 'sec-1', description: null }],
             })
@@ -119,11 +119,19 @@ describe(`${UPDATE_SECTIONS} tool`, () => {
             })
         })
 
-        it('rejects an empty-string description ("remove" is the only clear path)', () => {
-            const result = z.object(updateSections.parameters).safeParse({
-                sections: [{ id: 'sec-1', description: '' }],
+        it('saves the literal string "remove" as a description (no sentinel)', async () => {
+            mockTodoistApi.updateSection.mockResolvedValue(
+                createMockSection({ id: 'sec-1', name: 'Planning' }),
+            )
+
+            await updateSections.execute(
+                { sections: [{ id: 'sec-1', description: 'remove' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.updateSection).toHaveBeenCalledWith('sec-1', {
+                description: 'remove',
             })
-            expect(result.success).toBe(false)
         })
 
         it('rejects a no-op update with neither name nor description', () => {
