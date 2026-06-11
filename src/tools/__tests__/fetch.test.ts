@@ -183,6 +183,23 @@ describe(`${FETCH} tool`, () => {
             })
         })
 
+        it('surfaces the project description in the fetched text', async () => {
+            const mockProject = createMockProject({
+                id: TEST_IDS.PROJECT_WORK,
+                name: 'Work Project',
+                description: 'Quarterly OKRs',
+            })
+            mockTodoistApi.getProject.mockResolvedValue(mockProject)
+
+            const result = await fetch.execute(
+                { id: `project:${TEST_IDS.PROJECT_WORK}` },
+                mockTodoistApi,
+            )
+
+            const jsonResponse = JSON.parse(result.textContent ?? '{}')
+            expect(jsonResponse.text).toContain('Description: Quarterly OKRs')
+        })
+
         it('should fetch a project without optional flags', async () => {
             const mockProject = createMockProject({
                 id: TEST_IDS.PROJECT_TEST,

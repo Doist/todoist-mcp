@@ -66,6 +66,28 @@ describe(`${ADD_PROJECTS} tool`, () => {
             )
         })
 
+        it('should forward description to the API and map it back', async () => {
+            const mockApiResponse = createMockProject({
+                id: TEST_IDS.PROJECT_TEST,
+                name: 'Docs',
+                description: 'A handy reference',
+            })
+
+            mockTodoistApi.addProject.mockResolvedValue(mockApiResponse)
+
+            const result = await addProjects.execute(
+                { projects: [{ name: 'Docs', description: 'A handy reference' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.addProject).toHaveBeenCalledWith(
+                expect.objectContaining({ name: 'Docs', description: 'A handy reference' }),
+            )
+            expect(result.structuredContent.projects[0]).toEqual(
+                expect.objectContaining({ description: 'A handy reference' }),
+            )
+        })
+
         it('should handle different project properties from API', async () => {
             const mockApiResponse = createMockProject({
                 id: 'project-456',
@@ -311,6 +333,7 @@ describe(`${ADD_PROJECTS} tool`, () => {
             const allowedKeys = [
                 'id',
                 'name',
+                'description',
                 'color',
                 'isFavorite',
                 'isShared',
@@ -329,7 +352,6 @@ describe(`${ADD_PROJECTS} tool`, () => {
                 'createdAt',
                 'updatedAt',
                 'defaultOrder',
-                'description',
                 'isArchived',
                 'isCollapsed',
                 'isDeleted',
