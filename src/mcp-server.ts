@@ -146,7 +146,7 @@ You have access to comprehensive Todoist management tools for personal productiv
 
 7. **Pagination**: Large result sets use cursor-based pagination. Use limit parameter to control result size (default varies by tool).
 
-8. **Error Handling**: All tools provide detailed error messages and next-step suggestions. Pay attention to validation feedback for corrective actions.
+8. **Error Handling**: All tools provide detailed error messages and next-step suggestions. Pay attention to validation feedback for corrective actions. Batch tools (e.g. add-tasks, update-tasks) report per-item \`failures\` alongside successes — a single failed item does not undo the rest of the batch. When an item fails, **do not retry the whole batch**; inspect its failure reason and only re-send the items that are actually fixable.
 
 ### Common Workflows:
 
