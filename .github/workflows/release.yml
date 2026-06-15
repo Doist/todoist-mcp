@@ -51,13 +51,13 @@ jobs:
                   GH_TOKEN: ${{ steps.generate_token.outputs.token }}
 
             - name: Checkout repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@v6
               with:
                   token: ${{ steps.generate_token.outputs.token }}
                   fetch-depth: 0
 
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version-file: .nvmrc
                   cache: npm
