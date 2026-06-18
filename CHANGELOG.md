@@ -1,3 +1,9 @@
+## [10.1.6](https://github.com/Doist/todoist-mcp/compare/v10.1.5...v10.1.6) (2026-06-18)
+
+### Bug Fixes
+
+* bind standalone HTTP server to localhost by default ([#510](https://github.com/Doist/todoist-mcp/issues/510)) ([0401adc](https://github.com/Doist/todoist-mcp/commit/0401adceca0cc435d61d9290d6598d20394af0a0))
+
 ## [10.1.5](https://github.com/Doist/todoist-mcp/compare/v10.1.4...v10.1.5) (2026-06-10)
 
 ### Bug Fixes
