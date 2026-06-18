@@ -129,12 +129,12 @@ TODOIST_API_KEY=your-key node dist/main-http.js
 
 ### Environment Variables
 
-| Variable           | Default     | Description                                                              |
-| ------------------ | ----------- | ------------------------------------------------------------------------ |
-| `TODOIST_API_KEY`  | (required)  | Your Todoist API key. MCP tool calls run as this Todoist user.           |
-| `HOST`             | `127.0.0.1` | HTTP bind host. Use `0.0.0.0` only behind trusted network/auth controls. |
-| `PORT`             | `3000`      | HTTP server port                                                         |
-| `TODOIST_BASE_URL` | (optional)  | Custom Todoist API base URL                                              |
+| Variable           | Default     | Description                                                                       |
+| ------------------ | ----------- | --------------------------------------------------------------------------------- |
+| `TODOIST_API_KEY`  | (required)  | Your Todoist API key. MCP tool calls run as this Todoist user.                    |
+| `HOST`             | `127.0.0.1` | HTTP bind host. Use non-loopback hosts only behind trusted network/auth controls. |
+| `PORT`             | `3000`      | HTTP server port                                                                  |
+| `TODOIST_BASE_URL` | (optional)  | Custom Todoist API base URL                                                       |
 
 ### Local Development
 
