@@ -27,13 +27,33 @@ dotenv.config({ quiet: true })
 
 const PORT = Number.parseInt(process.env.PORT || '3000', 10)
 const HOST = process.env.HOST || '127.0.0.1'
+const LISTEN_HOST = normalizeListenHost(HOST)
+
+function normalizeListenHost(host: string): string {
+    if (host.startsWith('[') && host.endsWith(']')) {
+        return host.slice(1, -1)
+    }
+    return host
+}
+
+function formatUrlHost(host: string): string {
+    if (host === '0.0.0.0' || host === '::') {
+        return 'localhost'
+    }
+    return formatListenHost(host)
+}
+
+function formatListenHost(host: string): string {
+    if (isIP(host) === 6) {
+        return `[${host}]`
+    }
+    return host
+}
 
 function isLoopbackHost(host: string): boolean {
+    host = normalizeListenHost(host)
     if (host === 'localhost') {
         return true
-    }
-    if (host.startsWith('[') && host.endsWith(']')) {
-        host = host.slice(1, -1)
     }
     if (host === '::1' || host === '0:0:0:0:0:0:0:1') {
         return true
@@ -96,12 +116,12 @@ function main() {
         res.status(405).set('Allow', 'POST').send('Method Not Allowed')
     })
 
-    app.listen(PORT, HOST, () => {
-        const displayHost = HOST === '0.0.0.0' ? 'localhost' : HOST
-        console.error(`Todoist MCP HTTP Server started on ${HOST}:${PORT}`)
+    app.listen(PORT, LISTEN_HOST, () => {
+        const displayHost = formatUrlHost(LISTEN_HOST)
+        console.error(`Todoist MCP HTTP Server started on ${formatListenHost(LISTEN_HOST)}:${PORT}`)
         console.error(`MCP endpoint: http://${displayHost}:${PORT}/mcp`)
         console.error(`Health check: http://${displayHost}:${PORT}/health`)
-        if (!isLoopbackHost(HOST)) {
+        if (!isLoopbackHost(LISTEN_HOST)) {
             console.error(
                 'Warning: todoist-mcp-http is reachable from other hosts. ' +
                     'Protect this service with trusted network/auth controls because requests run with TODOIST_API_KEY.',

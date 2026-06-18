@@ -154,7 +154,7 @@ MCP host applications can connect via the `mcp-remote` bridge:
         "todoist-mcp-http": {
             "type": "stdio",
             "command": "npx",
-            "args": ["mcp-remote", "http://localhost:3000/mcp"]
+            "args": ["mcp-remote", "http://127.0.0.1:3000/mcp"]
         }
     }
 }
@@ -167,7 +167,7 @@ The HTTP server exposes a health check endpoint at `/health` that returns:
 - Server status
 
 ```bash
-curl http://localhost:3000/health
+curl http://127.0.0.1:3000/health
 ```
 
 > [!NOTE]
