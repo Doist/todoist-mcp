@@ -95,19 +95,21 @@ Update the configuration above as follows
 
 ## Using Streamable HTTP Server Transport
 
-You can run the MCP server as an HTTP service with configurable session timeouts. This is useful as an alternative to the hosted service at `ai.todoist.net/mcp`, especially if you experience frequent session disconnections ([#239](https://github.com/Doist/todoist-mcp/issues/239)).
+You can run the MCP server as a local HTTP service. This is useful as an alternative to the hosted service at `ai.todoist.net/mcp`, especially if you experience frequent session disconnections ([#239](https://github.com/Doist/todoist-mcp/issues/239)).
+
+> [!IMPORTANT]
+> The standalone HTTP server runs every MCP tool with the `TODOIST_API_KEY` supplied by the operator. It binds to `127.0.0.1` by default and is intended for local MCP clients. Do not expose it to a LAN or the public internet unless you add your own trusted network and authentication controls.
 
 ### Quick Start with npx
 
 ```bash
-# Default: 30 minute session timeout
 TODOIST_API_KEY=your-key npx -p @doist/todoist-mcp todoist-mcp-http
-
-# Custom timeout: 1 hour (3600000ms)
-TODOIST_API_KEY=your-key SESSION_TIMEOUT_MS=3600000 npx -p @doist/todoist-mcp todoist-mcp-http
 
 # Custom port
 TODOIST_API_KEY=your-key PORT=8080 npx -p @doist/todoist-mcp todoist-mcp-http
+
+# Explicitly expose on all interfaces. Only do this behind trusted network/auth controls.
+TODOIST_API_KEY=your-key HOST=0.0.0.0 npx -p @doist/todoist-mcp todoist-mcp-http
 ```
 
 ### Running from Source
@@ -127,12 +129,12 @@ TODOIST_API_KEY=your-key node dist/main-http.js
 
 ### Environment Variables
 
-| Variable             | Default    | Description                                      |
-| -------------------- | ---------- | ------------------------------------------------ |
-| `TODOIST_API_KEY`    | (required) | Your Todoist API key                             |
-| `PORT`               | `3000`     | HTTP server port                                 |
-| `SESSION_TIMEOUT_MS` | `1800000`  | Session timeout in milliseconds (30 min default) |
-| `TODOIST_BASE_URL`   | (optional) | Custom Todoist API base URL                      |
+| Variable           | Default     | Description                                                              |
+| ------------------ | ----------- | ------------------------------------------------------------------------ |
+| `TODOIST_API_KEY`  | (required)  | Your Todoist API key. MCP tool calls run as this Todoist user.           |
+| `HOST`             | `127.0.0.1` | HTTP bind host. Use `0.0.0.0` only behind trusted network/auth controls. |
+| `PORT`             | `3000`      | HTTP server port                                                         |
+| `TODOIST_BASE_URL` | (optional)  | Custom Todoist API base URL                                              |
 
 ### Local Development
 
@@ -140,7 +142,7 @@ TODOIST_API_KEY=your-key node dist/main-http.js
 PORT=8080 npm run dev:http
 ```
 
-This will expose the service at `http://localhost:8080/mcp` with hot-reload.
+This will expose the service at `http://127.0.0.1:8080/mcp` with hot-reload.
 
 ### Connecting MCP Clients
 
@@ -163,8 +165,6 @@ MCP host applications can connect via the `mcp-remote` bridge:
 The HTTP server exposes a health check endpoint at `/health` that returns:
 
 - Server status
-- Number of active sessions
-- Configured session timeout
 
 ```bash
 curl http://localhost:3000/health

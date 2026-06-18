@@ -10,6 +10,8 @@
  * - TODOIST_API_KEY: Required. Your Todoist API key.
  * - TODOIST_BASE_URL: Optional. Custom Todoist API base URL.
  * - PORT: Optional. Server port (default: 3000).
+ * - HOST: Optional. Bind host (default: 127.0.0.1). Use 0.0.0.0 only behind
+ *   trusted network/auth controls because requests run with TODOIST_API_KEY.
  *
  * @see https://github.com/Doist/todoist-mcp/issues/239
  */
@@ -22,6 +24,7 @@ import { requireValidTodoistToken } from './middleware/require-valid-todoist-tok
 dotenv.config({ quiet: true })
 
 const PORT = Number.parseInt(process.env.PORT || '3000', 10)
+const HOST = process.env.HOST || '127.0.0.1'
 
 function main() {
     const baseUrl = process.env.TODOIST_BASE_URL
@@ -75,10 +78,17 @@ function main() {
         res.status(405).set('Allow', 'POST').send('Method Not Allowed')
     })
 
-    app.listen(PORT, () => {
-        console.error(`Todoist MCP HTTP Server started on port ${PORT}`)
-        console.error(`MCP endpoint: http://localhost:${PORT}/mcp`)
-        console.error(`Health check: http://localhost:${PORT}/health`)
+    app.listen(PORT, HOST, () => {
+        const displayHost = HOST === '0.0.0.0' ? 'localhost' : HOST
+        console.error(`Todoist MCP HTTP Server started on ${HOST}:${PORT}`)
+        console.error(`MCP endpoint: http://${displayHost}:${PORT}/mcp`)
+        console.error(`Health check: http://${displayHost}:${PORT}/health`)
+        if (HOST === '0.0.0.0' || HOST === '::') {
+            console.error(
+                'Warning: todoist-mcp-http is reachable from other hosts. ' +
+                    'Protect this service with trusted network/auth controls because requests run with TODOIST_API_KEY.',
+            )
+        }
     })
 }
 
