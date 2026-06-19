@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/doist-todoist-mcp-badge.png)](https://mseep.ai/app/doist-todoist-mcp)
+
 # Todoist MCP Server
 
 > **Note:** This package was previously named `@doist/todoist-ai`. The old name continues to work as a thin shim that re-exports from `@doist/todoist-mcp`, but new installs should use `@doist/todoist-mcp` directly.
