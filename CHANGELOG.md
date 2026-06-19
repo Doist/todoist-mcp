@@ -1,3 +1,9 @@
+## [10.2.0](https://github.com/Doist/todoist-mcp/compare/v10.1.6...v10.2.0) (2026-06-19)
+
+### Features
+
+* **projects:** add description to add-projects and update-projects ([#500](https://github.com/Doist/todoist-mcp/issues/500)) ([ff91b99](https://github.com/Doist/todoist-mcp/commit/ff91b99e6ff04f8222b2bab6599312b1d8393dd4))
+
 ## [10.1.6](https://github.com/Doist/todoist-mcp/compare/v10.1.5...v10.1.6) (2026-06-18)
 
 ### Bug Fixes
