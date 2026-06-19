@@ -41,8 +41,8 @@ When adding a new tool, it must be registered in **all** of these locations:
 3. `src/mcp-server.ts` — import, register with `registerTool()`, and add to LLM `instructions` string
 4. `src/index.ts` — import and add to both the `tools` object and the named exports
 5. `scripts/run-tool.ts` — import and add to the `tools` record
-6. `src/tools/__tests__/tool-annotations.test.ts` — add annotation expectation entry
-7. `src/tools/__tests__/<tool-name>.test.ts` — create test file
+6. `src/tools/tool-annotations.test.ts` — add annotation expectation entry
+7. `src/tools/<tool-name>.test.ts` — create test file
 8. `src/token-footprint.test.ts` — import the tool and append it to the `allTools` array so the token baseline keeps measuring the full surface. If the new tool's schema/description is large enough to push the combined fixed cost over `TOKEN_BUDGET`, raise the budget in the same PR and call it out in the description.
 
 ## Testing Requirements

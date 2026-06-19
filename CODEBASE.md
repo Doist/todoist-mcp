@@ -48,8 +48,7 @@ src/
 ├─ prompts/                   # MCP prompts (productivity-analysis)
 ├─ middleware/                # require-valid-todoist-token (HTTP auth)
 ├─ mcp-apps/                  # React UI widgets (task list). Built separately. Ignore unless task mentions widgets.
-├─ tools/                     # 40+ tool definitions. One file = one tool. See catalog.
-│  └─ __tests__/              # Co-located tests: <tool>.test.ts
+├─ tools/                     # 40+ tool definitions. One file = one tool. Each <tool>.test.ts sits alongside its tool; snapshots in tools/__snapshots__/. See catalog.
 └─ utils/                     # Reusable helpers. See catalog.
 ```
 
@@ -118,7 +117,7 @@ Tool files are flat in `src/tools/` (kebab-case). Don't enumerate — grep. Curr
 - **Productivity/activity** — get-overview, get-productivity-stats, find-activity
 - **Generic** — delete-object, fetch, fetch-object, search, reorder-objects, view-attachment
 
-New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; import + register in `src/mcp-server.ts`; add tool name to `src/utils/tool-names.ts`; add to `src/index.ts` (exports) and `scripts/run-tool.ts` (direct-run registry); add annotation entry to `src/tools/__tests__/tool-annotations.test.ts`; write `<tool-name>.test.ts` alongside it.
+New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; import + register in `src/mcp-server.ts`; add tool name to `src/utils/tool-names.ts`; add to `src/index.ts` (exports) and `scripts/run-tool.ts` (direct-run registry); add annotation entry to `src/tools/tool-annotations.test.ts`; write `<tool-name>.test.ts` alongside it.
 
 ## `src/utils/` catalog — don't reimplement
 
@@ -151,7 +150,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; imp
 ## Testing
 
 - **Runner:** `vitest` with globals. `npm test` / `npm run test:watch` / `npm run test:coverage`.
-- **Location:** co-located at `src/tools/__tests__/<tool>.test.ts`; utility tests alongside (`src/utils/retry.test.ts`, etc.).
+- **Location:** co-located at `src/tools/<tool>.test.ts`; utility tests alongside (`src/utils/retry.test.ts`, etc.).
 - **Mocks:** `vi.fn()` against `TodoistApi` methods. Use factories from `src/utils/test-helpers.ts` — do NOT hand-build mock entities.
 - **Coverage:** 333+ tests currently. All must pass before commit.
 
@@ -181,7 +180,7 @@ Needs `TODOIST_API_KEY` in `.env`.
 - Priority: **`"p1"`–`"p4"` strings only**, never integers
 - Clearing optional fields: special strings `"remove"` / `"unassign"`, never `null` (Gemini compatibility — see `CLAUDE.md`)
 - Tool parameters: Zod **raw shape** (`{ foo: z.string() }`), not `z.object({...})`
-- Every new tool: register in `src/mcp-server.ts`, add to `src/utils/tool-names.ts`, `src/index.ts`, and `scripts/run-tool.ts`; add annotation entry to `src/tools/__tests__/tool-annotations.test.ts`; write a `<tool>.test.ts` — full checklist in `AGENTS.md`
+- Every new tool: register in `src/mcp-server.ts`, add to `src/utils/tool-names.ts`, `src/index.ts`, and `scripts/run-tool.ts`; add annotation entry to `src/tools/tool-annotations.test.ts`; write a `<tool>.test.ts` — full checklist in `AGENTS.md`
 
 ## Start here if new
 
