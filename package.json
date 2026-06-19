@@ -112,7 +112,7 @@
         "*.{md,yml,yaml,css,json}": [
             "oxfmt --no-error-on-unmatched-pattern"
         ],
-        "src/tools/*.ts": [
+        "src/tools/!(*.test).ts": [
             "npm run lint:schemas"
         ],
         "src/index.ts": [
