@@ -21,6 +21,10 @@ const ProjectSchema = z.object({
         .enum(['list', 'board', 'calendar'])
         .optional()
         .describe('The project view style. Defaults to "list".'),
+    description: z
+        .string()
+        .optional()
+        .describe('The description of the project. Supports Markdown.'),
     color: ColorSchema,
     workspace: z
         .string()
