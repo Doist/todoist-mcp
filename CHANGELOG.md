@@ -1,3 +1,9 @@
+## [10.3.0](https://github.com/Doist/todoist-mcp/compare/v10.2.0...v10.3.0) (2026-06-19)
+
+### Features
+
+* **sections:** add description to add-sections and update-sections ([#501](https://github.com/Doist/todoist-mcp/issues/501)) ([ccf6f45](https://github.com/Doist/todoist-mcp/commit/ccf6f451e4ea18fe583ea9f3cbbd3c7bf97b15e5)), closes [#500](https://github.com/Doist/todoist-mcp/issues/500)
+
 ## [10.2.0](https://github.com/Doist/todoist-mcp/compare/v10.1.6...v10.2.0) (2026-06-19)
 
 ### Features
