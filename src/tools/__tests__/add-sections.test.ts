@@ -215,7 +215,7 @@ describe(`${ADD_SECTIONS} tool`, () => {
             ).rejects.toThrow('API Error: Section name is required')
         })
 
-        it('should handle partial failures in multiple sections', async () => {
+        it('should keep successful sections when one in the batch fails', async () => {
             const mockSection = createMockSection({
                 id: 'section-1',
                 projectId: TEST_IDS.PROJECT_TEST,
@@ -226,17 +226,50 @@ describe(`${ADD_SECTIONS} tool`, () => {
                 .mockResolvedValueOnce(mockSection)
                 .mockRejectedValueOnce(new Error('API Error: Invalid project ID'))
 
+            const result = await addSections.execute(
+                {
+                    sections: [
+                        { name: 'First Section', projectId: TEST_IDS.PROJECT_TEST },
+                        { name: 'Second Section', projectId: 'invalid-project' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            // The successful section is preserved instead of being discarded by the failure.
+            const { structuredContent } = result
+            expect(structuredContent.sections).toHaveLength(1)
+            expect(structuredContent.totalCount).toBe(1)
+            expect(structuredContent.successCount).toBe(1)
+            expect(structuredContent.totalRequested).toBe(2)
+
+            // The failure is reported per-item with the offending section identified by name.
+            expect(structuredContent.failureCount).toBe(1)
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('Second Section')
+            expect(structuredContent.failures[0]?.error).toContain('API Error: Invalid project ID')
+
+            expect(result.textContent).toContain('Added 1 section:')
+            expect(result.textContent).toContain('Failed (1)')
+            expect(result.textContent).toContain('not retried automatically')
+        })
+
+        it('should throw when every section in the batch fails', async () => {
+            mockTodoistApi.addSection
+                .mockRejectedValueOnce(new Error('API Error: Invalid project ID'))
+                .mockRejectedValueOnce(new Error('API Error: Invalid project ID'))
+
             await expect(
                 addSections.execute(
                     {
                         sections: [
-                            { name: 'First Section', projectId: TEST_IDS.PROJECT_TEST },
-                            { name: 'Second Section', projectId: 'invalid-project' },
+                            { name: 'First Section', projectId: 'invalid-1' },
+                            { name: 'Second Section', projectId: 'invalid-2' },
                         ],
                     },
                     mockTodoistApi,
                 ),
-            ).rejects.toThrow('API Error: Invalid project ID')
+            ).rejects.toThrow('All 2 section(s) failed to create')
         })
     })
 })
