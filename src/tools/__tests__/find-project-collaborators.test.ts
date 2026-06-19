@@ -158,6 +158,19 @@ describe(`${FIND_PROJECT_COLLABORATORS} tool`, () => {
             expect(result.structuredContent.collaborators).toEqual([ernesto])
         })
 
+        it('matches hidden-email collaborators by name', async () => {
+            const hiddenEmailCollaborator = { id: 'user-4', name: 'Hidden User', email: null }
+            vi.mocked(userResolver.getAllCollaborators).mockResolvedValue([hiddenEmailCollaborator])
+
+            const result = await findProjectCollaborators.execute(
+                { searchTerm: 'hidden' },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.collaborators).toEqual([hiddenEmailCollaborator])
+            expect(result.textContent).toContain('Hidden User (No email)')
+        })
+
         it('returns helpful empty result when workspace has no shared projects and getUser fails', async () => {
             vi.mocked(userResolver.getAllCollaborators).mockResolvedValue([])
 

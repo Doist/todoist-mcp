@@ -143,7 +143,7 @@ const ActivityEventSchema = z.object({
 const CollaboratorSchema = z.object({
     id: z.string().describe('The unique ID of the user.'),
     name: z.string().describe('The full name of the user.'),
-    email: z.string().describe('The email address of the user.'),
+    email: z.string().nullable().describe('The email address of the user, or null when hidden.'),
 })
 
 /**

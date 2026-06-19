@@ -103,4 +103,37 @@ describe('UserResolver', () => {
             expect(collaborators.map((c) => c.id).sort()).toEqual(['user-p1', 'user-p2'])
         })
     })
+
+    describe('nullable collaborator emails', () => {
+        beforeEach(() => {
+            mockClient.getProjectCollaborators = vi.fn().mockResolvedValue({
+                results: [{ id: 'user-hidden', name: 'Hidden User', email: null }],
+                nextCursor: null,
+            }) as unknown as typeof mockClient.getProjectCollaborators
+
+            mockClient.getProjects = vi.fn().mockResolvedValue({
+                results: [{ id: 'shared-project', isShared: true }],
+                nextCursor: null,
+            }) as unknown as typeof mockClient.getProjects
+        })
+
+        it('keeps collaborators whose email is hidden', async () => {
+            const collaborators = await resolver.getProjectCollaborators(
+                mockClient,
+                'shared-project',
+            )
+
+            expect(collaborators).toEqual([{ id: 'user-hidden', name: 'Hidden User', email: null }])
+        })
+
+        it('resolves hidden-email collaborators by name', async () => {
+            const result = await resolver.resolveUser(mockClient, 'Hidden User')
+
+            expect(result).toEqual({
+                userId: 'user-hidden',
+                displayName: 'Hidden User',
+                email: null,
+            })
+        })
+    })
 })
