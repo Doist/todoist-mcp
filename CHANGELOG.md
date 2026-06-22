@@ -1,3 +1,9 @@
+## [10.3.2](https://github.com/Doist/todoist-mcp/compare/v10.3.1...v10.3.2) (2026-06-22)
+
+### Bug Fixes
+
+* **deps:** update dependency @doist/todoist-sdk to v10.4.1 ([#514](https://github.com/Doist/todoist-mcp/issues/514)) ([3febb57](https://github.com/Doist/todoist-mcp/commit/3febb57d9528207cee260b7fbd9d7abb9656726d))
+
 ## [10.3.1](https://github.com/Doist/todoist-mcp/compare/v10.3.0...v10.3.1) (2026-06-19)
 
 ### Bug Fixes
