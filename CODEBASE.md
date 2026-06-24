@@ -36,7 +36,8 @@ TypeScript · ESM-only · Node 18+ · `zod` v4 for schemas · MCP SDK ≥1.25.
 ```
 src/
 ├─ main.ts                    # stdio entry: dotenv → getMcpServer() → StdioServerTransport
-├─ main-http.ts               # Express entry: same server behind HTTP
+├─ main-http.ts               # Express entry: thin bootstrap — reads env, builds the app, listen()
+├─ http-app.ts                # createHttpApp(): the Express app + middleware chain (Host/Origin guard scoped to /mcp). Pure/side-effect-free so it's testable
 ├─ index.ts                   # Public package exports — a curated subset of tools + helpers + types. NOT the full registry.
 ├─ mcp-server.ts              # getMcpServer() factory. **Authoritative tool registry** — imports every tool, calls registerTool() for each, registers productivity-analysis prompt, contains the giant `instructions` string shown to the LLM
 ├─ mcp-helpers.ts             # registerTool(), FEATURE_NAMES, output formatting, retry wrapping
@@ -46,7 +47,7 @@ src/
 ├─ filter-helpers.ts          # appendToQuery, buildResponsibleUserQueryFilter, resolveResponsibleUser
 ├─ tool-execution-error.ts    # ToolExecutionError: wraps SDK errors with user/system classification
 ├─ prompts/                   # MCP prompts (productivity-analysis)
-├─ middleware/                # require-valid-todoist-token (HTTP auth)
+├─ middleware/                # require-trusted-host (Host/Origin allowlist, DNS-rebinding protection), require-valid-todoist-token (HTTP auth)
 ├─ mcp-apps/                  # React UI widgets (task list). Built separately. Ignore unless task mentions widgets.
 ├─ tools/                     # 40+ tool definitions. One file = one tool. Each <tool>.test.ts sits alongside its tool; snapshots in tools/__snapshots__/. See catalog.
 └─ utils/                     # Reusable helpers. See catalog.
@@ -144,6 +145,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; imp
 
 - Client: `new TodoistApi(apiKey, baseUrl?)` — created once per server in `mcp-server.ts`, passed into every `execute()`.
 - Auth: `TODOIST_API_KEY` env var, validated at startup. Both stdio and HTTP use this; the HTTP server passes it through `requireValidTodoistToken({ type: 'static', apiKey })` middleware (`src/middleware/require-valid-todoist-token.ts`). The middleware _also_ supports a per-request bearer-token mode, but `main-http.ts` does not wire that up today.
+- HTTP request guard: `requireTrustedHost` (`src/middleware/require-trusted-host.ts`) is scoped to the `/mcp` routes, running ahead of `express.json()` and `requireValidTodoistToken`, validating the `Host` and `Origin` headers against a trusted-hostname allowlist (loopback defaults + `ALLOWED_HOSTS` + a concrete non-loopback `HOST`). This is DNS-rebinding protection: it blocks malicious websites from reaching the loopback server with the operator's token. `/health` is intentionally unguarded so deployment probes (which use the target's private IP in the Host header) stay reachable. The allowlist is built by `buildAllowedHosts(HOST, ALLOWED_HOSTS)` in the same module; shared host helpers live in `src/utils/host.ts`. The app is assembled by `createHttpApp()` in `src/http-app.ts` (a pure module, no side effects, so the middleware chain is testable); `src/main-http.ts` is a thin bootstrap that reads env and calls `listen()`.
 - Optional `TODOIST_BASE_URL` for staging/dev APIs.
 - Errors: wrap SDK throws in `ToolExecutionError` (classify user vs system) — `registerTool` handles this automatically.
 

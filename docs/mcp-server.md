@@ -98,7 +98,7 @@ Update the configuration above as follows
 You can run the MCP server as a local HTTP service. This is useful as an alternative to the hosted service at `ai.todoist.net/mcp`, especially if you experience frequent session disconnections ([#239](https://github.com/Doist/todoist-mcp/issues/239)).
 
 > [!IMPORTANT]
-> The standalone HTTP server runs every MCP tool with the `TODOIST_API_KEY` supplied by the operator. It binds to `127.0.0.1` by default and is intended for local MCP clients. Do not expose it to a LAN or the public internet unless you add your own trusted network and authentication controls.
+> The standalone HTTP server runs every MCP tool with the `TODOIST_API_KEY` supplied by the operator. It binds to `127.0.0.1` by default and is intended for local MCP clients. Requests to `/mcp` have their `Host` and `Origin` headers validated against a trusted-hostname allowlist (DNS-rebinding protection), so loopback clients work out of the box (`/health` is exempt so deployment health probes keep working). Do not expose it to a LAN or the public internet unless you add your own trusted network and authentication controls — and when you do, set `ALLOWED_HOSTS` to the hostnames your clients use.
 
 ### Quick Start with npx
 
@@ -109,7 +109,8 @@ TODOIST_API_KEY=your-key npx -p @doist/todoist-mcp todoist-mcp-http
 TODOIST_API_KEY=your-key PORT=8080 npx -p @doist/todoist-mcp todoist-mcp-http
 
 # Explicitly expose on all interfaces. Only do this behind trusted network/auth controls.
-TODOIST_API_KEY=your-key HOST=0.0.0.0 npx -p @doist/todoist-mcp todoist-mcp-http
+# Set ALLOWED_HOSTS to the hostnames clients use, otherwise their requests are rejected with 403.
+TODOIST_API_KEY=your-key HOST=0.0.0.0 ALLOWED_HOSTS=mcp.example.lan npx -p @doist/todoist-mcp todoist-mcp-http
 ```
 
 ### Running from Source
@@ -129,12 +130,13 @@ TODOIST_API_KEY=your-key node dist/main-http.js
 
 ### Environment Variables
 
-| Variable           | Default     | Description                                                                       |
-| ------------------ | ----------- | --------------------------------------------------------------------------------- |
-| `TODOIST_API_KEY`  | (required)  | Your Todoist API key. MCP tool calls run as this Todoist user.                    |
-| `HOST`             | `127.0.0.1` | HTTP bind host. Use non-loopback hosts only behind trusted network/auth controls. |
-| `PORT`             | `3000`      | HTTP server port                                                                  |
-| `TODOIST_BASE_URL` | (optional)  | Custom Todoist API base URL                                                       |
+| Variable           | Default     | Description                                                                                                                                                                                                                                                                                             |
+| ------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TODOIST_API_KEY`  | (required)  | Your Todoist API key. MCP tool calls run as this Todoist user.                                                                                                                                                                                                                                          |
+| `HOST`             | `127.0.0.1` | HTTP bind host. Use non-loopback hosts only behind trusted network/auth controls.                                                                                                                                                                                                                       |
+| `ALLOWED_HOSTS`    | (optional)  | Comma-separated extra hostnames trusted in the `Host`/`Origin` headers (DNS-rebinding protection), in addition to the loopback defaults (`localhost`, `127.0.0.1`, `[::1]`). Required when `HOST=0.0.0.0` so LAN clients' hostnames are accepted. IPv6 entries must be bracketed, e.g. `[2001:db8::1]`. |
+| `PORT`             | `3000`      | HTTP server port                                                                                                                                                                                                                                                                                        |
+| `TODOIST_BASE_URL` | (optional)  | Custom Todoist API base URL                                                                                                                                                                                                                                                                             |
 
 ### Local Development
 
