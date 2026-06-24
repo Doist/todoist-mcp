@@ -1,3 +1,9 @@
+## [10.3.3](https://github.com/Doist/todoist-mcp/compare/v10.3.2...v10.3.3) (2026-06-24)
+
+### Bug Fixes
+
+* validate Host/Origin on HTTP transport to block DNS rebinding ([#516](https://github.com/Doist/todoist-mcp/issues/516)) ([245bf29](https://github.com/Doist/todoist-mcp/commit/245bf29cf5dbd8272e2aa896ad38557f91f8a16a))
+
 ## [10.3.2](https://github.com/Doist/todoist-mcp/compare/v10.3.1...v10.3.2) (2026-06-22)
 
 ### Bug Fixes
