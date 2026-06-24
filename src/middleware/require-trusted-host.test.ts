@@ -62,7 +62,10 @@ describe('requireTrustedHost', () => {
             // Host (which still carries the attacker's domain) is rejected.
             ['evil.com'],
             ['http://'],
-        ])('rejects untrusted/unparseable host %s with 403', (host) => {
+            // URL-only syntax that must not be normalised to a trusted host.
+            ['foo@127.0.0.1'],
+            ['127.0.0.1/../evil'],
+        ])('rejects untrusted/malformed host %s with 403', (host) => {
             const res = createMockRes()
             middleware(createReq({ host }), res, next)
 
@@ -168,6 +171,10 @@ describe('buildAllowedHosts', () => {
         expect(res.status).not.toHaveBeenCalled()
     })
 
+    it('auto-includes a non-default loopback alias bind host (e.g. 127.0.1.1)', () => {
+        expect(buildAllowedHosts('127.0.1.1')).toEqual([...DEFAULT_ALLOWED_HOSTS, '127.0.1.1'])
+    })
+
     it('does not add the 0.0.0.0 bind wildcard', () => {
         expect(buildAllowedHosts('0.0.0.0')).toEqual(DEFAULT_ALLOWED_HOSTS)
     })
@@ -186,5 +193,23 @@ describe('buildAllowedHosts', () => {
 
     it('deduplicates entries already present in the defaults', () => {
         expect(buildAllowedHosts('127.0.0.1', 'localhost')).toEqual(DEFAULT_ALLOWED_HOSTS)
+    })
+})
+
+describe('requireTrustedHost construction', () => {
+    it.each([
+        ['unbracketed IPv6', '2001:db8::1'],
+        ['whitespace', 'bad host'],
+        ['userinfo', 'a@b'],
+    ])('throws fast on an invalid allowed host (%s)', (_label, badEntry) => {
+        expect(() => requireTrustedHost({ allowedHosts: [badEntry] })).toThrow(
+            /Invalid allowed host/,
+        )
+    })
+
+    it('does not throw for valid entries', () => {
+        expect(() =>
+            requireTrustedHost({ allowedHosts: [...DEFAULT_ALLOWED_HOSTS, 'mcp.lan'] }),
+        ).not.toThrow()
     })
 })
