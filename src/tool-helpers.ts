@@ -156,6 +156,82 @@ export async function searchAllProjects(client: TodoistApi, query: string): Prom
 }
 
 /**
+ * Fetches all active (non-archived) projects across every page.
+ *
+ * @param client - The Todoist API client
+ * @returns Promise resolving to array of active projects
+ */
+export async function fetchAllActiveProjects(client: TodoistApi): Promise<Project[]> {
+    return fetchAllPages({
+        apiMethod: client.getProjects.bind(client),
+        args: {},
+        limit: ApiLimits.PROJECTS_MAX,
+    })
+}
+
+/**
+ * Fetches all archived projects across every page.
+ *
+ * The API has no server-side search for archived projects, so callers that need
+ * to filter by name should fetch all and filter client-side with
+ * {@link matchesWildcardQuery}.
+ *
+ * @param client - The Todoist API client
+ * @returns Promise resolving to array of archived projects
+ */
+export async function fetchAllArchivedProjects(client: TodoistApi): Promise<Project[]> {
+    return fetchAllPages({
+        apiMethod: client.getArchivedProjects.bind(client),
+        args: {},
+        limit: ApiLimits.PROJECTS_MAX,
+    })
+}
+
+/**
+ * Compiles a search query into a case-insensitive RegExp using the same wildcard
+ * semantics as server-side search (see {@link toWildcardQuery}): `*` matches any
+ * sequence, `\*` is a literal asterisk, and every other character (backslashes
+ * included) is matched literally. A query without an unescaped `*` matches as a
+ * substring; otherwise the whole name must match.
+ *
+ * Compile once and reuse the result when filtering many names (e.g. archived
+ * projects), rather than calling {@link matchesWildcardQuery} per item.
+ */
+export function compileWildcardQuery(query: string): RegExp {
+    const escapeRegex = (char: string) => char.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    // Unescaped wildcard = `*` preceded by an even number of backslashes
+    const hasWildcard = /(?<!\\)(?:\\\\)*\*/.test(query)
+    const chars = [...query]
+    let pattern = ''
+    for (let i = 0; i < chars.length; i++) {
+        const char = chars[i] as string
+        if (char === '\\' && chars[i + 1] === '\\') {
+            pattern += '\\\\' // escaped backslash → literal backslash
+            i++
+        } else if (char === '\\' && chars[i + 1] === '*') {
+            pattern += '\\*' // escaped asterisk → literal asterisk
+            i++
+        } else if (char === '*') {
+            pattern += '.*' // wildcard
+        } else {
+            pattern += escapeRegex(char)
+        }
+    }
+    // No wildcard → substring (unanchored) match; wildcard → match the whole name.
+    return new RegExp(hasWildcard ? `^${pattern}$` : pattern, 'iu')
+}
+
+/**
+ * Tests whether a name matches a search query using the same wildcard semantics
+ * as server-side search. Used for client-side filtering where the API exposes no
+ * search endpoint (e.g. archived projects). For bulk filtering, prefer
+ * {@link compileWildcardQuery} so the pattern is compiled only once.
+ */
+export function matchesWildcardQuery(name: string, query: string): boolean {
+    return compileWildcardQuery(query).test(name)
+}
+
+/**
  * Searches labels by name and fetches all matching pages.
  *
  * @param client - The Todoist API client
@@ -284,6 +360,7 @@ function mapProject(project: Project) {
         workspaceId: isWorkspaceProject(project) ? project.workspaceId : undefined,
         folderId: isWorkspaceProject(project) ? (project.folderId ?? undefined) : undefined,
         childOrder: project.childOrder,
+        isArchived: project.isArchived,
     }
 }
 

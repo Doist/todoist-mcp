@@ -86,8 +86,9 @@ You have access to comprehensive Todoist management tools for personal productiv
 - **find-completed-tasks**: View completed tasks by completion date or original due date; if since/until are omitted, defaults to the last 7 days (returns all collaborators unless filtered)
 
 **Project & Organization:**
-- **add-projects/update-projects/find-projects**: Manage project lifecycle with names, descriptions (Markdown), favorites, view styles (list/board/calendar), and workspace assignment for new projects (by name or ID)
+- **add-projects/update-projects/find-projects**: Manage project lifecycle with names, descriptions (Markdown), favorites, view styles (list/board/calendar), and workspace assignment for new projects (by name or ID). find-projects returns active projects by default; pass archivedStatus ('archived' or 'all') to include archived projects. Every returned project includes an isArchived field
 - **project-management**: Archive or unarchive projects by ID
+- To delete a project (active or archived), use **delete-object** with type "project". Note: workspace projects must be archived first; personal projects can be deleted regardless
 - **project-move**: Move projects between personal and workspace contexts
 - **add-sections/update-sections/find-sections**: Organize tasks within projects using sections
 - **find-goals/add-goals/update-goals**: Manage goals (personal or workspace). Goals track progress via linked tasks
@@ -125,7 +126,7 @@ You have access to comprehensive Todoist management tools for personal productiv
 - **get-workspace-insights**: Get aggregated health and progress insights across all projects in a workspace. Accepts workspace name or ID, with optional project ID filtering.
 
 **General Operations:**
-- **delete-object**: Remove projects, sections, tasks, comments, labels, filters, reminders, or location reminders by type and ID
+- **delete-object**: Remove projects, sections, tasks, comments, labels, filters, reminders, or location reminders by type and ID. Deletes both active and archived projects (workspace projects must be archived first; use find-projects with archivedStatus to locate archived projects)
 - **fetch-object**: Fetch a single task, project, comment, or section by its ID
 - **reorder-objects**: Reorder sibling projects or sections, and optionally move projects to a new parent. For projects: set order to reorder siblings, and/or set parentId to move under a new parent (use "root" for top level). For sections: set order to reorder within a project
 - **user-info**: Get user details including timezone, goals, and plan information

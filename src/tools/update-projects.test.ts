@@ -447,6 +447,7 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
                 'workspaceId',
                 'folderId',
                 'childOrder',
+                'isArchived',
             ]
             const actualKeys = Object.keys(project)
             expect(actualKeys.sort()).toEqual(allowedKeys.sort())
@@ -456,7 +457,6 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
                 'createdAt',
                 'updatedAt',
                 'defaultOrder',
-                'isArchived',
                 'isCollapsed',
                 'isDeleted',
                 'isFrozen',

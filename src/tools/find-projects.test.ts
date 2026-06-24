@@ -15,6 +15,7 @@ import { findProjects } from './find-projects.js'
 const mockTodoistApi = {
     getProjects: vi.fn(),
     searchProjects: vi.fn(),
+    getArchivedProjects: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { FIND_PROJECTS } = ToolNames
@@ -269,6 +270,7 @@ describe(`${FIND_PROJECTS} tool`, () => {
                     inboxProject: true,
                     viewStyle: 'list',
                     childOrder: 0,
+                    isArchived: false,
                 }
                 // Should parse without throwing
                 const parsed = ProjectSchema.parse(project)
@@ -288,6 +290,7 @@ describe(`${FIND_PROJECTS} tool`, () => {
                     inboxProject: true,
                     viewStyle: 'list',
                     childOrder: 0,
+                    isArchived: false,
                 }
                 expect(() => ProjectSchema.parse(project)).not.toThrow()
             })
@@ -361,6 +364,176 @@ describe(`${FIND_PROJECTS} tool`, () => {
 
             expect(result.structuredContent.projects).toHaveLength(1)
             expect(result.structuredContent.projects[0]?.name).toBe('Work Project')
+        })
+    })
+
+    describe('archived projects', () => {
+        it("should list only archived projects when archivedStatus is 'archived'", async () => {
+            const archivedProjects = [
+                createMockProject({
+                    id: 'archived-1',
+                    name: 'Old Project',
+                    isArchived: true,
+                }),
+            ]
+            mockTodoistApi.getArchivedProjects.mockResolvedValue(
+                createMockApiResponse(archivedProjects),
+            )
+
+            const result = await findProjects.execute(
+                { limit: 50, archivedStatus: 'archived' },
+                mockTodoistApi,
+            )
+
+            // Uses the archived endpoint, never the active one
+            expect(mockTodoistApi.getArchivedProjects).toHaveBeenCalledWith({
+                limit: 50,
+                cursor: null,
+            })
+            expect(mockTodoistApi.getProjects).not.toHaveBeenCalled()
+
+            const structuredContent = result.structuredContent
+            expect(structuredContent.projects).toHaveLength(1)
+            expect(structuredContent.projects[0]?.isArchived).toBe(true)
+            expect(structuredContent.totalCount).toBe(1)
+        })
+
+        it("should paginate archived projects when archivedStatus is 'archived'", async () => {
+            mockTodoistApi.getArchivedProjects.mockResolvedValue(
+                createMockApiResponse(
+                    [createMockProject({ id: 'archived-1', isArchived: true })],
+                    'next-archived-cursor',
+                ),
+            )
+
+            const result = await findProjects.execute(
+                { limit: 10, cursor: 'archived-cursor', archivedStatus: 'archived' },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getArchivedProjects).toHaveBeenCalledWith({
+                limit: 10,
+                cursor: 'archived-cursor',
+            })
+            expect(result.structuredContent.hasMore).toBe(true)
+            expect(result.structuredContent.nextCursor).toBe('next-archived-cursor')
+        })
+
+        it("should merge active and archived projects when archivedStatus is 'all'", async () => {
+            mockTodoistApi.getProjects.mockResolvedValue(
+                createMockApiResponse([
+                    createMockProject({ id: 'active-1', name: 'Active', isArchived: false }),
+                ]),
+            )
+            mockTodoistApi.getArchivedProjects.mockResolvedValue(
+                createMockApiResponse([
+                    createMockProject({ id: 'archived-1', name: 'Archived', isArchived: true }),
+                ]),
+            )
+
+            const result = await findProjects.execute(
+                { limit: 50, archivedStatus: 'all' },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getProjects).toHaveBeenCalled()
+            expect(mockTodoistApi.getArchivedProjects).toHaveBeenCalled()
+
+            const structuredContent = result.structuredContent
+            expect(structuredContent.projects).toHaveLength(2)
+            expect(structuredContent.projects.map((p) => p.isArchived).sort()).toEqual([
+                false,
+                true,
+            ])
+            // Combined results are not cursor-paginated
+            expect(structuredContent.hasMore).toBe(false)
+            expect(structuredContent.nextCursor).toBeUndefined()
+        })
+
+        it("should filter archived projects by searchText client-side when archivedStatus is 'archived'", async () => {
+            mockTodoistApi.getArchivedProjects.mockResolvedValue(
+                createMockApiResponse([
+                    createMockProject({ id: 'a1', name: 'Work Archive', isArchived: true }),
+                    createMockProject({ id: 'a2', name: 'Personal Stuff', isArchived: true }),
+                    createMockProject({ id: 'a3', name: 'Old work notes', isArchived: true }),
+                ]),
+            )
+
+            const result = await findProjects.execute(
+                { limit: 50, searchText: 'work', archivedStatus: 'archived' },
+                mockTodoistApi,
+            )
+
+            // No server-side search for archived; the active search endpoint is not used
+            expect(mockTodoistApi.searchProjects).not.toHaveBeenCalled()
+
+            const names = result.structuredContent.projects.map((p) => p.name)
+            expect(names).toEqual(['Work Archive', 'Old work notes'])
+            expect(result.structuredContent.hasMore).toBe(false)
+        })
+
+        it('should support prefix wildcard search for archived projects', async () => {
+            mockTodoistApi.getArchivedProjects.mockResolvedValue(
+                createMockApiResponse([
+                    createMockProject({ id: 'a1', name: 'Work Archive', isArchived: true }),
+                    createMockProject({ id: 'a2', name: 'Old work notes', isArchived: true }),
+                ]),
+            )
+
+            const result = await findProjects.execute(
+                { limit: 50, searchText: 'work*', archivedStatus: 'archived' },
+                mockTodoistApi,
+            )
+
+            // Prefix match: only names starting with "work" (case-insensitive)
+            expect(result.structuredContent.projects.map((p) => p.name)).toEqual(['Work Archive'])
+        })
+
+        it("should search across both active and archived when archivedStatus is 'all' with searchText", async () => {
+            // Active projects use server-side search; archived are filtered client-side.
+            mockTodoistApi.searchProjects.mockResolvedValue(
+                createMockApiResponse([
+                    createMockProject({
+                        id: 'active-work',
+                        name: 'Active Work',
+                        isArchived: false,
+                    }),
+                ]),
+            )
+            mockTodoistApi.getArchivedProjects.mockResolvedValue(
+                createMockApiResponse([
+                    createMockProject({ id: 'arch-work', name: 'Archived Work', isArchived: true }),
+                    createMockProject({ id: 'arch-other', name: 'Old notes', isArchived: true }),
+                ]),
+            )
+
+            const result = await findProjects.execute(
+                { limit: 50, searchText: 'work', archivedStatus: 'all' },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.searchProjects).toHaveBeenCalledWith({
+                query: '*work*',
+                limit: 200,
+                cursor: null,
+            })
+
+            const projects = result.structuredContent.projects
+            expect(projects.map((p) => p.name)).toEqual(['Active Work', 'Archived Work'])
+            expect(projects.map((p) => p.isArchived)).toEqual([false, true])
+            expect(result.structuredContent.hasMore).toBe(false)
+        })
+
+        it('should report no archived projects when none exist', async () => {
+            mockTodoistApi.getArchivedProjects.mockResolvedValue(createMockApiResponse([]))
+
+            const result = await findProjects.execute(
+                { limit: 50, archivedStatus: 'archived' },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.totalCount).toBe(0)
+            expect(result.textContent).toContain('No archived projects')
         })
     })
 
