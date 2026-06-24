@@ -1,3 +1,33 @@
+## [10.3.2](https://github.com/Doist/todoist-mcp/compare/v10.3.1...v10.3.2) (2026-06-22)
+
+### Bug Fixes
+
+* **deps:** update dependency @doist/todoist-sdk to v10.4.1 ([#514](https://github.com/Doist/todoist-mcp/issues/514)) ([3febb57](https://github.com/Doist/todoist-mcp/commit/3febb57d9528207cee260b7fbd9d7abb9656726d))
+
+## [10.3.1](https://github.com/Doist/todoist-mcp/compare/v10.3.0...v10.3.1) (2026-06-19)
+
+### Bug Fixes
+
+* **release:** send client_payload as a JSON object in the integrations dispatch ([#512](https://github.com/Doist/todoist-mcp/issues/512)) ([9107093](https://github.com/Doist/todoist-mcp/commit/91070935fac70e93b8ddc6bd31c6b1bc5b9148ce))
+
+## [10.3.0](https://github.com/Doist/todoist-mcp/compare/v10.2.0...v10.3.0) (2026-06-19)
+
+### Features
+
+* **sections:** add description to add-sections and update-sections ([#501](https://github.com/Doist/todoist-mcp/issues/501)) ([ccf6f45](https://github.com/Doist/todoist-mcp/commit/ccf6f451e4ea18fe583ea9f3cbbd3c7bf97b15e5)), closes [#500](https://github.com/Doist/todoist-mcp/issues/500)
+
+## [10.2.0](https://github.com/Doist/todoist-mcp/compare/v10.1.6...v10.2.0) (2026-06-19)
+
+### Features
+
+* **projects:** add description to add-projects and update-projects ([#500](https://github.com/Doist/todoist-mcp/issues/500)) ([ff91b99](https://github.com/Doist/todoist-mcp/commit/ff91b99e6ff04f8222b2bab6599312b1d8393dd4))
+
+## [10.1.6](https://github.com/Doist/todoist-mcp/compare/v10.1.5...v10.1.6) (2026-06-18)
+
+### Bug Fixes
+
+* bind standalone HTTP server to localhost by default ([#510](https://github.com/Doist/todoist-mcp/issues/510)) ([0401adc](https://github.com/Doist/todoist-mcp/commit/0401adceca0cc435d61d9290d6598d20394af0a0))
+
 ## [10.1.5](https://github.com/Doist/todoist-mcp/compare/v10.1.4...v10.1.5) (2026-06-10)
 
 ### Bug Fixes

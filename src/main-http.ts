@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { isIP } from 'node:net'
 /**
  * HTTP Server for Todoist MCP in stateless mode.
  *
@@ -10,6 +11,9 @@
  * - TODOIST_API_KEY: Required. Your Todoist API key.
  * - TODOIST_BASE_URL: Optional. Custom Todoist API base URL.
  * - PORT: Optional. Server port (default: 3000).
+ * - HOST: Optional. Bind host (default: 127.0.0.1). Use non-loopback hosts
+ *   only behind trusted network/auth controls because requests run with
+ *   TODOIST_API_KEY.
  *
  * @see https://github.com/Doist/todoist-mcp/issues/239
  */
@@ -22,6 +26,43 @@ import { requireValidTodoistToken } from './middleware/require-valid-todoist-tok
 dotenv.config({ quiet: true })
 
 const PORT = Number.parseInt(process.env.PORT || '3000', 10)
+const HOST = process.env.HOST || '127.0.0.1'
+const LISTEN_HOST = normalizeListenHost(HOST)
+
+function normalizeListenHost(host: string): string {
+    if (host.startsWith('[') && host.endsWith(']')) {
+        return host.slice(1, -1)
+    }
+    return host
+}
+
+function formatUrlHost(host: string): string {
+    if (host === '0.0.0.0' || host === '::') {
+        return 'localhost'
+    }
+    return formatListenHost(host)
+}
+
+function formatListenHost(host: string): string {
+    if (isIP(host) === 6) {
+        return `[${host}]`
+    }
+    return host
+}
+
+function isLoopbackHost(host: string): boolean {
+    host = normalizeListenHost(host)
+    if (host === 'localhost') {
+        return true
+    }
+    if (host === '::1' || host === '0:0:0:0:0:0:0:1') {
+        return true
+    }
+    if (isIP(host) === 4) {
+        return host.split('.')[0] === '127'
+    }
+    return false
+}
 
 function main() {
     const baseUrl = process.env.TODOIST_BASE_URL
@@ -75,10 +116,17 @@ function main() {
         res.status(405).set('Allow', 'POST').send('Method Not Allowed')
     })
 
-    app.listen(PORT, () => {
-        console.error(`Todoist MCP HTTP Server started on port ${PORT}`)
-        console.error(`MCP endpoint: http://localhost:${PORT}/mcp`)
-        console.error(`Health check: http://localhost:${PORT}/health`)
+    app.listen(PORT, LISTEN_HOST, () => {
+        const displayHost = formatUrlHost(LISTEN_HOST)
+        console.error(`Todoist MCP HTTP Server started on ${formatListenHost(LISTEN_HOST)}:${PORT}`)
+        console.error(`MCP endpoint: http://${displayHost}:${PORT}/mcp`)
+        console.error(`Health check: http://${displayHost}:${PORT}/health`)
+        if (!isLoopbackHost(LISTEN_HOST)) {
+            console.error(
+                'Warning: todoist-mcp-http is reachable from other hosts. ' +
+                    'Protect this service with trusted network/auth controls because requests run with TODOIST_API_KEY.',
+            )
+        }
     })
 }
 

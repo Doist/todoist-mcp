@@ -11,6 +11,19 @@ const ProjectUpdateSchema = z.object({
     name: z.string().min(1).optional().describe('The new name of the project.'),
     isFavorite: z.boolean().optional().describe('Whether the project is a favorite.'),
     viewStyle: z.enum(['list', 'board', 'calendar']).optional().describe('The project view style.'),
+    description: z
+        .preprocess(
+            // `null` is the advertised clear value; the param schema stays a
+            // plain string (Gemini forbids nullable schemas, not preprocessing),
+            // so `null` is normalised to "" before the project wire clear.
+            (value) => (value === null ? '' : value),
+            z
+                .string()
+                .describe(
+                    'The description of the project (Markdown). Pass null (or an empty string) to clear it.',
+                ),
+        )
+        .optional(),
     color: ColorSchema,
 })
 
@@ -51,6 +64,8 @@ const updateProjects = {
                 const skipReason = getSkipReason(project)
                 if (skipReason !== null) return { kind: 'skipped', reason: skipReason }
 
+                // An empty `description` clears it. That is already the project
+                // wire value (backend NULL_KEEPS_UNCHANGED), so forward as-is.
                 const { id, ...updateArgs } = project
                 const updated = await client.updateProject(id, updateArgs)
                 return { kind: 'updated', project: updated }

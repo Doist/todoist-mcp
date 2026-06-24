@@ -179,6 +179,7 @@ End of description.`)
             expect(mapProject(mockWorkspaceProject)).toEqual({
                 id: 'proj-2',
                 name: 'Workspace Project',
+                description: '',
                 color: 'red',
                 isFavorite: true,
                 isShared: true,
@@ -207,6 +208,7 @@ End of description.`)
             expect(mapProject(mockWorkspaceProject)).toEqual({
                 id: 'proj-3',
                 name: 'Folder Project',
+                description: '',
                 color: 'green',
                 isFavorite: false,
                 isShared: true,
@@ -409,6 +411,7 @@ End of description.`)
         const createMockSection = (overrides: Partial<Section> = {}): Section => ({
             id: 'section-id',
             name: 'Section Name',
+            description: null,
             projectId: 'project-id',
             sectionOrder: 1,
             url: 'https://todoist.com/app/section/section-id',

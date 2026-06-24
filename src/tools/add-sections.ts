@@ -13,6 +13,10 @@ const SectionSchema = z.object({
         .describe(
             'The ID of the project to add the section to. Project ID should be an ID string, or the text "inbox", for inbox tasks.',
         ),
+    description: z
+        .string()
+        .optional()
+        .describe('The description of the section. Supports Markdown.'),
 })
 
 const ArgsSchema = {
