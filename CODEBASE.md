@@ -43,7 +43,7 @@ src/
 ├─ mcp-helpers.ts             # registerTool(), FEATURE_NAMES, output formatting, retry wrapping
 ├─ usage-tracking.ts          # Shared Todoist request headers + SDK customFetch wrapper for MCP usage attribution
 ├─ todoist-tool.ts            # TodoistTool<Params, Output> contract (the tool interface)
-├─ tool-helpers.ts            # Shared transforms: mapTask, fetchAllPages, resolveInboxProjectId, isInboxProjectId, isPersonalProject, isWorkspaceProject. Re-exports filter-helpers.
+├─ tool-helpers.ts            # Shared transforms: mapTask, fetchAllPages, toWildcardQuery, matchesWildcardQuery (client-side name match), resolveInboxProjectId, isInboxProjectId, isPersonalProject, isWorkspaceProject. Re-exports filter-helpers.
 ├─ filter-helpers.ts          # appendToQuery, buildResponsibleUserQueryFilter, resolveResponsibleUser
 ├─ tool-execution-error.ts    # ToolExecutionError: wraps SDK errors with user/system classification
 ├─ prompts/                   # MCP prompts (productivity-analysis)

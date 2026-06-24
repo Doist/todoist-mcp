@@ -63,6 +63,7 @@ const ProjectSchema = z.object({
         .optional()
         .describe('The ID of the folder this project belongs to (workspace projects only).'),
     childOrder: z.number().describe('The ordering index of the project among its siblings.'),
+    isArchived: z.boolean().describe('Whether the project is archived.'),
 })
 
 /**

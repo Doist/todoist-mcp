@@ -33,6 +33,7 @@ type ProjectLike = {
     parentId?: string | null
     inboxProject?: boolean
     viewStyle?: string
+    isArchived?: boolean
 }
 
 type TaskOperationOptions = {
@@ -143,10 +144,11 @@ export function formatProjectPreview(project: ProjectLike): string {
     const isInbox = project.inboxProject ? ' • Inbox' : ''
     const isFavorite = project.isFavorite ? ' • ⭐' : ''
     const isShared = project.isShared ? ' • Shared' : ''
+    const isArchived = project.isArchived ? ' • Archived' : ''
     const viewStyle =
         project.viewStyle && project.viewStyle !== 'list' ? ` • ${project.viewStyle}` : ''
     const id = ` • id=${project.id}`
-    return `    ${project.name}${isInbox}${isFavorite}${isShared}${viewStyle}${id}`
+    return `    ${project.name}${isInbox}${isFavorite}${isShared}${isArchived}${viewStyle}${id}`
 }
 
 /**
