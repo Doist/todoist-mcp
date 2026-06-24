@@ -1,3 +1,9 @@
+## [10.4.0](https://github.com/Doist/todoist-mcp/compare/v10.3.3...v10.4.0) (2026-06-24)
+
+### Features
+
+* **projects:** support archived projects in find-projects ([#517](https://github.com/Doist/todoist-mcp/issues/517)) ([65b8ae9](https://github.com/Doist/todoist-mcp/commit/65b8ae9b7e2baa2688137bdf12952f97afb0f0a8))
+
 ## [10.3.3](https://github.com/Doist/todoist-mcp/compare/v10.3.2...v10.3.3) (2026-06-24)
 
 ### Bug Fixes
