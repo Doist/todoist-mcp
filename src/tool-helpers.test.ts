@@ -413,6 +413,13 @@ End of description.`)
             expect(matchesWildcardQuery('back\\slash notes', 'back\\slash*')).toBe(true)
         })
 
+        it('treats an escaped backslash followed by a wildcard as literal-backslash + wildcard', () => {
+            // Query `a\\*b`: `\\` is a literal backslash, `*` is a wildcard, matching
+            // `a\` + anything + `b` (same as server-side search), not the literal `a\\*b`.
+            expect(matchesWildcardQuery('a\\Xb', 'a\\\\*b')).toBe(true)
+            expect(matchesWildcardQuery('aXb', 'a\\\\*b')).toBe(false)
+        })
+
         it('compiles a reusable case-insensitive RegExp', () => {
             const regex = compileWildcardQuery('work*')
             expect(regex).toBeInstanceOf(RegExp)

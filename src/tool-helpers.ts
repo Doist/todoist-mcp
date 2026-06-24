@@ -205,8 +205,11 @@ export function compileWildcardQuery(query: string): RegExp {
     let pattern = ''
     for (let i = 0; i < chars.length; i++) {
         const char = chars[i] as string
-        if (char === '\\' && chars[i + 1] === '*') {
-            pattern += '\\*' // literal asterisk
+        if (char === '\\' && chars[i + 1] === '\\') {
+            pattern += '\\\\' // escaped backslash → literal backslash
+            i++
+        } else if (char === '\\' && chars[i + 1] === '*') {
+            pattern += '\\*' // escaped asterisk → literal asterisk
             i++
         } else if (char === '*') {
             pattern += '.*' // wildcard
