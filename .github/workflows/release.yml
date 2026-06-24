@@ -126,13 +126,18 @@ jobs:
                       echo "EOF"
                   } >> "$GITHUB_OUTPUT"
 
-            - name: Announce release in Twist
+            - name: Announce release in Comms
               if: ${{ steps.announcement.outputs.should_announce == 'true' }}
-              uses: Doist/twist-post-action@74a0255b75ad93c06b9eb1009960106efe13f5ca
+              uses: Doist/comms-actions/post-comment-action@cf057e327f43e3ded8a54ebc871911d2b44027e4
               with:
-                  message: ${{ steps.announcement.outputs.message }}
-                  install_id: ${{ secrets.TWIST_RELEASE_INSTALL_ID }}
-                  install_token: ${{ secrets.TWIST_RELEASE_INSTALL_TOKEN }}
+                  comms-client-id: ${{ secrets.COMMS_CLIENT_ID }}
+                  comms-client-secret: ${{ secrets.COMMS_CLIENT_SECRET }}
+                  comms-username: ${{ secrets.COMMS_USERNAME }}
+                  comms-password: ${{ secrets.COMMS_PASSWORD }}
+                  workspace-id: 69
+                  thread-id: CZER8KY4dS7idQxrb8hvg
+                  content: ${{ steps.announcement.outputs.message }}
+                  audience: thread
               continue-on-error: true
 
             - name: Trigger todoist-ai-integrations update
