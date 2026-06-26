@@ -88,7 +88,7 @@
         "gpt-tokenizer": "3.4.0",
         "husky": "9.1.7",
         "lint-staged": "16.4.0",
-        "morgan": "1.10.1",
+        "morgan": "1.11.0",
         "nodemon": "3.1.14",
         "oxfmt": "0.48.0",
         "oxlint": "1.58.0",
