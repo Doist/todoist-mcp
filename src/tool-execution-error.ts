@@ -270,8 +270,17 @@ function hasKnownApiErrorKeys(responseData: Record<string, unknown> | undefined)
 }
 
 function getNextStepHint(statusCode: number | undefined, hasFieldHints: boolean): string {
-    if (statusCode === 401 || statusCode === 403) {
-        return 'Verify your API token and access permissions, then retry.'
+    if (statusCode === 401) {
+        return 'Authentication failed. Verify your API token, then retry.'
+    }
+
+    if (statusCode === 403) {
+        // 403 is not a transient failure, so retrying the same request keeps failing and
+        // can trip server-side abuse penalties. Two distinct causes need different fixes,
+        // and this hint can't see which applies, so it covers both: a scope/access denial
+        // (use a token/account with the required access) vs. a permission decision such as
+        // moving objects out of a workspace (change the request or target).
+        return "Access denied — retrying the same request won't help. If it's a scope/access problem (e.g. insufficient token scope), use a token or account that has the required access. Otherwise it's a permission decision (e.g. moving items out of a workspace) — change the request or target instead."
     }
 
     if (statusCode === 404) {
