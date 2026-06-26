@@ -130,10 +130,10 @@ jobs:
               if: ${{ steps.announcement.outputs.should_announce == 'true' }}
               uses: Doist/comms-actions/post-comment-action@cf057e327f43e3ded8a54ebc871911d2b44027e4
               with:
-                  comms-client-id: ${{ secrets.COMMS_CLIENT_ID }}
-                  comms-client-secret: ${{ secrets.COMMS_CLIENT_SECRET }}
-                  comms-username: ${{ secrets.COMMS_USERNAME }}
-                  comms-password: ${{ secrets.COMMS_PASSWORD }}
+                  comms-client-id: ${{ secrets.COMMS_DOISTBOT_CLIENT_ID }}
+                  comms-client-secret: ${{ secrets.COMMS_DOISTBOT_CLIENT_SECRET }}
+                  comms-username: ${{ secrets.COMMS_DOISTBOT_USER }}
+                  comms-password: ${{ secrets.COMMS_DOISTBOT_PASSWORD }}
                   workspace-id: 69
                   thread-id: CZER8KY4dS7idQxrb8hvg
                   content: ${{ steps.announcement.outputs.message }}
