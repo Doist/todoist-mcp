@@ -1,6 +1,5 @@
 import type {
     CurrentUser,
-    Goal,
     Label,
     PersonalProject,
     Section,
@@ -151,32 +150,6 @@ export function createMockLabel(overrides: Partial<Label> = {}): Label {
         color: 'red',
         order: 1,
         isFavorite: false,
-        ...overrides,
-    }
-}
-
-/**
- * Creates a mock Goal with all required properties and sensible defaults.
- * Pass only the properties you want to override for your specific test.
- */
-export function createMockGoal(overrides: Partial<Goal> = {}): Goal {
-    return {
-        id: 'goal-123',
-        name: 'Test Goal',
-        ownerType: 'USER',
-        ownerId: TEST_IDS.USER_ID,
-        description: null,
-        deadline: null,
-        parentGoalId: null,
-        childOrder: 1,
-        isCompleted: false,
-        completedAt: null,
-        responsibleUid: null,
-        isDeleted: false,
-        progress: undefined,
-        creatorUid: TEST_IDS.USER_ID,
-        createdAt: new Date('2025-08-13T22:09:55.841785Z'),
-        updatedAt: new Date('2025-08-13T22:09:55.841800Z'),
         ...overrides,
     }
 }

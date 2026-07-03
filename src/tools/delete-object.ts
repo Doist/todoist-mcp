@@ -10,7 +10,6 @@ const entityTypes = [
     'comment',
     'label',
     'filter',
-    'goal',
     'reminder',
     'location_reminder',
 ] as const
@@ -33,7 +32,7 @@ const OutputSchema = {
 const deleteObject = {
     name: ToolNames.DELETE_OBJECT,
     description:
-        'Delete a project, section, task, comment, label, filter, goal, reminder, or location_reminder by its ID. Projects can be deleted whether active or archived (find archived ones via find-projects with archivedStatus); note a workspace project must be archived before it can be deleted, while personal projects can be deleted regardless.',
+        'Delete a project, section, task, comment, label, filter, reminder, or location_reminder by its ID. Projects can be deleted whether active or archived (find archived ones via find-projects with archivedStatus); note a workspace project must be archived before it can be deleted, while personal projects can be deleted regardless.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
@@ -65,9 +64,6 @@ const deleteObject = {
                 await client.sync({
                     commands: [createCommand('filter_delete', { id: args.id })],
                 })
-                break
-            case 'goal':
-                await client.deleteGoal(args.id)
                 break
             case 'reminder':
                 await client.deleteReminder(args.id)
