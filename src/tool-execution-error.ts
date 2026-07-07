@@ -269,8 +269,26 @@ function hasKnownApiErrorKeys(responseData: Record<string, unknown> | undefined)
     return KNOWN_TODOIST_API_ERROR_KEYS.some((key) => responseData[key] !== undefined)
 }
 
-function getNextStepHint(statusCode: number | undefined, hasFieldHints: boolean): string {
-    if (statusCode === 401 || statusCode === 403) {
+function getNextStepHint(error: ApiErrorInfo): string {
+    const { statusCode, tag, fieldHints } = error
+    const hasFieldHints = fieldHints.length > 0
+
+    // Todoist plan/usage limits (e.g. MAX_ITEMS_LIMIT_REACHED) come back as
+    // 403s; pointing users at their API token sends them down the wrong path.
+    if (tag && tag.endsWith('LIMIT_REACHED')) {
+        return 'A Todoist plan or project limit was reached. Complete, archive, or delete items — or upgrade the plan — then retry.'
+    }
+
+    if (statusCode === 401) {
+        return 'Verify your API token and access permissions, then retry.'
+    }
+
+    if (statusCode === 403) {
+        // A specific error tag means the request was authenticated and
+        // understood but rejected for the stated reason — not a token problem.
+        if (tag && tag !== 'FORBIDDEN' && tag !== 'UNAUTHORIZED') {
+            return 'The request was rejected for the reason in the message above — this is not an API token problem. Address it and retry.'
+        }
         return 'Verify your API token and access permissions, then retry.'
     }
 
@@ -421,7 +439,7 @@ function formatApiErrorMessage(error: ApiErrorInfo): string {
         lines.push(`Field hints: ${error.fieldHints.join('; ')}`)
     }
 
-    lines.push(`Try next: ${getNextStepHint(error.statusCode, error.fieldHints.length > 0)}`)
+    lines.push(`Try next: ${getNextStepHint(error)}`)
 
     return lines.join('\n')
 }

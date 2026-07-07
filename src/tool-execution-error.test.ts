@@ -66,6 +66,77 @@ describe('formatToolExecutionError', () => {
         )
     })
 
+    it('points 403 limit errors at the limit, not the API token (Doist/Issues#20301)', () => {
+        const output = formatToolExecutionError({
+            responseData: {
+                error: 'Maximum number of items per user project limit reached',
+                error_code: 49,
+                error_tag: 'MAX_ITEMS_LIMIT_REACHED',
+                http_code: 403,
+                error_extra: {},
+            },
+        })
+
+        expect(output).toContain(
+            'Todoist API request failed (HTTP 403, code 49, tag MAX_ITEMS_LIMIT_REACHED).',
+        )
+        expect(output).toContain('Message: Maximum number of items per user project limit reached')
+        expect(output).toContain(
+            'Try next: A Todoist plan or project limit was reached. Complete, archive, or delete items — or upgrade the plan — then retry.',
+        )
+        expect(output).not.toContain('Verify your API token')
+    })
+
+    it('does not blame the API token for 403s with a specific error tag', () => {
+        const output = formatToolExecutionError({
+            responseData: {
+                error: 'Project is frozen',
+                error_code: 63,
+                error_tag: 'PROJECT_FROZEN',
+                http_code: 403,
+                error_extra: {},
+            },
+        })
+
+        expect(output).toContain(
+            'Try next: The request was rejected for the reason in the message above — this is not an API token problem. Address it and retry.',
+        )
+        expect(output).not.toContain('Verify your API token')
+    })
+
+    it('keeps the token hint for plain 403s', () => {
+        const output = formatToolExecutionError({
+            responseData: {
+                error: 'Forbidden',
+                error_tag: 'FORBIDDEN',
+                http_code: 403,
+            },
+        })
+
+        expect(output).toContain(
+            'Try next: Verify your API token and access permissions, then retry.',
+        )
+    })
+
+    it('keeps the token hint for 403s without a payload', () => {
+        const output = formatToolExecutionError({ httpStatusCode: 403 })
+
+        expect(output).toContain(
+            'Try next: Verify your API token and access permissions, then retry.',
+        )
+    })
+
+    it('keeps the token hint for 401s', () => {
+        const output = formatToolExecutionError({
+            httpStatusCode: 401,
+            responseData: { error: 'Unauthorized' },
+        })
+
+        expect(output).toContain(
+            'Try next: Verify your API token and access permissions, then retry.',
+        )
+    })
+
     it('extracts HTTP status from generic API error messages', () => {
         const output = formatToolExecutionError(new Error('HTTP 400: Bad Request'))
 
