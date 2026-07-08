@@ -158,6 +158,18 @@ describe('formatToolExecutionError', () => {
             expect(output).toContain('maximum number of active tasks')
             expect(output).not.toContain('Verify your API token')
         })
+
+        it('recovers the item-limit tag from long wrapper errors before display truncation', () => {
+            const longTaskTitle = 'x'.repeat(260)
+            const output = formatToolExecutionError(
+                new Error(
+                    `All 1 task(s) failed to create: "${longTaskTitle}": Maximum number of items exceeded (HTTP 403, code 49, tag MAX_ITEMS_LIMIT_REACHED)`,
+                ),
+            )
+
+            expect(output).toContain('maximum number of active tasks')
+            expect(output).not.toContain('Verify your API token')
+        })
     })
 
     describe('formatBatchItemError', () => {

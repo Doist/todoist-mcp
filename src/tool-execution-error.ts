@@ -6,6 +6,7 @@ type ApiErrorInfo = {
     tag?: string
     message?: string
     details?: string
+    rawText?: string[]
     fieldHints: string[]
 }
 
@@ -309,8 +310,9 @@ function getKnownErrorHint(error: ApiErrorInfo): string | undefined {
     }
 
     // Wrapper errors (e.g. batch tools embedding per-item failures into a new
-    // Error) lose the structured fields; recover known tags from the text.
-    return findKnownTagHintInText(error.message, error.details)
+    // Error) lose the structured fields; recover known tags from raw text
+    // before sanitized display text can truncate the tag.
+    return findKnownTagHintInText(...(error.rawText ?? []), error.message, error.details)
 }
 
 function getNextStepHint(error: ApiErrorInfo): string {
@@ -439,11 +441,12 @@ function extractApiErrorInfo(error: unknown): ApiErrorInfo | null {
         tag: tag ? sanitizeErrorText(tag, 80) : undefined,
         message: message ? sanitizeErrorText(message) : undefined,
         details: details ? sanitizeErrorText(details) : undefined,
+        rawText: rawMessageCandidates,
         fieldHints,
     }
 }
 
-function formatApiErrorMessage(error: ApiErrorInfo): string {
+function buildErrorContext(error: ApiErrorInfo): string[] {
     const context: string[] = []
     if (error.statusCode !== undefined) {
         context.push(`HTTP ${error.statusCode}`)
@@ -454,6 +457,12 @@ function formatApiErrorMessage(error: ApiErrorInfo): string {
     if (error.tag) {
         context.push(`tag ${error.tag}`)
     }
+
+    return context
+}
+
+function formatApiErrorMessage(error: ApiErrorInfo): string {
+    const context = buildErrorContext(error)
 
     const lines = [
         context.length > 0
@@ -503,17 +512,7 @@ export function formatBatchItemError(error: unknown): string {
         return formatGenericError(error)
     }
 
-    const context: string[] = []
-    if (parsedApiError.statusCode !== undefined) {
-        context.push(`HTTP ${parsedApiError.statusCode}`)
-    }
-    if (parsedApiError.code !== undefined) {
-        context.push(`code ${parsedApiError.code}`)
-    }
-    if (parsedApiError.tag) {
-        context.push(`tag ${parsedApiError.tag}`)
-    }
-
+    const context = buildErrorContext(parsedApiError)
     const message =
         parsedApiError.message &&
         !(context.length > 0 && isGenericHttpMessage(parsedApiError.message))
