@@ -1,5 +1,5 @@
 import z from 'zod'
-import { formatToolExecutionError } from './tool-execution-error.js'
+import { formatBatchItemError, formatToolExecutionError } from './tool-execution-error.js'
 
 describe('formatToolExecutionError', () => {
     it('formats Todoist API errors with actionable details', () => {
@@ -88,6 +88,108 @@ describe('formatToolExecutionError', () => {
         expect(output).toContain('[REDACTED]')
         expect(output).not.toContain('secret_token_123456789')
         expect(output).not.toContain('another_secret_value')
+    })
+
+    describe('project item-limit errors (MAX_ITEMS_LIMIT_REACHED)', () => {
+        it('surfaces item-limit guidance instead of the generic 403 auth hint', () => {
+            // Shape thrown by the SDK for REST calls: an Error with
+            // httpStatusCode + the raw snake_case API body in responseData.
+            const error = Object.assign(new Error('HTTP 403: Forbidden'), {
+                httpStatusCode: 403,
+                responseData: {
+                    error: 'Maximum number of items exceeded',
+                    error_code: 49,
+                    error_tag: 'MAX_ITEMS_LIMIT_REACHED',
+                    http_code: 403,
+                },
+            })
+
+            const output = formatToolExecutionError(error)
+
+            expect(output).toContain(
+                'Todoist API request failed (HTTP 403, code 49, tag MAX_ITEMS_LIMIT_REACHED).',
+            )
+            expect(output).toContain('Message: Maximum number of items exceeded')
+            expect(output).toContain('maximum number of active tasks')
+            expect(output).toContain('not an authentication or permission problem')
+            // The cap is identical on Beginner/Pro/Business (per the Todoist
+            // usage-limits docs), so the copy must not nudge a plan upgrade.
+            expect(output).toContain('upgrading will not raise it')
+            expect(output).not.toContain('Verify your API token')
+        })
+
+        it('supports camelCase item-limit payloads', () => {
+            const output = formatToolExecutionError({
+                httpStatusCode: 403,
+                responseData: {
+                    error: 'Maximum number of items exceeded',
+                    errorCode: 49,
+                    errorTag: 'MAX_ITEMS_LIMIT_REACHED',
+                },
+            })
+
+            expect(output).toContain('tag MAX_ITEMS_LIMIT_REACHED')
+            expect(output).toContain('maximum number of active tasks')
+            expect(output).not.toContain('Verify your API token')
+        })
+
+        it('keeps the auth hint for plain 403s without item-limit signals', () => {
+            const output = formatToolExecutionError({
+                httpStatusCode: 403,
+                responseData: { error: 'Forbidden' },
+            })
+
+            expect(output).toContain('Todoist API request failed (HTTP 403).')
+            expect(output).toContain(
+                'Try next: Verify your API token and access permissions, then retry.',
+            )
+            expect(output).not.toContain('maximum number of active tasks')
+        })
+
+        it('recovers the item-limit tag from wrapper errors that embed per-item failures', () => {
+            // Shape thrown by batch tools (e.g. add-tasks) when every item
+            // fails: a plain Error whose message embeds the per-item summaries.
+            const output = formatToolExecutionError(
+                new Error(
+                    'All 1 task(s) failed to create: "one too many": Maximum number of items exceeded (HTTP 403, code 49, tag MAX_ITEMS_LIMIT_REACHED)',
+                ),
+            )
+
+            expect(output).toContain('maximum number of active tasks')
+            expect(output).not.toContain('Verify your API token')
+        })
+    })
+
+    describe('formatBatchItemError', () => {
+        it('preserves API error signals lost by error.message', () => {
+            const error = Object.assign(new Error('HTTP 403: Forbidden'), {
+                httpStatusCode: 403,
+                responseData: {
+                    error: 'Maximum number of items exceeded',
+                    error_code: 49,
+                    error_tag: 'MAX_ITEMS_LIMIT_REACHED',
+                    http_code: 403,
+                },
+            })
+
+            expect(formatBatchItemError(error)).toBe(
+                'Maximum number of items exceeded (HTTP 403, code 49, tag MAX_ITEMS_LIMIT_REACHED)',
+            )
+        })
+
+        it('avoids repeating generic HTTP messages when context is available', () => {
+            const error = Object.assign(new Error('HTTP 403: Forbidden'), {
+                httpStatusCode: 403,
+            })
+
+            expect(formatBatchItemError(error)).toBe('Todoist API request failed (HTTP 403)')
+        })
+
+        it('returns plain messages for non-API errors', () => {
+            expect(formatBatchItemError(new Error('Section "xyz" not found'))).toBe(
+                'Section "xyz" not found',
+            )
+        })
     })
 
     it('keeps Zod validation errors unchanged', () => {

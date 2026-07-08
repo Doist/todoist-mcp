@@ -45,7 +45,7 @@ src/
 ├─ todoist-tool.ts            # TodoistTool<Params, Output> contract (the tool interface)
 ├─ tool-helpers.ts            # Shared transforms: mapTask, fetchAllPages, toWildcardQuery, compileWildcardQuery + matchesWildcardQuery (client-side name match), resolveInboxProjectId, isInboxProjectId, isPersonalProject, isWorkspaceProject. Re-exports filter-helpers.
 ├─ filter-helpers.ts          # appendToQuery, buildResponsibleUserQueryFilter, resolveResponsibleUser
-├─ tool-execution-error.ts    # ToolExecutionError: wraps SDK errors with user/system classification
+├─ tool-execution-error.ts    # formatToolExecutionError (actionable API-error formatting, incl. known error_tag hints like MAX_ITEMS_LIMIT_REACHED) + formatBatchItemError (single-line per-item failure summaries — use in batch tools instead of error.message)
 ├─ prompts/                   # MCP prompts (productivity-analysis)
 ├─ middleware/                # require-trusted-host (Host/Origin allowlist, DNS-rebinding protection), require-valid-todoist-token (HTTP auth)
 ├─ mcp-apps/                  # React UI widgets (task list). Built separately. Ignore unless task mentions widgets.
