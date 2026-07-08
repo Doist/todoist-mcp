@@ -1,6 +1,7 @@
 import type { AddTaskArgs, Task, TodoistApi } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
 import { isInboxProjectId, mapTask } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
 import { DurationParseError, parseDuration } from '../utils/duration-parser.js'
@@ -132,10 +133,10 @@ const addTasks = {
             } else {
                 failures.push({
                     item: tasks[index]?.content ?? `Task ${index + 1}`,
-                    error:
-                        result.reason instanceof Error
-                            ? result.reason.message
-                            : String(result.reason),
+                    // Keep API error signals (status/code/tag) — `error.message`
+                    // alone collapses e.g. a full-project rejection into a bare
+                    // "HTTP 403: Forbidden"
+                    error: formatBatchItemError(result.reason),
                 })
             }
         }

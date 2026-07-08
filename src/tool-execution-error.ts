@@ -6,6 +6,7 @@ type ApiErrorInfo = {
     tag?: string
     message?: string
     details?: string
+    rawText?: string[]
     fieldHints: string[]
 }
 
@@ -269,7 +270,60 @@ function hasKnownApiErrorKeys(responseData: Record<string, unknown> | undefined)
     return KNOWN_TODOIST_API_ERROR_KEYS.some((key) => responseData[key] !== undefined)
 }
 
-function getNextStepHint(statusCode: number | undefined, hasFieldHints: boolean): string {
+/**
+ * Targeted guidance for specific Todoist API errors, keyed by canonical
+ * `error_tag`. These take precedence over the generic status-code hints:
+ * e.g. a full project surfaces as HTTP 403, and without this mapping the
+ * error would be indistinguishable from an auth/permission failure.
+ */
+const TODOIST_ERROR_TAG_HINTS: Record<string, string> = {
+    MAX_ITEMS_LIMIT_REACHED:
+        'This project has reached the maximum number of active tasks per project (subtasks count toward it; completed tasks do not). ' +
+        'The cap is the same on every Todoist plan — upgrading will not raise it — and it is not an authentication or permission problem. ' +
+        'Complete, delete, or move existing tasks out of the project, or add the task to a different project, then retry.',
+}
+
+function findKnownTagHintInText(...texts: Array<string | undefined>): string | undefined {
+    for (const text of texts) {
+        if (!text) {
+            continue
+        }
+
+        const normalized = text.toUpperCase()
+        const tag = Object.keys(TODOIST_ERROR_TAG_HINTS).find((knownTag) =>
+            normalized.includes(knownTag),
+        )
+        if (tag) {
+            return TODOIST_ERROR_TAG_HINTS[tag]
+        }
+    }
+
+    return undefined
+}
+
+function getKnownErrorHint(error: ApiErrorInfo): string | undefined {
+    if (error.tag) {
+        const hint = TODOIST_ERROR_TAG_HINTS[error.tag.toUpperCase()]
+        if (hint) {
+            return hint
+        }
+    }
+
+    // Wrapper errors (e.g. batch tools embedding per-item failures into a new
+    // Error) lose the structured fields; recover known tags from raw text
+    // before sanitized display text can truncate the tag.
+    return findKnownTagHintInText(...(error.rawText ?? []), error.message, error.details)
+}
+
+function getNextStepHint(error: ApiErrorInfo): string {
+    const knownErrorHint = getKnownErrorHint(error)
+    if (knownErrorHint) {
+        return knownErrorHint
+    }
+
+    const { statusCode } = error
+    const hasFieldHints = error.fieldHints.length > 0
+
     if (statusCode === 401 || statusCode === 403) {
         return 'Verify your API token and access permissions, then retry.'
     }
@@ -387,11 +441,12 @@ function extractApiErrorInfo(error: unknown): ApiErrorInfo | null {
         tag: tag ? sanitizeErrorText(tag, 80) : undefined,
         message: message ? sanitizeErrorText(message) : undefined,
         details: details ? sanitizeErrorText(details) : undefined,
+        rawText: rawMessageCandidates,
         fieldHints,
     }
 }
 
-function formatApiErrorMessage(error: ApiErrorInfo): string {
+function buildErrorContext(error: ApiErrorInfo): string[] {
     const context: string[] = []
     if (error.statusCode !== undefined) {
         context.push(`HTTP ${error.statusCode}`)
@@ -402,6 +457,12 @@ function formatApiErrorMessage(error: ApiErrorInfo): string {
     if (error.tag) {
         context.push(`tag ${error.tag}`)
     }
+
+    return context
+}
+
+function formatApiErrorMessage(error: ApiErrorInfo): string {
+    const context = buildErrorContext(error)
 
     const lines = [
         context.length > 0
@@ -421,7 +482,7 @@ function formatApiErrorMessage(error: ApiErrorInfo): string {
         lines.push(`Field hints: ${error.fieldHints.join('; ')}`)
     }
 
-    lines.push(`Try next: ${getNextStepHint(error.statusCode, error.fieldHints.length > 0)}`)
+    lines.push(`Try next: ${getNextStepHint(error)}`)
 
     return lines.join('\n')
 }
@@ -439,9 +500,30 @@ function formatGenericError(error: unknown): string {
 }
 
 /**
+ * Compact single-line variant of {@link formatToolExecutionError} for batch
+ * tools that report per-item failures. Unlike `error.message` (which for SDK
+ * errors is just "HTTP 403: Forbidden"), this preserves the API error signals
+ * (status, code, tag) so failures like MAX_ITEMS_LIMIT_REACHED stay
+ * recognizable after aggregation.
+ */
+export function formatBatchItemError(error: unknown): string {
+    const parsedApiError = extractApiErrorInfo(error)
+    if (!parsedApiError) {
+        return formatGenericError(error)
+    }
+
+    const context = buildErrorContext(parsedApiError)
+    const message =
+        parsedApiError.message &&
+        !(context.length > 0 && isGenericHttpMessage(parsedApiError.message))
+            ? parsedApiError.message
+            : 'Todoist API request failed'
+
+    return context.length > 0 ? `${message} (${context.join(', ')})` : message
+}
+
+/**
  * Format tool execution errors in a consistent, actionable format.
- *
- * This is the only public API exposed by this module.
  */
 export function formatToolExecutionError(error: unknown): string {
     if (error instanceof ZodError) {

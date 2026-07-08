@@ -579,6 +579,67 @@ describe(`${ADD_TASKS} tool`, () => {
                 ),
             ).rejects.toThrow('All 2 task(s) failed to create')
         })
+
+        it('should preserve the item-limit error tag when a project is full', async () => {
+            // Shape thrown by the SDK when the API rejects the add with the
+            // item-limit error (project at max active tasks): HTTP 403 plus
+            // the raw snake_case body in responseData.
+            const itemLimitError = Object.assign(new Error('HTTP 403: Forbidden'), {
+                httpStatusCode: 403,
+                responseData: {
+                    error: 'Maximum number of items exceeded',
+                    error_code: 49,
+                    error_tag: 'MAX_ITEMS_LIMIT_REACHED',
+                    http_code: 403,
+                },
+            })
+            mockTodoistApi.addTask.mockRejectedValue(itemLimitError)
+
+            await expect(
+                addTasks.execute(
+                    { tasks: [{ content: 'One too many', projectId: '6cfCcrrCFg2xP94Q' }] },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow(
+                'Maximum number of items exceeded (HTTP 403, code 49, tag MAX_ITEMS_LIMIT_REACHED)',
+            )
+        })
+
+        it('should report the item-limit error tag in partial failures', async () => {
+            const mockApiResponse: Task = createMockTask({
+                id: '8485093752',
+                content: 'Fits in project',
+            })
+            const itemLimitError = Object.assign(new Error('HTTP 403: Forbidden'), {
+                httpStatusCode: 403,
+                responseData: {
+                    error: 'Maximum number of items exceeded',
+                    error_code: 49,
+                    error_tag: 'MAX_ITEMS_LIMIT_REACHED',
+                    http_code: 403,
+                },
+            })
+            mockTodoistApi.addTask
+                .mockResolvedValueOnce(mockApiResponse)
+                .mockRejectedValueOnce(itemLimitError)
+
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        { content: 'Fits in project', projectId: '6cfCcrrCFg2xP94Q' },
+                        { content: 'One too many', projectId: '6cfCcrrCFg2xP94Q' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.failures[0]).toEqual(
+                expect.objectContaining({
+                    item: 'One too many',
+                    error: 'Maximum number of items exceeded (HTTP 403, code 49, tag MAX_ITEMS_LIMIT_REACHED)',
+                }),
+            )
+        })
     })
 
     describe('next steps logic', () => {
