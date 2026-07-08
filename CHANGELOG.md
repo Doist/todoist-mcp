@@ -1,3 +1,9 @@
+## [10.4.2](https://github.com/Doist/todoist-mcp/compare/v10.4.1...v10.4.2) (2026-07-08)
+
+### Bug Fixes
+
+* preserve item limit details in task batch errors ([#532](https://github.com/Doist/todoist-mcp/issues/532)) ([ef2e5f4](https://github.com/Doist/todoist-mcp/commit/ef2e5f4abb2e3a70f8aaa2b7702d67e9d234bd04))
+
 ## [10.4.1](https://github.com/Doist/todoist-mcp/compare/v10.4.0...v10.4.1) (2026-06-26)
 
 ### Bug Fixes
