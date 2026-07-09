@@ -218,6 +218,7 @@ export function createMappedTask(overrides: Partial<MappedTask> = {}): MappedTas
         assignedByUid: undefined,
         checked: false,
         completedAt: undefined,
+        addedAt: undefined,
         ...overrides,
     }
 }
