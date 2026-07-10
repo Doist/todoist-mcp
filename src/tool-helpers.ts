@@ -336,6 +336,7 @@ function mapTask(task: Task) {
         assignedByUid: task.assignedByUid ?? undefined,
         checked: task.checked,
         completedAt: task.completedAt?.toISOString() ?? undefined,
+        addedAt: task.addedAt?.toISOString() ?? undefined,
     }
 }
 
