@@ -1,3 +1,9 @@
+## [10.5.0](https://github.com/Doist/todoist-mcp/compare/v10.4.2...v10.5.0) (2026-07-10)
+
+### Features
+
+* expose addedAt field in task objects ([#534](https://github.com/Doist/todoist-mcp/issues/534)) ([f2f34e1](https://github.com/Doist/todoist-mcp/commit/f2f34e17f0ae24d1589221279709488a014d5cc5))
+
 ## [10.4.2](https://github.com/Doist/todoist-mcp/compare/v10.4.1...v10.4.2) (2026-07-08)
 
 ### Bug Fixes
