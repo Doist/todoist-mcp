@@ -1,3 +1,13 @@
+## [11.0.0](https://github.com/Doist/todoist-mcp/compare/v10.5.0...v11.0.0) (2026-07-13)
+
+### ⚠ BREAKING CHANGES
+
+* Removal of Goals (BETA)
+
+### Features
+
+* Removal of Goals (BETA) ([74fd8a0](https://github.com/Doist/todoist-mcp/commit/74fd8a095fb189bab379ed3f7d660c99a6861bfb))
+
 ## [10.5.0](https://github.com/Doist/todoist-mcp/compare/v10.4.2...v10.5.0) (2026-07-10)
 
 ### Features

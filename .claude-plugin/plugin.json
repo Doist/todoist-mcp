@@ -1,6 +1,6 @@
 {
     "name": "todoist",
-    "version": "10.5.0",
+    "version": "11.0.0",
     "description": "Todoist for Claude Code — manage tasks, projects, labels, and workflows from your terminal.",
     "author": {
         "name": "Doist",
