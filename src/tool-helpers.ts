@@ -5,7 +5,6 @@ import {
     type ColorKey,
     type Comment,
     type CurrentUser,
-    type Goal,
     type Label,
     type MoveTaskArgs,
     type PersonalProject,
@@ -398,25 +397,6 @@ function mapComment(comment: Comment) {
 }
 
 /**
- * Map a single Todoist goal to a more structured format, for LLM consumption.
- * Drops `null` values so the output matches `GoalSchema` (which makes nullable
- * fields optional — `registerTool` strips nulls from `structuredContent`).
- */
-function mapGoal(goal: Goal) {
-    return {
-        id: goal.id,
-        name: goal.name,
-        ownerType: goal.ownerType,
-        ownerId: goal.ownerId,
-        description: goal.description ?? undefined,
-        deadline: goal.deadline ?? undefined,
-        responsibleUid: goal.responsibleUid ?? undefined,
-        isCompleted: goal.isCompleted,
-        progress: goal.progress,
-    }
-}
-
-/**
  * Map a single Todoist activity event to a more structured format, for LLM consumption.
  * @param event - The activity event to map.
  * @returns The mapped activity event.
@@ -549,7 +529,6 @@ export {
     getTasksByFilter,
     mapActivityEvent,
     mapComment,
-    mapGoal,
     mapProject,
     mapReminder,
     mapTask,
