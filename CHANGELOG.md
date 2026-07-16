@@ -1,3 +1,13 @@
+## [12.0.0](https://github.com/Doist/todoist-mcp/compare/v11.0.0...v12.0.0) (2026-07-16)
+
+### ⚠ BREAKING CHANGES
+
+* require node >=24, test on 24 & 26, support npm >=11 (#537)
+
+### Features
+
+* require node >=24, test on 24 & 26, support npm >=11 ([#537](https://github.com/Doist/todoist-mcp/issues/537)) ([f6d7de8](https://github.com/Doist/todoist-mcp/commit/f6d7de8d53f3318981f860c1a1c0ab3a2808e93a))
+
 ## [11.0.0](https://github.com/Doist/todoist-mcp/compare/v10.5.0...v11.0.0) (2026-07-13)
 
 ### ⚠ BREAKING CHANGES
