@@ -16,6 +16,10 @@ jobs:
         timeout-minutes: 60
         runs-on: ubicloud # `ubuntu-latest` is the official drop-in replacement
 
+        strategy:
+            matrix:
+                node-version: [24, 26]
+
         services:
             memcached:
                 image: memcached:1.6-alpine
@@ -39,7 +43,7 @@ jobs:
             - name: Setup Node.js
               uses: actions/setup-node@v6
               with:
-                  node-version-file: '.nvmrc'
+                  node-version: ${{ matrix.node-version }}
                   cache: 'npm'
 
             - name: Install dependencies
