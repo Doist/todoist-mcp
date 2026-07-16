@@ -17,6 +17,7 @@ jobs:
         runs-on: ubicloud # `ubuntu-latest` is the official drop-in replacement
 
         strategy:
+            fail-fast: false
             matrix:
                 node-version: [24, 26]
 
