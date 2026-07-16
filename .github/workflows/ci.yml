@@ -12,9 +12,14 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
-    test:
+    test-matrix:
         timeout-minutes: 60
         runs-on: ubicloud # `ubuntu-latest` is the official drop-in replacement
+
+        strategy:
+            fail-fast: false
+            matrix:
+                node-version: [24, 26]
 
         services:
             memcached:
@@ -39,7 +44,7 @@ jobs:
             - name: Setup Node.js
               uses: actions/setup-node@v6
               with:
-                  node-version-file: '.nvmrc'
+                  node-version: ${{ matrix.node-version }}
                   cache: 'npm'
 
             - name: Install dependencies
@@ -61,3 +66,18 @@ jobs:
               run: npm run test:executable
               env:
                   TODOIST_API_KEY: fake-api-key-for-testing
+
+    # Aggregate gate: reports a single stable `test` status regardless of the
+    # node-version matrix, so branch protection can require one context that
+    # doesn't change when the matrix does.
+    test:
+        needs: test-matrix
+        if: always()
+        runs-on: ubuntu-latest
+        steps:
+            - name: Verify the test matrix succeeded
+              run: |
+                  if [ "${{ needs.test-matrix.result }}" != "success" ]; then
+                      echo "test-matrix result: ${{ needs.test-matrix.result }}"
+                      exit 1
+                  fi

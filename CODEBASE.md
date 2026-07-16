@@ -13,7 +13,7 @@ binaries:
 - `todoist-mcp` → `dist/main.js` — stdio MCP server (primary)
 - `todoist-mcp-http` → `dist/main-http.js` — Express HTTP wrapper
 
-TypeScript · ESM-only · Node 18+ · `zod` v4 for schemas · MCP SDK ≥1.25.
+TypeScript · ESM-only · Node >=24 · npm >=11 · `zod` v4 for schemas · MCP SDK ≥1.25.
 
 ## Top-level layout
 

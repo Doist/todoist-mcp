@@ -18,6 +18,10 @@
         "README.md"
     ],
     "license": "MIT",
+    "engines": {
+        "node": ">=24",
+        "npm": ">=11"
+    },
     "description": "The official Todoist MCP server",
     "repository": {
         "type": "git",
