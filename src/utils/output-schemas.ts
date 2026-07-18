@@ -73,6 +73,7 @@ const ProjectSchema = z.object({
 const SectionSchema = z.object({
     id: z.string().describe('The unique ID of the section.'),
     name: z.string().describe('The name of the section.'),
+    sectionOrder: z.number().describe('The ordering index of the section within its project.'),
     description: z
         .string()
         .optional()
@@ -87,8 +88,8 @@ type SectionSummary = z.infer<typeof SectionSchema>
  * (Gemini-compatible), so the read's `string | null` description maps `null` to
  * `undefined`.
  */
-function toSectionSummary({ id, name, description }: Section): SectionSummary {
-    return { id, name, description: description ?? undefined }
+function toSectionSummary({ id, name, sectionOrder, description }: Section): SectionSummary {
+    return { id, name, sectionOrder, description: description ?? undefined }
 }
 
 /**
