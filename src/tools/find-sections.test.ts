@@ -70,7 +70,12 @@ describe(`${FIND_SECTIONS} tool`, () => {
 
             // Verify structured content
             const { structuredContent } = result
-            expect(structuredContent.sections).toHaveLength(4)
+            expect(structuredContent.sections).toEqual([
+                expect.objectContaining({ id: TEST_IDS.SECTION_1, sectionOrder: 1 }),
+                expect.objectContaining({ id: TEST_IDS.SECTION_2, sectionOrder: 2 }),
+                expect.objectContaining({ id: 'section-789', sectionOrder: 3 }),
+                expect.objectContaining({ id: 'section-999', sectionOrder: 4 }),
+            ])
             expect(structuredContent.totalCount).toBe(4)
             expect(structuredContent.appliedFilters).toEqual({
                 projectId: TEST_IDS.PROJECT_TEST,
@@ -303,8 +308,18 @@ describe(`${FIND_SECTIONS} tool`, () => {
             const { structuredContent } = result
             expect(structuredContent.totalCount).toBe(2)
             expect(structuredContent.sections).toEqual([
-                { id: TEST_IDS.SECTION_1, name: 'Inbox Section 1' },
-                { id: TEST_IDS.SECTION_2, name: 'Inbox Section 2' },
+                {
+                    id: TEST_IDS.SECTION_1,
+                    name: 'Inbox Section 1',
+                    sectionOrder: 1,
+                    description: undefined,
+                },
+                {
+                    id: TEST_IDS.SECTION_2,
+                    name: 'Inbox Section 2',
+                    sectionOrder: 2,
+                    description: undefined,
+                },
             ])
         })
     })

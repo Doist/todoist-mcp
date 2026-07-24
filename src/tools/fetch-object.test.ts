@@ -218,6 +218,7 @@ describe(`${FETCH_OBJECT} tool`, () => {
                 object: {
                     id: 'section123',
                     name: 'My Section',
+                    sectionOrder: 1,
                     description: 'Section notes',
                 },
             })
