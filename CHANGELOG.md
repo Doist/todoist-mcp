@@ -1,3 +1,9 @@
+## [12.1.0](https://github.com/Doist/todoist-mcp/compare/v12.0.0...v12.1.0) (2026-07-24)
+
+### Features
+
+* expose section order ([#538](https://github.com/Doist/todoist-mcp/issues/538)) ([99fba85](https://github.com/Doist/todoist-mcp/commit/99fba85c8cbfc2c195099b6f863d922630d97e08))
+
 ## [12.0.0](https://github.com/Doist/todoist-mcp/compare/v11.0.0...v12.0.0) (2026-07-16)
 
 ### ⚠ BREAKING CHANGES
