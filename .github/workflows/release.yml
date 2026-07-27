@@ -128,7 +128,7 @@ jobs:
 
             - name: Announce release in Comms
               if: ${{ steps.announcement.outputs.should_announce == 'true' }}
-              uses: Doist/comms-actions/post-comment-action@cf057e327f43e3ded8a54ebc871911d2b44027e4
+              uses: Doist/comms-actions/post-comment-action@aeeefe3270ad30d0c4cdd7dbf94b2fac1dcb8ceb
               with:
                   comms-client-id: ${{ secrets.COMMS_DOISTBOT_CLIENT_ID }}
                   comms-client-secret: ${{ secrets.COMMS_DOISTBOT_CLIENT_SECRET }}
