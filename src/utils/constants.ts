@@ -23,6 +23,8 @@ export const ApiLimits = {
     SECTIONS_MAX: 200,
     /** Batch size for fetching all tasks in a project */
     TASKS_BATCH_SIZE: 50,
+    /** Maximum number of direct children returned when children are requested alongside an object */
+    CHILDREN_MAX: 25,
     /** Default limit for comment listings */
     COMMENTS_DEFAULT: 10,
     /** Maximum limit for comment search and list operations */
