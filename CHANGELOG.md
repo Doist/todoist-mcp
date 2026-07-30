@@ -1,3 +1,9 @@
+## [12.2.0](https://github.com/Doist/todoist-mcp/compare/v12.1.2...v12.2.0) (2026-07-30)
+
+### Features
+
+* **fetch-object:** add includeChildren for subtasks and sub-projects ([#543](https://github.com/Doist/todoist-mcp/issues/543)) ([b7b5620](https://github.com/Doist/todoist-mcp/commit/b7b56205794971f853fccefc2efdfc6d10bfde48))
+
 ## [12.1.2](https://github.com/Doist/todoist-mcp/compare/v12.1.1...v12.1.2) (2026-07-27)
 
 ### Bug Fixes
