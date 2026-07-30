@@ -2,6 +2,13 @@ import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { mapComment, mapProject, mapTask } from '../tool-helpers.js'
 import {
+    ChildrenOutputSchema,
+    formatChildrenSummary,
+    getProjectChildren,
+    getTaskChildren,
+    resolveChildren,
+} from '../utils/children.js'
+import {
     CommentSchema,
     ProjectSchema,
     SectionSchema,
@@ -15,6 +22,12 @@ const ObjectTypes = ['task', 'project', 'comment', 'section'] as const
 const ArgsSchema = {
     type: z.enum(ObjectTypes).describe('The type of object to fetch.'),
     id: z.string().min(1).describe('The unique ID of the object to fetch.'),
+    includeChildren: z
+        .boolean()
+        .optional()
+        .describe(
+            'Also return the direct children of the object: subtasks for a task, sub-projects for a project. Returns childCount plus a compact list, flagging each child that has children of its own. Use this to check whether a task hides subtasks instead of a speculative find-tasks lookup. Ignored for comments and sections.',
+        ),
 }
 
 const OutputSchema = {
@@ -23,41 +36,54 @@ const OutputSchema = {
     object: z
         .union([TaskSchema, ProjectSchema, CommentSchema, SectionSchema])
         .describe('The fetched object data.'),
+    ...ChildrenOutputSchema,
 }
 
 const fetchObject = {
     name: ToolNames.FETCH_OBJECT,
     description:
-        'Fetch a single task, project, comment, or section by its ID. Use this when you have a specific object ID and want to retrieve its full details.',
+        'Fetch a single task, project, comment, or section by its ID. Use this when you have a specific object ID and want to retrieve its full details. Set includeChildren to also get its direct subtasks or sub-projects.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     async execute(args, client) {
-        const { type, id } = args
+        const { type, id, includeChildren } = args
 
         try {
             switch (type) {
                 case 'task': {
-                    const task = await client.getTask(id)
+                    // Subtasks are looked up by parent id alone, so both requests
+                    // can go out at once rather than one after the other.
+                    const [task, children] = await Promise.all([
+                        client.getTask(id),
+                        includeChildren
+                            ? resolveChildren(() => getTaskChildren(client, id))
+                            : Promise.resolve({}),
+                    ])
                     const mappedTask = mapTask(task)
                     return {
-                        textContent: `Found task: ${mappedTask.content} • id=${mappedTask.id} • priority=${mappedTask.priority} • project=${mappedTask.projectId}`,
+                        textContent: `Found task: ${mappedTask.content} • id=${mappedTask.id} • priority=${mappedTask.priority} • project=${mappedTask.projectId}${formatChildrenSummary('subtasks', children)}`,
                         structuredContent: {
                             type,
                             id,
                             object: mappedTask,
+                            ...children,
                         },
                     }
                 }
                 case 'project': {
                     const project = await client.getProject(id)
                     const mappedProject = mapProject(project)
+                    const children = includeChildren
+                        ? await resolveChildren(() => getProjectChildren(client, project))
+                        : {}
                     return {
-                        textContent: `Found project: ${mappedProject.name} • id=${mappedProject.id} • color=${mappedProject.color} • viewStyle=${mappedProject.viewStyle}`,
+                        textContent: `Found project: ${mappedProject.name} • id=${mappedProject.id} • color=${mappedProject.color} • viewStyle=${mappedProject.viewStyle}${formatChildrenSummary('subProjects', children)}`,
                         structuredContent: {
                             type,
                             id,
                             object: mappedProject,
+                            ...children,
                         },
                     }
                 }

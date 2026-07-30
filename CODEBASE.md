@@ -126,6 +126,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; imp
 - `tool-names.ts` — `ToolNames` enum of every registered tool name
 - `output-schemas.ts` — Reusable Zod schemas: TaskSchema, ProjectSchema, SectionSchema, CommentSchema, etc.
 - `schema-helpers.ts` — Zod builders used across tools
+- `children.ts` — `ChildrenOutputSchema` plus `getTaskChildren`/`getProjectChildren` for returning an object's direct subtasks or sub-projects
 - `priorities.ts` — `"p1"`–`"p4"` ↔ SDK integer conversion (**strings only in tool I/O**)
 - `duration-parser.ts` — `"2h30m"` ↔ ms, plus `formatDuration`
 - `date.ts` — date parsing/formatting (ISO, Todoist strings)

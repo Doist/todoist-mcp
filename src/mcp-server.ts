@@ -119,7 +119,7 @@ You have access to comprehensive Todoist management tools for personal productiv
 
 **General Operations:**
 - **delete-object**: Remove projects, sections, tasks, comments, labels, filters, reminders, or location reminders by type and ID. Deletes both active and archived projects (workspace projects must be archived first; use find-projects with archivedStatus to locate archived projects)
-- **fetch-object**: Fetch a single task, project, comment, or section by its ID
+- **fetch-object**: Fetch a single task, project, comment, or section by its ID. Pass includeChildren=true to also get its direct children (subtasks for a task, sub-projects for a project) with a childCount - use this to check whether a task hides subtasks rather than a speculative find-tasks call
 - **reorder-objects**: Reorder sibling projects or sections, and optionally move projects to a new parent. For projects: set order to reorder siblings, and/or set parentId to move under a new parent (use "root" for top level). For sections: set order to reorder within a project
 - **user-info**: Get user details including timezone, goals, and plan information
 
