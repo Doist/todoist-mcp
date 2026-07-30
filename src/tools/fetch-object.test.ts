@@ -400,10 +400,19 @@ describe(`${FETCH_OBJECT} tool`, () => {
                 expect(result.textContent).toContain('subtasks=unavailable')
             })
 
-            it('should report a failed grandchild probe without failing the fetch', async () => {
+            it('should keep the subtask list when a grandchild probe fails', async () => {
                 mockTodoistApi.getTasks.mockImplementation(async (args) => {
                     if (args?.parentId === 'task123') {
-                        return { results: [createMockTask({ id: 'sub1' })], nextCursor: null }
+                        return {
+                            results: [
+                                createMockTask({ id: 'sub1' }),
+                                createMockTask({ id: 'sub2' }),
+                            ],
+                            nextCursor: null,
+                        }
+                    }
+                    if (args?.parentId === 'sub2') {
+                        return { results: [], nextCursor: null }
                     }
                     throw new Error('Probe failed')
                 })
@@ -413,8 +422,36 @@ describe(`${FETCH_OBJECT} tool`, () => {
                     mockTodoistApi,
                 )
 
-                expect(childrenOf(result).childrenError).toBe('Probe failed')
-                expect(result.structuredContent).not.toHaveProperty('childCount')
+                expect(childrenOf(result)).toMatchObject({
+                    childCount: 2,
+                    children: [
+                        { id: 'sub1', hasChildren: false },
+                        { id: 'sub2', hasChildren: false },
+                    ],
+                    childrenError:
+                        'Could not check 1 of 2 subtasks for subtasks of their own; those are reported as hasChildren=false.',
+                })
+                expect(result.textContent).toContain('subtasks=2 (partial)')
+            })
+
+            it('should fetch the task and its children concurrently', async () => {
+                const calls: string[] = []
+                mockTodoistApi.getTask.mockImplementation(async () => {
+                    calls.push('getTask')
+                    return createMockTask({ id: 'task123' })
+                })
+                mockTodoistApi.getTasks.mockImplementation(async () => {
+                    calls.push('getTasks')
+                    return { results: [], nextCursor: null }
+                })
+
+                await fetchObject.execute(
+                    { type: 'task', id: 'task123', includeChildren: true },
+                    mockTodoistApi,
+                )
+
+                // Both requests are issued before either has resolved.
+                expect(calls).toEqual(['getTask', 'getTasks'])
             })
         })
 
@@ -469,6 +506,32 @@ describe(`${FETCH_OBJECT} tool`, () => {
                 )
 
                 expect(result.structuredContent).toMatchObject({ childCount: 0, children: [] })
+            })
+
+            it('should flag a truncated sub-project list', async () => {
+                mockTodoistApi.getProject.mockResolvedValue(createMockProject({ id: 'parent' }))
+                mockTodoistApi.getProjects.mockResolvedValue({
+                    results: Array.from({ length: 30 }, (_, index) =>
+                        createMockProject({
+                            id: `child${index}`,
+                            parentId: 'parent',
+                            childOrder: index,
+                        }),
+                    ),
+                    nextCursor: null,
+                })
+
+                const result = await fetchObject.execute(
+                    { type: 'project', id: 'parent', includeChildren: true },
+                    mockTodoistApi,
+                )
+
+                expect(childrenOf(result).children).toHaveLength(25)
+                expect(result.structuredContent).toMatchObject({
+                    childCount: 25,
+                    hasMoreChildren: true,
+                })
+                expect(result.textContent).toContain('subProjects=25+')
             })
 
             it('should short-circuit workspace projects, which nest under folders', async () => {
