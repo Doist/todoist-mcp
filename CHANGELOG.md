@@ -1,3 +1,10 @@
+## [12.2.1](https://github.com/Doist/todoist-mcp/compare/v12.2.0...v12.2.1) (2026-07-31)
+
+### Bug Fixes
+
+* **projects,sections:** Report per-item failures instead of failing the whole batch ([#504](https://github.com/Doist/todoist-mcp/issues/504)) ([e5da65a](https://github.com/Doist/todoist-mcp/commit/e5da65ad5c7cb7f56a55487b7b19f2bb9a5a8de7))
+* **update-tasks:** Report per-task failures instead of failing the whole batch ([#502](https://github.com/Doist/todoist-mcp/issues/502)) ([fd533db](https://github.com/Doist/todoist-mcp/commit/fd533db99243fa6e47a62181f12a6c3497f055a4))
+
 ## [12.2.0](https://github.com/Doist/todoist-mcp/compare/v12.1.2...v12.2.0) (2026-07-30)
 
 ### Features
