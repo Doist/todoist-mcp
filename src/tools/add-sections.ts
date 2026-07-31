@@ -116,7 +116,10 @@ function generateTextContent({
         .map((section) => `• ${section.name} (id=${section.id}, projectId=${section.projectId})`)
         .join('\n')
 
-    const summary = `Added ${count} section${count === 1 ? '' : 's'}:\n${sectionList}`
+    const summary =
+        count > 0
+            ? `Added ${count} section${count === 1 ? '' : 's'}:\n${sectionList}`
+            : 'Added 0 sections'
 
     return appendFailureSummary(summary, failures)
 }

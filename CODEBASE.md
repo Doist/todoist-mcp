@@ -136,7 +136,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; imp
 - `reminder-schemas.ts` — reminder-specific shapes
 - `assignment-validator.ts` — validate collaborator assignments
 - `user-resolver.ts` / `workspace-resolver.ts` — resolve user/workspace refs
-- `response-builders.ts` — `summarizeTaskOperation`, `summarizeBatch`, `previewTasks` (keep output messages consistent)
+- `response-builders.ts` — `summarizeTaskOperation`, `summarizeBatch`, `appendFailureSummary`, `previewTasks` (keep output messages consistent)
 - `retry.ts` — `executeWithRetry()` used inside `registerTool`
 - `sanitize-data.ts` — HTML sanitization (dompurify) for comment content
 - `validate-todoist-token.ts` — token validation for HTTP middleware

@@ -137,7 +137,10 @@ function generateTextContent({
     const count = projects.length
     const projectList = projects.map((project) => `• ${project.name} (id=${project.id})`).join('\n')
 
-    const summary = `Added ${count} project${count === 1 ? '' : 's'}:\n${projectList}`
+    const summary =
+        count > 0
+            ? `Added ${count} project${count === 1 ? '' : 's'}:\n${projectList}`
+            : 'Added 0 projects'
 
     return appendFailureSummary(summary, failures)
 }

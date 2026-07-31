@@ -306,6 +306,10 @@ describe(`${ADD_SECTIONS} tool`, () => {
             expect(result.structuredContent.sections).toEqual([])
             expect(result.structuredContent.successCount).toBe(0)
             expect(result.structuredContent.failureCount).toBe(2)
+            expect(result.structuredContent.failures.map((failure) => failure.item)).toEqual([
+                'First Section',
+                'Second Section',
+            ])
         })
 
         it('keeps non-inbox successes when inbox resolution fails', async () => {

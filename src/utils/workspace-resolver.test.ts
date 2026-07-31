@@ -134,6 +134,34 @@ describe('WorkspaceResolver', () => {
     })
 
     describe('caching', () => {
+        it('shares an in-flight workspace request across concurrent resolutions', async () => {
+            const workspaces = [
+                createMockWorkspace({ id: '111', name: 'Engineering' }),
+                createMockWorkspace({ id: '222', name: 'Marketing' }),
+            ]
+            let resolveWorkspaces: (value: Workspace[]) => void = () => undefined
+            mockTodoistApi.getWorkspaces.mockReturnValue(
+                new Promise<Workspace[]>((resolve) => {
+                    resolveWorkspaces = resolve
+                }),
+            )
+
+            const engineering = resolver.resolveWorkspace(mockTodoistApi, 'Engineering')
+            const marketing = resolver.resolveWorkspace(mockTodoistApi, 'Marketing')
+
+            expect(mockTodoistApi.getWorkspaces).toHaveBeenCalledTimes(1)
+
+            resolveWorkspaces(workspaces)
+            await expect(engineering).resolves.toEqual({
+                workspaceId: '111',
+                workspaceName: 'Engineering',
+            })
+            await expect(marketing).resolves.toEqual({
+                workspaceId: '222',
+                workspaceName: 'Marketing',
+            })
+        })
+
         it('should not re-fetch workspaces on second call', async () => {
             const workspaces = [createMockWorkspace({ id: '111', name: 'Engineering' })]
             mockTodoistApi.getWorkspaces.mockResolvedValue(workspaces)
