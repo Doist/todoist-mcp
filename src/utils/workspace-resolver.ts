@@ -16,15 +16,30 @@ export function looksLikeWorkspaceId(ref: string): boolean {
 
 export class WorkspaceResolver {
     private cache: { workspaces: Workspace[]; timestamp: number } | null = null
+    private inFlightWorkspaces: Promise<Workspace[]> | null = null
 
     private async getWorkspaces(client: TodoistApi): Promise<Workspace[]> {
         if (this.cache && Date.now() - this.cache.timestamp < CACHE_TTL) {
             return this.cache.workspaces
         }
 
-        const workspaces = await client.getWorkspaces()
-        this.cache = { workspaces, timestamp: Date.now() }
-        return workspaces
+        if (this.inFlightWorkspaces) {
+            return this.inFlightWorkspaces
+        }
+
+        const request = client
+            .getWorkspaces()
+            .then((workspaces) => {
+                this.cache = { workspaces, timestamp: Date.now() }
+                return workspaces
+            })
+            .finally(() => {
+                if (this.inFlightWorkspaces === request) {
+                    this.inFlightWorkspaces = null
+                }
+            })
+        this.inFlightWorkspaces = request
+        return request
     }
 
     /**

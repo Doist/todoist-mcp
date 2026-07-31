@@ -529,46 +529,113 @@ describe(`${ADD_PROJECTS} tool`, () => {
             expect(mockTodoistApi.getWorkspaces).toHaveBeenCalledTimes(1)
         })
 
-        it('should throw when workspace name is ambiguous', async () => {
+        it('reports an ambiguous workspace reference as a per-project failure', async () => {
             const mockWorkspaces = [
                 createMockWorkspace({ id: '555', name: 'Engineering Team' }),
                 createMockWorkspace({ id: '666', name: 'Marketing Team' }),
             ]
             mockTodoistApi.getWorkspaces.mockResolvedValue(mockWorkspaces)
 
-            await expect(
-                addProjects.execute(
-                    { projects: [{ name: 'Project', workspace: 'Team' }] },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(/Ambiguous workspace reference/)
+            const result = await addProjects.execute(
+                { projects: [{ name: 'Project', workspace: 'Team' }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.projects).toHaveLength(0)
+            expect(result.structuredContent.failures).toEqual([
+                expect.objectContaining({
+                    item: 'Project',
+                    error: expect.stringMatching(/Ambiguous workspace reference/),
+                }),
+            ])
         })
 
-        it('should throw when workspace name is not found', async () => {
+        it('reports a missing workspace as a per-project failure', async () => {
             mockTodoistApi.getWorkspaces.mockResolvedValue([
                 createMockWorkspace({ id: '777', name: 'Engineering' }),
             ])
 
-            await expect(
-                addProjects.execute(
-                    { projects: [{ name: 'Project', workspace: 'Nonexistent' }] },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(/Workspace "Nonexistent" not found/)
+            const result = await addProjects.execute(
+                { projects: [{ name: 'Project', workspace: 'Nonexistent' }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.failures).toEqual([
+                expect.objectContaining({
+                    item: 'Project',
+                    error: expect.stringMatching(/Workspace "Nonexistent" not found/),
+                }),
+            ])
+        })
+
+        it('keeps personal-project successes when another project has an invalid workspace', async () => {
+            mockTodoistApi.getWorkspaces.mockResolvedValue([
+                createMockWorkspace({ id: '777', name: 'Engineering' }),
+            ])
+            mockTodoistApi.addProject.mockResolvedValue(
+                createMockProject({ id: 'personal-project', name: 'Personal project' }),
+            )
+
+            const result = await addProjects.execute(
+                {
+                    projects: [
+                        { name: 'Workspace project', workspace: 'Nonexistent' },
+                        { name: 'Personal project' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.projects).toHaveLength(1)
+            expect(result.structuredContent.projects[0]?.id).toBe('personal-project')
+            expect(result.structuredContent.failures).toEqual([
+                expect.objectContaining({ item: 'Workspace project' }),
+            ])
         })
     })
 
     describe('error handling', () => {
-        it('should propagate API errors', async () => {
+        it('reports API errors as structured failures', async () => {
             const apiError = new Error('API Error: Project name is required')
             mockTodoistApi.addProject.mockRejectedValue(apiError)
 
-            await expect(
-                addProjects.execute({ projects: [{ name: '' }] }, mockTodoistApi),
-            ).rejects.toThrow('API Error: Project name is required')
+            const result = await addProjects.execute({ projects: [{ name: '' }] }, mockTodoistApi)
+
+            expect(result.structuredContent.failures).toEqual([
+                expect.objectContaining({ item: '', error: 'API Error: Project name is required' }),
+            ])
         })
 
-        it('should handle partial failures in multiple projects', async () => {
+        it('retries a transient 5xx failure on a per-item call via the retry helper', async () => {
+            // A per-item transient error must still get backoff+retry (it used to bubble
+            // up to the registerTool wrapper before the batch was settled per item). The
+            // first attempt fails with 503, the retry succeeds, so the item is reported as
+            // a success rather than a permanent failure.
+            vi.useFakeTimers()
+            try {
+                const okProject = createMockProject({ id: 'p-retry', name: 'Eventually OK' })
+                mockTodoistApi.addProject
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    .mockResolvedValueOnce(okProject)
+
+                const promise = addProjects.execute(
+                    { projects: [{ name: 'Eventually OK' }] },
+                    mockTodoistApi,
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.addProject).toHaveBeenCalledTimes(2)
+                expect(result.structuredContent.projects).toHaveLength(1)
+                expect(result.structuredContent.failureCount).toBe(0)
+            } finally {
+                vi.useRealTimers()
+            }
+        })
+
+        it('should keep successful projects when one in the batch fails', async () => {
             const mockProject = createMockProject({
                 id: 'project-1',
                 name: 'First Project',
@@ -578,14 +645,52 @@ describe(`${ADD_PROJECTS} tool`, () => {
                 .mockResolvedValueOnce(mockProject)
                 .mockRejectedValueOnce(new Error('API Error: Invalid project name'))
 
-            await expect(
-                addProjects.execute(
-                    {
-                        projects: [{ name: 'First Project' }, { name: 'Invalid' }],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('API Error: Invalid project name')
+            const result = await addProjects.execute(
+                {
+                    projects: [{ name: 'First Project' }, { name: 'Invalid' }],
+                },
+                mockTodoistApi,
+            )
+
+            // The successful project is preserved instead of being discarded by the failure.
+            const { structuredContent } = result
+            expect(structuredContent.projects).toHaveLength(1)
+            expect(structuredContent.totalCount).toBe(1)
+            expect(structuredContent.successCount).toBe(1)
+            expect(structuredContent.totalRequested).toBe(2)
+
+            // The failure is reported per-item with the offending project identified by name.
+            expect(structuredContent.failureCount).toBe(1)
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('Invalid')
+            expect(structuredContent.failures[0]?.error).toContain(
+                'API Error: Invalid project name',
+            )
+
+            expect(result.textContent).toContain('Added 1 project:')
+            expect(result.textContent).toContain('Failed (1)')
+            expect(result.textContent).toContain('address or drop these items')
+        })
+
+        it('returns structured failures when every project in the batch fails', async () => {
+            mockTodoistApi.addProject
+                .mockRejectedValueOnce(new Error('API Error: Invalid project name'))
+                .mockRejectedValueOnce(new Error('API Error: Invalid project name'))
+
+            const result = await addProjects.execute(
+                {
+                    projects: [{ name: 'Invalid 1' }, { name: 'Invalid 2' }],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.projects).toEqual([])
+            expect(result.structuredContent.successCount).toBe(0)
+            expect(result.structuredContent.failureCount).toBe(2)
+            expect(result.structuredContent.failures.map((failure) => failure.item)).toEqual([
+                'Invalid 1',
+                'Invalid 2',
+            ])
         })
     })
 })

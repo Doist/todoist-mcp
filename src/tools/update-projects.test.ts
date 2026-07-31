@@ -73,6 +73,7 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
                     appliedOperations: {
                         updateCount: 1,
                         skippedCount: 0,
+                        failureCount: 0,
                     },
                 }),
             )
@@ -251,6 +252,7 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
             expect(result.structuredContent.appliedOperations).toEqual({
                 updateCount: 0,
                 skippedCount: 1,
+                failureCount: 0,
             })
         })
 
@@ -280,6 +282,7 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
             expect(result.structuredContent.appliedOperations).toEqual({
                 updateCount: 1,
                 skippedCount: 2,
+                failureCount: 0,
             })
         })
     })
@@ -346,6 +349,7 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
                     appliedOperations: {
                         updateCount: 3,
                         skippedCount: 0,
+                        failureCount: 0,
                     },
                 }),
             )
@@ -387,6 +391,7 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
                     appliedOperations: {
                         updateCount: 1,
                         skippedCount: 1,
+                        failureCount: 0,
                     },
                 }),
             )
@@ -516,19 +521,24 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
     })
 
     describe('error handling', () => {
-        it('should propagate API errors', async () => {
+        it('reports API errors as structured failures', async () => {
             const apiError = new Error('API Error: Project not found')
             mockTodoistApi.updateProject.mockRejectedValue(apiError)
 
-            await expect(
-                updateProjects.execute(
-                    { projects: [{ id: 'nonexistent', name: 'New Name' }] },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('API Error: Project not found')
+            const result = await updateProjects.execute(
+                { projects: [{ id: 'nonexistent', name: 'New Name' }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.failures).toEqual([
+                expect.objectContaining({
+                    item: 'nonexistent',
+                    error: 'API Error: Project not found',
+                }),
+            ])
         })
 
-        it('should handle partial failures in multiple projects', async () => {
+        it('should keep successful updates when one in the batch fails', async () => {
             const mockProject = createMockProject({
                 id: 'project-1',
                 name: 'Updated Project',
@@ -538,17 +548,89 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
                 .mockResolvedValueOnce(mockProject)
                 .mockRejectedValueOnce(new Error('API Error: Project not found'))
 
-            await expect(
-                updateProjects.execute(
-                    {
-                        projects: [
-                            { id: 'project-1', name: 'Updated Project' },
-                            { id: 'nonexistent', name: 'New Name' },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('API Error: Project not found')
+            const result = await updateProjects.execute(
+                {
+                    projects: [
+                        { id: 'project-1', name: 'Updated Project' },
+                        { id: 'nonexistent', name: 'New Name' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            // The successful update is preserved instead of being discarded by the failure.
+            const { structuredContent } = result
+            expect(structuredContent.projects).toHaveLength(1)
+            expect(structuredContent.totalCount).toBe(1)
+            expect(structuredContent.updatedProjectIds).toEqual(['project-1'])
+
+            // The failure is reported per-item, identified by the project id.
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('nonexistent')
+            expect(structuredContent.failures[0]?.error).toContain('API Error: Project not found')
+            expect(structuredContent.appliedOperations).toEqual({
+                updateCount: 1,
+                skippedCount: 0,
+                failureCount: 1,
+            })
+
+            expect(result.textContent).toContain('Updated 1 project')
+            expect(result.textContent).toContain('Failed (1)')
+            expect(result.textContent).toContain('address or drop these items')
+        })
+
+        it('returns structured failures when every project in the batch fails', async () => {
+            mockTodoistApi.updateProject
+                .mockRejectedValueOnce(new Error('API Error: Project not found'))
+                .mockRejectedValueOnce(new Error('API Error: Project not found'))
+
+            const result = await updateProjects.execute(
+                {
+                    projects: [
+                        { id: 'nonexistent-1', name: 'New Name' },
+                        { id: 'nonexistent-2', name: 'New Name' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.projects).toEqual([])
+            expect(result.structuredContent.updatedProjectIds).toEqual([])
+            expect(result.structuredContent.appliedOperations).toEqual({
+                updateCount: 0,
+                skippedCount: 0,
+                failureCount: 2,
+            })
+        })
+
+        it('does not throw when the batch is only skipped and failed projects', async () => {
+            // No project is actually updated: one is a no-op skip, the other fails. A skip
+            // is a successful no-op, so this is NOT a total failure and must return normally
+            // with the failure listed — rather than throwing a batch-wide error.
+            mockTodoistApi.updateProject.mockRejectedValueOnce(
+                new Error('API Error: Project not found'),
+            )
+
+            const result = await updateProjects.execute(
+                {
+                    projects: [
+                        { id: 'noop-project' }, // no fields -> skipped
+                        { id: 'nonexistent', name: 'New Name' }, // update -> fails
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const { structuredContent } = result
+            expect(structuredContent.projects).toHaveLength(0)
+            expect(structuredContent.totalCount).toBe(0)
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('nonexistent')
+            expect(structuredContent.appliedOperations).toEqual({
+                updateCount: 0,
+                skippedCount: 1,
+                failureCount: 1,
+            })
         })
     })
 })

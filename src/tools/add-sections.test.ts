@@ -235,19 +235,21 @@ describe(`${ADD_SECTIONS} tool`, () => {
     })
 
     describe('error handling', () => {
-        it('should propagate API errors', async () => {
+        it('reports API errors as structured failures', async () => {
             const apiError = new Error('API Error: Section name is required')
             mockTodoistApi.addSection.mockRejectedValue(apiError)
 
-            await expect(
-                addSections.execute(
-                    { sections: [{ name: '', projectId: TEST_IDS.PROJECT_TEST }] },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('API Error: Section name is required')
+            const result = await addSections.execute(
+                { sections: [{ name: '', projectId: TEST_IDS.PROJECT_TEST }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.failures).toEqual([
+                expect.objectContaining({ item: '', error: 'API Error: Section name is required' }),
+            ])
         })
 
-        it('should handle partial failures in multiple sections', async () => {
+        it('should keep successful sections when one in the batch fails', async () => {
             const mockSection = createMockSection({
                 id: 'section-1',
                 projectId: TEST_IDS.PROJECT_TEST,
@@ -258,17 +260,86 @@ describe(`${ADD_SECTIONS} tool`, () => {
                 .mockResolvedValueOnce(mockSection)
                 .mockRejectedValueOnce(new Error('API Error: Invalid project ID'))
 
-            await expect(
-                addSections.execute(
-                    {
-                        sections: [
-                            { name: 'First Section', projectId: TEST_IDS.PROJECT_TEST },
-                            { name: 'Second Section', projectId: 'invalid-project' },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('API Error: Invalid project ID')
+            const result = await addSections.execute(
+                {
+                    sections: [
+                        { name: 'First Section', projectId: TEST_IDS.PROJECT_TEST },
+                        { name: 'Second Section', projectId: 'invalid-project' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            // The successful section is preserved instead of being discarded by the failure.
+            const { structuredContent } = result
+            expect(structuredContent.sections).toHaveLength(1)
+            expect(structuredContent.totalCount).toBe(1)
+            expect(structuredContent.successCount).toBe(1)
+            expect(structuredContent.totalRequested).toBe(2)
+
+            // The failure is reported per-item with the offending section identified by name.
+            expect(structuredContent.failureCount).toBe(1)
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('Second Section')
+            expect(structuredContent.failures[0]?.error).toContain('API Error: Invalid project ID')
+
+            expect(result.textContent).toContain('Added 1 section:')
+            expect(result.textContent).toContain('Failed (1)')
+            expect(result.textContent).toContain('address or drop these items')
+        })
+
+        it('returns structured failures when every section in the batch fails', async () => {
+            mockTodoistApi.addSection
+                .mockRejectedValueOnce(new Error('API Error: Invalid project ID'))
+                .mockRejectedValueOnce(new Error('API Error: Invalid project ID'))
+
+            const result = await addSections.execute(
+                {
+                    sections: [
+                        { name: 'First Section', projectId: 'invalid-1' },
+                        { name: 'Second Section', projectId: 'invalid-2' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.sections).toEqual([])
+            expect(result.structuredContent.successCount).toBe(0)
+            expect(result.structuredContent.failureCount).toBe(2)
+            expect(result.structuredContent.failures.map((failure) => failure.item)).toEqual([
+                'First Section',
+                'Second Section',
+            ])
+        })
+
+        it('keeps non-inbox successes when inbox resolution fails', async () => {
+            mockTodoistApi.getUser.mockRejectedValue(new Error('API Error: Cannot resolve inbox'))
+            mockTodoistApi.addSection.mockResolvedValue(
+                createMockSection({
+                    id: 'regular-section',
+                    name: 'Regular section',
+                    projectId: TEST_IDS.PROJECT_TEST,
+                }),
+            )
+
+            const result = await addSections.execute(
+                {
+                    sections: [
+                        { name: 'Inbox section', projectId: 'inbox' },
+                        { name: 'Regular section', projectId: TEST_IDS.PROJECT_TEST },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.sections).toHaveLength(1)
+            expect(result.structuredContent.sections[0]?.id).toBe('regular-section')
+            expect(result.structuredContent.failures).toEqual([
+                expect.objectContaining({
+                    item: 'Inbox section',
+                    error: 'API Error: Cannot resolve inbox',
+                }),
+            ])
         })
     })
 })

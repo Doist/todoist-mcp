@@ -116,6 +116,26 @@ export function summarizeBatch(params: BatchOperationParams): string {
 }
 
 /**
+ * Appends a per-item failure block to a success summary. Returns the summary unchanged
+ * when there are no failures.
+ */
+export function appendFailureSummary(
+    summary: string,
+    failures: Array<{ item: string; error: string }>,
+): string {
+    if (failures.length === 0) {
+        return summary
+    }
+
+    const shown = failures.slice(0, DisplayLimits.MAX_FAILURES_SHOWN)
+    const remaining = failures.length - shown.length
+    const failureLines = shown.map((f) => `    ${f.item}: ${f.error}`).join('\n')
+    const moreInfo = remaining > 0 ? `\n    +${remaining} more` : ''
+
+    return `${summary}\nFailed (${failures.length}) - address or drop these items:\n${failureLines}${moreInfo}`
+}
+
+/**
  * Formats a single task-like object into a readable preview line
  */
 function formatTaskPreview(task: TaskLike): string {
