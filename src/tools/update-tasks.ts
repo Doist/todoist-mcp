@@ -4,7 +4,7 @@ import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
 import { createMoveTaskArgs, mapTask, resolveInboxProjectId } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
-import { DisplayLimits } from '../utils/constants.js'
+import { BatchLimits, DisplayLimits } from '../utils/constants.js'
 import { DurationParseError, parseDuration } from '../utils/duration-parser.js'
 import { FailureSchema, TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import {
@@ -69,7 +69,11 @@ const TasksUpdateSchema = z.object({
             'The duration of the task. Use format: "2h" (hours), "90m" (minutes), "2h30m" (combined), or "1.5h" (decimal hours). Max 24h.',
         ),
     responsibleUser: z
-        .string()
+        .preprocess(
+            // Keep accepting legacy null while exposing a Gemini-compatible string schema.
+            (value) => (value === null ? 'unassign' : value),
+            z.string(),
+        )
         .optional()
         .describe(
             'Change task assignment. Use "unassign" to remove assignment. Can be "me" (assigns to current user), a user ID, name, or email. User must be a project collaborator.',
@@ -99,7 +103,7 @@ const DUE_DATE_REMOVAL_VALUE = 'no date' as const
 
 // Cap the batch size (matching add-tasks) so a single call can't fan out an unbounded
 // number of concurrent SDK requests or buffer an unbounded failures response.
-const MAX_TASKS_PER_OPERATION = 25
+const MAX_TASKS_PER_OPERATION = BatchLimits.TASKS_PER_OPERATION
 
 const ArgsSchema = {
     tasks: z
@@ -134,7 +138,9 @@ const updateTasks = {
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     async execute(args, client) {
-        const { tasks } = args
+        // Direct callers bypass the MCP schema parser, so parse here as well to enforce
+        // transforms and the batch cap before starting concurrent work.
+        const { tasks } = z.object(ArgsSchema).parse(args)
 
         // Each task is updated independently. A failure on one task (for example, the
         // API rejecting a move with "Not allowed to move objects out of a workspace")
@@ -147,7 +153,7 @@ const updateTasks = {
         )
 
         const updatedTasks: Task[] = []
-        const failures: Array<{ item: string; error: string }> = []
+        const failures: Array<{ item: string; error: string; code?: string }> = []
         let skippedCount = 0
 
         for (const [index, result] of settled.entries()) {
@@ -162,6 +168,7 @@ const updateTasks = {
                     failures.push({
                         item: tasks[index]?.id ?? `Task ${index + 1}`,
                         error: result.value.error,
+                        code: 'PARTIAL_MOVE_APPLIED',
                     })
                 }
                 continue
@@ -228,10 +235,9 @@ async function processTaskUpdate(task: TaskUpdate, client: TodoistApi): Promise<
     } = task
 
     // Resolve "inbox" to actual inbox project ID if needed
-    const resolvedProjectId = await resolveInboxProjectId({
-        projectId,
-        client,
-    })
+    const resolvedProjectId = await executeWithRetry(() =>
+        resolveInboxProjectId({ projectId, client }),
+    )
 
     let updateArgs: UpdateTaskArgs = {
         ...otherUpdateArgs,
@@ -353,7 +359,7 @@ function generateTextContent({
     skippedCount,
 }: {
     tasks: ReturnType<typeof mapTask>[]
-    failures: Array<{ item: string; error: string }>
+    failures: Array<{ item: string; error: string; code?: string }>
     skippedCount: number
 }) {
     const contextParts: string[] = []

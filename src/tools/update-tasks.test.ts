@@ -21,6 +21,24 @@ describe(`${UPDATE_TASKS} tool`, () => {
         mockTodoistApi.getUser.mockResolvedValue(createMockUser())
     })
 
+    async function expectSingleFailure(
+        params: Parameters<typeof updateTasks.execute>[0]['tasks'][number],
+        expectedError: string,
+    ) {
+        const result = await updateTasks.execute({ tasks: [params] }, mockTodoistApi)
+        const { structuredContent } = result
+        expect(structuredContent.tasks).toHaveLength(0)
+        expect(structuredContent.failures).toHaveLength(1)
+        expect(structuredContent.failures[0]?.item).toBe(params.id)
+        expect(structuredContent.failures[0]?.error).toContain(expectedError)
+        expect(structuredContent.appliedOperations).toEqual({
+            updateCount: 0,
+            skippedCount: 0,
+            failureCount: 1,
+        })
+        return result
+    }
+
     describe('updating task properties', () => {
         it('should update task content and description', async () => {
             // Mock API response extracted from recordings (Task type)
@@ -745,24 +763,6 @@ describe(`${UPDATE_TASKS} tool`, () => {
     describe('error handling', () => {
         // The tool never throws for per-item problems — even a single failing task is
         // reported in the structured `failures` rather than rejecting the whole call.
-        async function expectSingleFailure(
-            params: Parameters<typeof updateTasks.execute>[0]['tasks'][number],
-            expectedError: string,
-        ) {
-            const result = await updateTasks.execute({ tasks: [params] }, mockTodoistApi)
-            const { structuredContent } = result
-            expect(structuredContent.tasks).toHaveLength(0)
-            expect(structuredContent.failures).toHaveLength(1)
-            expect(structuredContent.failures[0]?.item).toBe(params.id)
-            expect(structuredContent.failures[0]?.error).toContain(expectedError)
-            expect(structuredContent.appliedOperations).toEqual({
-                updateCount: 0,
-                skippedCount: 0,
-                failureCount: 1,
-            })
-            return result
-        }
-
         it('reports invalid duration format as a failure', async () => {
             await expectSingleFailure(
                 { id: '8485093756', duration: 'invalid' },
@@ -1054,25 +1054,8 @@ describe(`${UPDATE_TASKS} tool`, () => {
 
         describe('error handling', () => {
             // A move failure on the only task is reported in `failures`, not thrown.
-            async function expectSingleMoveFailure(
-                params: Parameters<typeof updateTasks.execute>[0]['tasks'][number],
-                expectedError: string,
-            ) {
-                const result = await updateTasks.execute({ tasks: [params] }, mockTodoistApi)
-                const { structuredContent } = result
-                expect(structuredContent.tasks).toHaveLength(0)
-                expect(structuredContent.failures).toHaveLength(1)
-                expect(structuredContent.failures[0]?.item).toBe(params.id)
-                expect(structuredContent.failures[0]?.error).toContain(expectedError)
-                expect(structuredContent.appliedOperations).toEqual({
-                    updateCount: 0,
-                    skippedCount: 0,
-                    failureCount: 1,
-                })
-            }
-
             it('reports a task with multiple move parameters as a failure', async () => {
-                await expectSingleMoveFailure(
+                await expectSingleFailure(
                     { id: 'task-1', projectId: 'new-project', sectionId: 'new-section' },
                     'Task task-1: Only one of projectId, sectionId, or parentId can be specified at a time',
                 )
@@ -1080,7 +1063,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
 
             it('reports API errors for individual task moves as failures', async () => {
                 mockTodoistApi.moveTask.mockRejectedValue(new Error('API Error: Task not found'))
-                await expectSingleMoveFailure(
+                await expectSingleFailure(
                     { id: 'non-existent-task', projectId: 'some-project' },
                     'API Error: Task not found',
                 )
@@ -1090,7 +1073,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 mockTodoistApi.moveTask.mockRejectedValue(
                     new Error('API Error: Invalid section ID'),
                 )
-                await expectSingleMoveFailure(
+                await expectSingleFailure(
                     { id: 'task-1', sectionId: 'invalid-section-format' },
                     'API Error: Invalid section ID',
                 )
@@ -1100,7 +1083,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 mockTodoistApi.moveTask.mockRejectedValue(
                     new Error('API Error: Insufficient permissions to move task'),
                 )
-                await expectSingleMoveFailure(
+                await expectSingleFailure(
                     { id: 'restricted-task', projectId: 'restricted-project' },
                     'API Error: Insufficient permissions to move task',
                 )
@@ -1110,7 +1093,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 mockTodoistApi.moveTask.mockRejectedValue(
                     new Error('API Error: Circular dependency detected'),
                 )
-                await expectSingleMoveFailure(
+                await expectSingleFailure(
                     { id: 'task-parent', parentId: 'task-child' },
                     'API Error: Circular dependency detected',
                 )
@@ -1301,6 +1284,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
             expect(structuredContent.failures[0]?.error).toBe(
                 'Move applied; field update failed: API Error: Invalid priority',
             )
+            expect(structuredContent.failures[0]?.code).toBe('PARTIAL_MOVE_APPLIED')
             expect(structuredContent.appliedOperations).toEqual({
                 updateCount: 1,
                 skippedCount: 0,
@@ -1380,6 +1364,37 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 vi.useRealTimers()
             }
         })
+
+        it('retries a transient 5xx response while resolving an inbox move', async () => {
+            vi.useFakeTimers()
+            try {
+                const movedTask = createMockTask({
+                    id: 'inbox-retry-task',
+                    projectId: TEST_IDS.PROJECT_INBOX,
+                })
+                mockTodoistApi.getUser.mockRejectedValueOnce(
+                    Object.assign(new Error('HTTP 503: Service Unavailable'), {
+                        httpStatusCode: 503,
+                    }),
+                )
+                mockTodoistApi.moveTask.mockResolvedValue(movedTask)
+
+                const promise = updateTasks.execute(
+                    { tasks: [{ id: 'inbox-retry-task', projectId: 'inbox' }] },
+                    mockTodoistApi,
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.getUser).toHaveBeenCalledTimes(2)
+                expect(mockTodoistApi.moveTask).toHaveBeenCalledWith('inbox-retry-task', {
+                    projectId: TEST_IDS.PROJECT_INBOX,
+                })
+                expect(result.structuredContent.failures).toHaveLength(0)
+            } finally {
+                vi.useRealTimers()
+            }
+        })
     })
 
     describe('isUncompletable parameter', () => {
@@ -1412,8 +1427,8 @@ describe(`${UPDATE_TASKS} tool`, () => {
     })
 
     describe('batch limits', () => {
-        // The cap is enforced by the schema at the MCP input boundary, bounding the
-        // concurrent fan-out and the size of the failures response.
+        // The cap is enforced at both the MCP input boundary and in execute(), bounding
+        // concurrent fan-out and the size of the failures response for direct callers too.
         const makeTasks = (count: number) =>
             Array.from({ length: count }, (_, i) => ({ id: `task-${i}`, content: 'x' }))
 
@@ -1425,6 +1440,13 @@ describe(`${UPDATE_TASKS} tool`, () => {
         it('rejects a batch larger than the cap', () => {
             const result = z.object(updateTasks.parameters).safeParse({ tasks: makeTasks(26) })
             expect(result.success).toBe(false)
+        })
+
+        it('rejects an oversized batch when execute is called directly', async () => {
+            await expect(
+                updateTasks.execute({ tasks: makeTasks(26) }, mockTodoistApi),
+            ).rejects.toThrow('Too big')
+            expect(mockTodoistApi.updateTask).not.toHaveBeenCalled()
         })
     })
 })
