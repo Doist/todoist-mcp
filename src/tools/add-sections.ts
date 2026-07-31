@@ -1,7 +1,7 @@
 import type { Section } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { formatToolExecutionError } from '../tool-execution-error.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
 import { isInboxProjectId, resolveInboxProjectId } from '../tool-helpers.js'
 import {
     FailureSchema,
@@ -50,9 +50,9 @@ const addSections = {
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     async execute({ sections }, client) {
-        // Check if any section needs inbox resolution
-        const needsInboxResolution = sections.some((section) => isInboxProjectId(section.projectId))
-        const todoistUser = needsInboxResolution ? await client.getUser() : undefined
+        const todoistUserPromise = sections.some((section) => isInboxProjectId(section.projectId))
+            ? executeWithRetry(() => client.getUser())
+            : undefined
 
         // Each section is created independently: a failure on one (for example, the API
         // rejecting it with a 403 permission error) must not discard the sections that
@@ -61,11 +61,14 @@ const addSections = {
         // the same backoff the registerTool() wrapper applies to single-call tools.
         const settled = await Promise.allSettled(
             sections.map(async (section) => {
+                const todoistUser = isInboxProjectId(section.projectId)
+                    ? await todoistUserPromise
+                    : undefined
                 const projectId =
                     (await resolveInboxProjectId({
                         projectId: section.projectId,
                         user: todoistUser,
-                        client: todoistUser ? undefined : client,
+                        client: undefined,
                     })) ?? section.projectId
                 return executeWithRetry(() => client.addSection({ ...section, projectId }))
             }),
@@ -80,16 +83,10 @@ const addSections = {
             } else {
                 failures.push({
                     item: sections[index]?.name ?? `Section ${index + 1}`,
-                    error: formatToolExecutionError(result.reason),
+                    error: formatBatchItemError(result.reason),
                 })
             }
         })
-
-        // If every section failed, surface a hard error instead of a misleading success.
-        if (newSections.length === 0 && failures.length > 0) {
-            const details = failures.map((f) => `"${f.item}": ${f.error}`).join('; ')
-            throw new Error(`All ${failures.length} section(s) failed to create: ${details}`)
-        }
 
         const textContent = generateTextContent({ sections: newSections, failures })
 

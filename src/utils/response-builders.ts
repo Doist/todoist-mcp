@@ -116,9 +116,8 @@ export function summarizeBatch(params: BatchOperationParams): string {
 }
 
 /**
- * Appends a per-item failure block to a success summary, signalling that the listed
- * items were not retried automatically so the caller does not blindly resend the whole
- * batch. Returns the summary unchanged when there are no failures.
+ * Appends a per-item failure block to a success summary. Returns the summary unchanged
+ * when there are no failures.
  */
 export function appendFailureSummary(
     summary: string,
@@ -133,7 +132,7 @@ export function appendFailureSummary(
     const failureLines = shown.map((f) => `    ${f.item}: ${f.error}`).join('\n')
     const moreInfo = remaining > 0 ? `\n    +${remaining} more` : ''
 
-    return `${summary}\nFailed (${failures.length}) - not retried automatically; address or drop these items:\n${failureLines}${moreInfo}`
+    return `${summary}\nFailed (${failures.length}) - address or drop these items:\n${failureLines}${moreInfo}`
 }
 
 /**

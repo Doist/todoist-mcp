@@ -235,16 +235,18 @@ describe(`${ADD_SECTIONS} tool`, () => {
     })
 
     describe('error handling', () => {
-        it('should propagate API errors', async () => {
+        it('reports API errors as structured failures', async () => {
             const apiError = new Error('API Error: Section name is required')
             mockTodoistApi.addSection.mockRejectedValue(apiError)
 
-            await expect(
-                addSections.execute(
-                    { sections: [{ name: '', projectId: TEST_IDS.PROJECT_TEST }] },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('API Error: Section name is required')
+            const result = await addSections.execute(
+                { sections: [{ name: '', projectId: TEST_IDS.PROJECT_TEST }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.failures).toEqual([
+                expect.objectContaining({ item: '', error: 'API Error: Section name is required' }),
+            ])
         })
 
         it('should keep successful sections when one in the batch fails', async () => {
@@ -283,25 +285,57 @@ describe(`${ADD_SECTIONS} tool`, () => {
 
             expect(result.textContent).toContain('Added 1 section:')
             expect(result.textContent).toContain('Failed (1)')
-            expect(result.textContent).toContain('not retried automatically')
+            expect(result.textContent).toContain('address or drop these items')
         })
 
-        it('should throw when every section in the batch fails', async () => {
+        it('returns structured failures when every section in the batch fails', async () => {
             mockTodoistApi.addSection
                 .mockRejectedValueOnce(new Error('API Error: Invalid project ID'))
                 .mockRejectedValueOnce(new Error('API Error: Invalid project ID'))
 
-            await expect(
-                addSections.execute(
-                    {
-                        sections: [
-                            { name: 'First Section', projectId: 'invalid-1' },
-                            { name: 'Second Section', projectId: 'invalid-2' },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('All 2 section(s) failed to create')
+            const result = await addSections.execute(
+                {
+                    sections: [
+                        { name: 'First Section', projectId: 'invalid-1' },
+                        { name: 'Second Section', projectId: 'invalid-2' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.sections).toEqual([])
+            expect(result.structuredContent.successCount).toBe(0)
+            expect(result.structuredContent.failureCount).toBe(2)
+        })
+
+        it('keeps non-inbox successes when inbox resolution fails', async () => {
+            mockTodoistApi.getUser.mockRejectedValue(new Error('API Error: Cannot resolve inbox'))
+            mockTodoistApi.addSection.mockResolvedValue(
+                createMockSection({
+                    id: 'regular-section',
+                    name: 'Regular section',
+                    projectId: TEST_IDS.PROJECT_TEST,
+                }),
+            )
+
+            const result = await addSections.execute(
+                {
+                    sections: [
+                        { name: 'Inbox section', projectId: 'inbox' },
+                        { name: 'Regular section', projectId: TEST_IDS.PROJECT_TEST },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.sections).toHaveLength(1)
+            expect(result.structuredContent.sections[0]?.id).toBe('regular-section')
+            expect(result.structuredContent.failures).toEqual([
+                expect.objectContaining({
+                    item: 'Inbox section',
+                    error: 'API Error: Cannot resolve inbox',
+                }),
+            ])
         })
     })
 })

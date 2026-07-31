@@ -521,16 +521,21 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
     })
 
     describe('error handling', () => {
-        it('should propagate API errors', async () => {
+        it('reports API errors as structured failures', async () => {
             const apiError = new Error('API Error: Project not found')
             mockTodoistApi.updateProject.mockRejectedValue(apiError)
 
-            await expect(
-                updateProjects.execute(
-                    { projects: [{ id: 'nonexistent', name: 'New Name' }] },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('API Error: Project not found')
+            const result = await updateProjects.execute(
+                { projects: [{ id: 'nonexistent', name: 'New Name' }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.failures).toEqual([
+                expect.objectContaining({
+                    item: 'nonexistent',
+                    error: 'API Error: Project not found',
+                }),
+            ])
         })
 
         it('should keep successful updates when one in the batch fails', async () => {
@@ -571,25 +576,31 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
 
             expect(result.textContent).toContain('Updated 1 project')
             expect(result.textContent).toContain('Failed (1)')
-            expect(result.textContent).toContain('not retried automatically')
+            expect(result.textContent).toContain('address or drop these items')
         })
 
-        it('should throw when every project in the batch fails', async () => {
+        it('returns structured failures when every project in the batch fails', async () => {
             mockTodoistApi.updateProject
                 .mockRejectedValueOnce(new Error('API Error: Project not found'))
                 .mockRejectedValueOnce(new Error('API Error: Project not found'))
 
-            await expect(
-                updateProjects.execute(
-                    {
-                        projects: [
-                            { id: 'nonexistent-1', name: 'New Name' },
-                            { id: 'nonexistent-2', name: 'New Name' },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('All 2 project update(s) failed')
+            const result = await updateProjects.execute(
+                {
+                    projects: [
+                        { id: 'nonexistent-1', name: 'New Name' },
+                        { id: 'nonexistent-2', name: 'New Name' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.projects).toEqual([])
+            expect(result.structuredContent.updatedProjectIds).toEqual([])
+            expect(result.structuredContent.appliedOperations).toEqual({
+                updateCount: 0,
+                skippedCount: 0,
+                failureCount: 2,
+            })
         })
 
         it('does not throw when the batch is only skipped and failed projects', async () => {

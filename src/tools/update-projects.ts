@@ -1,7 +1,7 @@
 import type { PersonalProject, WorkspaceProject } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { formatToolExecutionError } from '../tool-execution-error.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
 import { mapProject } from '../tool-helpers.js'
 import { ColorSchema } from '../utils/colors.js'
 import { FailureSchema, ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
@@ -67,7 +67,6 @@ const updateProjects = {
         type Outcome =
             | { kind: 'updated'; project: PersonalProject | WorkspaceProject }
             | { kind: 'skipped'; reason: SkipReason }
-            | { kind: 'failed'; item: string; error: string }
 
         // Each project is updated independently: a failure on one (for example, the API
         // rejecting it with a 403 permission error) must not discard the projects that
@@ -87,42 +86,27 @@ const updateProjects = {
             }),
         )
 
-        const outcomes: Outcome[] = settled.map((result, index) => {
-            if (result.status === 'fulfilled') return result.value
-            return {
-                kind: 'failed',
-                item: projects[index]?.id ?? `Project ${index + 1}`,
-                error: formatToolExecutionError(result.reason),
+        const updatedProjects: ReturnType<typeof mapProject>[] = []
+        const failures: Array<{ item: string; error: string }> = []
+        let skippedNoFields = 0
+        let skippedNoValidValues = 0
+
+        for (const [index, result] of settled.entries()) {
+            if (result.status === 'rejected') {
+                failures.push({
+                    item: projects[index]?.id ?? `Project ${index + 1}`,
+                    error: formatBatchItemError(result.reason),
+                })
+                continue
             }
-        })
 
-        const updatedProjects = outcomes
-            .filter(
-                (o): o is { kind: 'updated'; project: PersonalProject | WorkspaceProject } =>
-                    o.kind === 'updated',
-            )
-            .map((o) => mapProject(o.project))
-
-        const failures = outcomes
-            .filter(
-                (o): o is { kind: 'failed'; item: string; error: string } => o.kind === 'failed',
-            )
-            .map(({ item, error }) => ({ item, error }))
-
-        const skippedNoFields = outcomes.filter(
-            (o) => o.kind === 'skipped' && o.reason === 'no-fields',
-        ).length
-
-        const skippedNoValidValues = outcomes.filter(
-            (o) => o.kind === 'skipped' && o.reason === 'no-valid-values',
-        ).length
-
-        // Only a total failure — every project in the batch failed — is a hard error.
-        // Skips are successful no-ops, so a batch with any success or skip returns
-        // normally with the failures listed rather than throwing.
-        if (failures.length > 0 && failures.length === projects.length) {
-            const details = failures.map((f) => `"${f.item}": ${f.error}`).join('; ')
-            throw new Error(`All ${failures.length} project update(s) failed: ${details}`)
+            if (result.value.kind === 'updated') {
+                updatedProjects.push(mapProject(result.value.project))
+            } else if (result.value.reason === 'no-fields') {
+                skippedNoFields++
+            } else {
+                skippedNoValidValues++
+            }
         }
 
         const textContent = generateTextContent({

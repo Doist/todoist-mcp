@@ -1,7 +1,7 @@
 import type { PersonalProject, WorkspaceProject } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { formatToolExecutionError } from '../tool-execution-error.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
 import { mapProject } from '../tool-helpers.js'
 import { ColorSchema } from '../utils/colors.js'
 import { FailureSchema, ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
@@ -64,17 +64,22 @@ const addProjects = {
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     async execute({ projects }, client) {
-        // Collect unique workspace references and resolve each once. Resolution failures
-        // (ambiguous/unknown workspace) are validation errors that should fail loudly,
-        // so they stay outside the per-project settle below.
-        const uniqueWorkspaceRefs = [
-            ...new Set(projects.map((p) => p.workspace).filter(Boolean)),
-        ] as string[]
+        const workspaceResolutions = new Map<string, Promise<string>>()
 
-        const resolvedWorkspaces = new Map<string, string>()
-        for (const ref of uniqueWorkspaceRefs) {
-            const resolved = await workspaceResolver.resolveWorkspace(client, ref)
-            resolvedWorkspaces.set(ref, resolved.workspaceId)
+        const resolveWorkspaceId = (workspace: string | undefined) => {
+            if (!workspace) {
+                return Promise.resolve(undefined)
+            }
+
+            let resolution = workspaceResolutions.get(workspace)
+            if (!resolution) {
+                resolution = executeWithRetry(() =>
+                    workspaceResolver.resolveWorkspace(client, workspace),
+                ).then(({ workspaceId }) => workspaceId)
+                workspaceResolutions.set(workspace, resolution)
+            }
+
+            return resolution
         }
 
         // Each project is created independently: a failure on one (for example, the API
@@ -83,9 +88,9 @@ const addProjects = {
         // Per-item calls go through executeWithRetry so transient 5xx failures still get
         // the same backoff the registerTool() wrapper applies to single-call tools.
         const settled = await Promise.allSettled(
-            projects.map(({ workspace, ...rest }) => {
-                const workspaceId = workspace ? resolvedWorkspaces.get(workspace) : undefined
-                return executeWithRetry(() =>
+            projects.map(async ({ workspace, ...rest }) => {
+                const workspaceId = await resolveWorkspaceId(workspace)
+                return await executeWithRetry(() =>
                     client.addProject({ ...rest, ...(workspaceId ? { workspaceId } : {}) }),
                 )
             }),
@@ -100,16 +105,10 @@ const addProjects = {
             } else {
                 failures.push({
                     item: projects[index]?.name ?? `Project ${index + 1}`,
-                    error: formatToolExecutionError(result.reason),
+                    error: formatBatchItemError(result.reason),
                 })
             }
         })
-
-        // If every project failed, surface a hard error instead of a misleading success.
-        if (newProjects.length === 0 && failures.length > 0) {
-            const details = failures.map((f) => `"${f.item}": ${f.error}`).join('; ')
-            throw new Error(`All ${failures.length} project(s) failed to create: ${details}`)
-        }
 
         const mappedProjects = newProjects.map(mapProject)
         const textContent = generateTextContent({ projects: newProjects, failures })
