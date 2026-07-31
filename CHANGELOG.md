@@ -1,3 +1,9 @@
+## [12.2.2](https://github.com/Doist/todoist-mcp/compare/v12.2.1...v12.2.2) (2026-07-31)
+
+### Bug Fixes
+
+* **errors:** Treat 403 as a non-retryable permission decision ([#503](https://github.com/Doist/todoist-mcp/issues/503)) ([032934e](https://github.com/Doist/todoist-mcp/commit/032934e5dd2fcfeb9e5dc8e3373fd940df190fdc))
+
 ## [12.2.1](https://github.com/Doist/todoist-mcp/compare/v12.2.0...v12.2.1) (2026-07-31)
 
 ### Bug Fixes
