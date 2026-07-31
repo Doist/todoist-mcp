@@ -51,6 +51,12 @@ export const DisplayLimits = {
     BATCH_OPERATION_THRESHOLD: 10,
 } as const
 
+// Batch Operation Limits
+export const BatchLimits = {
+    /** Maximum tasks accepted by one task create or update operation */
+    TASKS_PER_OPERATION: 25,
+} as const
+
 // Response Builder Configuration
 export const ResponseConfig = {
     /** Maximum characters per line in text responses */

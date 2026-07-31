@@ -4,6 +4,7 @@ import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
 import { isInboxProjectId, mapTask } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
+import { BatchLimits } from '../utils/constants.js'
 import { DurationParseError, parseDuration } from '../utils/duration-parser.js'
 import { FailureSchema, TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import {
@@ -16,7 +17,7 @@ import { optionalString } from '../utils/schema-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 // Maximum tasks per operation to prevent abuse and timeouts
-const MAX_TASKS_PER_OPERATION = 25
+const MAX_TASKS_PER_OPERATION = BatchLimits.TASKS_PER_OPERATION
 
 const TaskSchema = z.object({
     content: z
