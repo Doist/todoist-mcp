@@ -1150,13 +1150,13 @@ describe(`${UPDATE_TASKS} tool`, () => {
             expect(structuredContent.totalCount).toBe(1)
             expect(structuredContent.updatedTaskIds).toEqual(['ok-task'])
 
-            // The failure is reported per-task, surfacing the error's message (matching the
-            // add-tasks/complete-tasks pattern). The SDK's moveTask puts the generic status
-            // text in error.message; the API objection lives in responseData and is not
-            // echoed per item.
+            // The failure is reported per-task, preserving the API's specific objection
+            // instead of the SDK's generic HTTP status message.
             expect(structuredContent.failures).toHaveLength(1)
             expect(structuredContent.failures[0]?.item).toBe('bad-task')
-            expect(structuredContent.failures[0]?.error).toBe('Request failed with status code 403')
+            expect(structuredContent.failures[0]?.error).toContain(
+                'Not allowed to move objects out of a workspace',
+            )
             expect(structuredContent.appliedOperations).toEqual({
                 updateCount: 1,
                 skippedCount: 0,
@@ -1267,13 +1267,15 @@ describe(`${UPDATE_TASKS} tool`, () => {
             })
         })
 
-        it('reports the whole task as a failure when the move succeeds but the field update fails', async () => {
+        it('reports a partial outcome when the move succeeds but the field update fails', async () => {
             // Combined move + field update where the move succeeds but updateTask rejects.
-            // The task is reported as a single failure — we do not surface which part
-            // applied.
-            mockTodoistApi.moveTask.mockResolvedValue(
-                createMockTask({ id: 'move-update-task', projectId: 'new-project-id' }),
-            )
+            // The response must disclose the move because retrying the whole item could
+            // otherwise apply the same operation twice.
+            const movedTask = createMockTask({
+                id: 'move-update-task',
+                projectId: 'new-project-id',
+            })
+            mockTodoistApi.moveTask.mockResolvedValue(movedTask)
             mockTodoistApi.updateTask.mockRejectedValue(new Error('API Error: Invalid priority'))
 
             const result = await updateTasks.execute(
@@ -1290,15 +1292,17 @@ describe(`${UPDATE_TASKS} tool`, () => {
             )
 
             const { structuredContent } = result
-            // The task is not reported as updated...
-            expect(structuredContent.tasks).toHaveLength(0)
-            expect(structuredContent.updatedTaskIds).toEqual([])
-            // ...it is a single failure carrying the field-update error.
+            expect(structuredContent.tasks).toEqual([
+                expect.objectContaining({ id: 'move-update-task', projectId: 'new-project-id' }),
+            ])
+            expect(structuredContent.updatedTaskIds).toEqual(['move-update-task'])
             expect(structuredContent.failures).toHaveLength(1)
             expect(structuredContent.failures[0]?.item).toBe('move-update-task')
-            expect(structuredContent.failures[0]?.error).toContain('API Error: Invalid priority')
+            expect(structuredContent.failures[0]?.error).toBe(
+                'Move applied; field update failed: API Error: Invalid priority',
+            )
             expect(structuredContent.appliedOperations).toEqual({
-                updateCount: 0,
+                updateCount: 1,
                 skippedCount: 0,
                 failureCount: 1,
             })

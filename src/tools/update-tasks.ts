@@ -1,6 +1,7 @@
 import type { Task, TodoistApi, UpdateTaskArgs } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
 import { createMoveTaskArgs, mapTask, resolveInboxProjectId } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
 import { DisplayLimits } from '../utils/constants.js'
@@ -87,6 +88,11 @@ const TasksUpdateSchema = z.object({
 
 type TaskUpdate = z.infer<typeof TasksUpdateSchema>
 
+type TaskUpdateOutcome =
+    | { kind: 'skipped' }
+    | { kind: 'updated'; task: Task }
+    | { kind: 'partial'; task: Task; error: string }
+
 const DUE_DATE_REMOVAL_ALIASES = ['remove', 'no date'] as const
 const DEADLINE_REMOVAL_ALIASES = ['remove', 'no date', 'no deadline'] as const
 const DUE_DATE_REMOVAL_VALUE = 'no date' as const
@@ -146,18 +152,24 @@ const updateTasks = {
 
         for (const [index, result] of settled.entries()) {
             if (result.status === 'fulfilled') {
-                if (result.value === undefined) {
+                if (result.value.kind === 'skipped') {
                     skippedCount++
-                } else {
-                    updatedTasks.push(result.value)
+                    continue
+                }
+
+                updatedTasks.push(result.value.task)
+                if (result.value.kind === 'partial') {
+                    failures.push({
+                        item: tasks[index]?.id ?? `Task ${index + 1}`,
+                        error: result.value.error,
+                    })
                 }
                 continue
             }
 
             failures.push({
                 item: tasks[index]?.id ?? `Task ${index + 1}`,
-                error:
-                    result.reason instanceof Error ? result.reason.message : String(result.reason),
+                error: formatBatchItemError(result.reason),
             })
         }
 
@@ -191,14 +203,14 @@ const updateTasks = {
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
 
 /**
- * Applies a single task's update and/or move. Returns the resulting task, or `undefined`
- * when the task carries no changes to make (skipped). Throws on any API or validation
- * error, so the caller records the whole task as a per-task failure without aborting the
- * rest of the batch.
+ * Applies a single task's update and/or move. A move followed by a failed field update is
+ * returned as a partial outcome because the move already changed server state. Other API
+ * and validation errors throw so the caller records the task as a failure without aborting
+ * the rest of the batch.
  */
-async function processTaskUpdate(task: TaskUpdate, client: TodoistApi): Promise<Task | undefined> {
+async function processTaskUpdate(task: TaskUpdate, client: TodoistApi): Promise<TaskUpdateOutcome> {
     if (!hasUpdatesToMake(task)) {
-        return undefined
+        return { kind: 'skipped' }
     }
 
     const {
@@ -279,17 +291,31 @@ async function processTaskUpdate(task: TaskUpdate, client: TodoistApi): Promise<
 
     // If no move parameters are provided, use updateTask without moveTask
     if (!resolvedProjectId && !sectionId && !parentId) {
-        return await executeWithRetry(() => client.updateTask(id, updateArgs))
+        return {
+            kind: 'updated',
+            task: await executeWithRetry(() => client.updateTask(id, updateArgs)),
+        }
     }
 
     const moveArgs = createMoveTaskArgs(id, resolvedProjectId, sectionId, parentId)
     const movedTask = await executeWithRetry(() => client.moveTask(id, moveArgs))
 
     if (Object.keys(updateArgs).length > 0) {
-        return await executeWithRetry(() => client.updateTask(id, updateArgs))
+        try {
+            return {
+                kind: 'updated',
+                task: await executeWithRetry(() => client.updateTask(id, updateArgs)),
+            }
+        } catch (error) {
+            return {
+                kind: 'partial',
+                task: movedTask,
+                error: `Move applied; field update failed: ${formatBatchItemError(error)}`,
+            }
+        }
     }
 
-    return movedTask
+    return { kind: 'updated', task: movedTask }
 }
 
 /**
