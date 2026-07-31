@@ -139,7 +139,7 @@ You have access to comprehensive Todoist management tools for personal productiv
 
 7. **Pagination**: Large result sets use cursor-based pagination. Use limit parameter to control result size (default varies by tool).
 
-8. **Error Handling**: All tools provide detailed error messages and next-step suggestions. Pay attention to validation feedback for corrective actions. Batch tools (e.g. add-tasks, update-tasks) report per-item \`failures\` alongside successes — a single failed item does not undo the rest of the batch. When an item fails, **do not retry the whole batch**; inspect its failure reason and only re-send the items that are actually fixable. A \`403 Forbidden\` is not a transient/rate-limit error, so retrying an identical request will keep failing. A scope/access denial (e.g. "Insufficient Token scope") needs a token or account with the required access; a permission decision (e.g. a workspace task cannot move to a personal or different-workspace project) requires changing the request or target.
+8. **Error Handling**: All tools provide detailed error messages and next-step suggestions. Pay attention to validation feedback for corrective actions. Batch tools (e.g. add-tasks, update-tasks) report per-item \`failures\` alongside successes — a single failed item does not undo the rest of the batch. When an item fails, **do not retry the whole batch**; inspect its failure reason and only re-send the items that are actually fixable.
 
 ### Common Workflows:
 
