@@ -324,8 +324,15 @@ function getNextStepHint(error: ApiErrorInfo): string {
     const { statusCode } = error
     const hasFieldHints = error.fieldHints.length > 0
 
-    if (statusCode === 401 || statusCode === 403) {
-        return 'Verify your API token and access permissions, then retry.'
+    if (statusCode === 401) {
+        return 'Authentication failed. Verify your API token, then retry.'
+    }
+
+    if (statusCode === 403) {
+        // 403 is not transient. It can denote either a scope/access denial (use a
+        // token/account with the required access) or a permission decision such as a
+        // workspace-boundary move (change the request or target).
+        return "Access denied. Retrying the same request will not help. If it's a scope/access problem (for example, insufficient token scope), use a token or account with the required access. Otherwise, change the request or target instead."
     }
 
     if (statusCode === 404) {
