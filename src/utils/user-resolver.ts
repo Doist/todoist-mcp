@@ -49,15 +49,9 @@ export class UserResolver {
 
         const trimmedInput = nameOrId.trim()
 
-        // Check cache first
-        const cached = userResolutionCache.get(trimmedInput)
-        if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-            return cached.result
-        }
-
         // Handle "me" keyword — resolve to the current authenticated user
         // Case-insensitive: LLMs may send "Me", "ME", etc.
-        // Not cached: the cache is process-global and "me" resolves differently per client/account
+        // Not cached because it always reflects the current authenticated user
         if (trimmedInput.toLowerCase() === SELF_USER_KEYWORD) {
             try {
                 const currentUser = await client.getUser()
@@ -80,8 +74,19 @@ export class UserResolver {
                 !/^[a-z]+[\s-]/.test(trimmedInput) &&
                 /[0-9_]/.test(trimmedInput))
         ) {
-            const result = { userId: trimmedInput, displayName: trimmedInput, email: trimmedInput }
-            userResolutionCache.set(trimmedInput, { result, timestamp: Date.now() })
+            return { userId: trimmedInput, displayName: trimmedInput, email: trimmedInput }
+        }
+
+        const cacheKey = await this.getCacheKey(client, `user_${trimmedInput}`)
+        const cached = cacheKey ? userResolutionCache.get(cacheKey) : undefined
+        if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+            return cached.result
+        }
+
+        const cacheResult = (result: ResolvedUser | null) => {
+            if (cacheKey) {
+                userResolutionCache.set(cacheKey, { result, timestamp: Date.now() })
+            }
             return result
         }
 
@@ -109,9 +114,7 @@ export class UserResolver {
             }
 
             if (allCollaborators.length === 0) {
-                const result = null // No users found (no current user, no shared projects)
-                userResolutionCache.set(trimmedInput, { result, timestamp: Date.now() })
-                return result
+                return cacheResult(null)
             }
 
             const searchTerm = nameOrId.toLowerCase().trim()
@@ -119,52 +122,58 @@ export class UserResolver {
             // Try exact ID match first
             let match = allCollaborators.find((c) => c.id === trimmedInput)
             if (match) {
-                const result = { userId: match.id, displayName: match.name, email: match.email }
-                userResolutionCache.set(trimmedInput, { result, timestamp: Date.now() })
-                return result
+                return cacheResult({
+                    userId: match.id,
+                    displayName: match.name,
+                    email: match.email,
+                })
             }
 
             // Try exact name match
             match = allCollaborators.find((c) => c.name.toLowerCase() === searchTerm)
             if (match) {
-                const result = { userId: match.id, displayName: match.name, email: match.email }
-                userResolutionCache.set(trimmedInput, { result, timestamp: Date.now() })
-                return result
+                return cacheResult({
+                    userId: match.id,
+                    displayName: match.name,
+                    email: match.email,
+                })
             }
 
             // Try exact email match
             match = allCollaborators.find((c) => c.email.toLowerCase() === searchTerm)
             if (match) {
-                const result = { userId: match.id, displayName: match.name, email: match.email }
-                userResolutionCache.set(trimmedInput, { result, timestamp: Date.now() })
-                return result
+                return cacheResult({
+                    userId: match.id,
+                    displayName: match.name,
+                    email: match.email,
+                })
             }
 
             // Try partial name match (contains)
             match = allCollaborators.find((c) => c.name.toLowerCase().includes(searchTerm))
             if (match) {
-                const result = { userId: match.id, displayName: match.name, email: match.email }
-                userResolutionCache.set(trimmedInput, { result, timestamp: Date.now() })
-                return result
+                return cacheResult({
+                    userId: match.id,
+                    displayName: match.name,
+                    email: match.email,
+                })
             }
 
             // Try partial email match
             match = allCollaborators.find((c) => c.email.toLowerCase().includes(searchTerm))
             if (match) {
-                const result = { userId: match.id, displayName: match.name, email: match.email }
-                userResolutionCache.set(trimmedInput, { result, timestamp: Date.now() })
-                return result
+                return cacheResult({
+                    userId: match.id,
+                    displayName: match.name,
+                    email: match.email,
+                })
             }
 
             // No match found
-            const result = null
-            userResolutionCache.set(trimmedInput, { result, timestamp: Date.now() })
-            return result
+            return cacheResult(null)
         } catch (_error) {
             // If we can't fetch collaborators, return null instead of dangerous fallback
-            const result = null
-            userResolutionCache.set(trimmedInput, { result, timestamp: Date.now() })
-            return result
+            return cacheResult(null)
         }
     }
 
@@ -191,9 +200,8 @@ export class UserResolver {
         client: TodoistApi,
         projectId: string,
     ): Promise<ProjectCollaborator[]> {
-        // Check cache first
-        const cacheKey = `project_${projectId}`
-        const cached = collaboratorsCache.get(cacheKey)
+        const cacheKey = await this.getCacheKey(client, `project_${projectId}`)
+        const cached = cacheKey ? collaboratorsCache.get(cacheKey) : undefined
         if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
             return cached.result
         }
@@ -205,10 +213,12 @@ export class UserResolver {
 
             const validCollaborators = collaborators.filter((c) => c?.id && c.name && c.email)
 
-            collaboratorsCache.set(cacheKey, {
-                result: validCollaborators,
-                timestamp: Date.now(),
-            })
+            if (cacheKey) {
+                collaboratorsCache.set(cacheKey, {
+                    result: validCollaborators,
+                    timestamp: Date.now(),
+                })
+            }
 
             return validCollaborators
         } catch (_error) {
@@ -221,9 +231,8 @@ export class UserResolver {
      * Get all collaborators from all shared projects, deduplicated by user ID.
      */
     async getAllCollaborators(client: TodoistApi): Promise<ProjectCollaborator[]> {
-        // Check cache first
-        const cacheKey = 'all_collaborators'
-        const cached = collaboratorsCache.get(cacheKey)
+        const cacheKey = await this.getCacheKey(client, 'all_collaborators')
+        const cached = cacheKey ? collaboratorsCache.get(cacheKey) : undefined
         if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
             return cached.result
         }
@@ -240,7 +249,9 @@ export class UserResolver {
 
             if (sharedProjects.length === 0) {
                 const result: ProjectCollaborator[] = []
-                collaboratorsCache.set(cacheKey, { result, timestamp: Date.now() })
+                if (cacheKey) {
+                    collaboratorsCache.set(cacheKey, { result, timestamp: Date.now() })
+                }
                 return result
             }
 
@@ -266,15 +277,26 @@ export class UserResolver {
                 // Skip failed projects, continue with others
             }
 
-            collaboratorsCache.set(cacheKey, {
-                result: allCollaborators,
-                timestamp: Date.now(),
-            })
+            if (cacheKey) {
+                collaboratorsCache.set(cacheKey, {
+                    result: allCollaborators,
+                    timestamp: Date.now(),
+                })
+            }
 
             return allCollaborators
         } catch (_error) {
             // Return empty array on error, don't cache failed requests
             return []
+        }
+    }
+
+    private async getCacheKey(client: TodoistApi, cacheKey: string): Promise<string | null> {
+        try {
+            const currentUser = await client.getUser()
+            return currentUser?.id ? `${currentUser.id}:${cacheKey}` : null
+        } catch (_error) {
+            return null
         }
     }
 
