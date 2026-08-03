@@ -1,3 +1,9 @@
+## [12.2.3](https://github.com/Doist/todoist-mcp/compare/v12.2.2...v12.2.3) (2026-08-03)
+
+### Bug Fixes
+
+* **retry:** add full jitter to backoff delays ([#546](https://github.com/Doist/todoist-mcp/issues/546)) ([f9c8e17](https://github.com/Doist/todoist-mcp/commit/f9c8e17fd4b5ce9769c4e7632a314b04a3bea210))
+
 ## [12.2.2](https://github.com/Doist/todoist-mcp/compare/v12.2.1...v12.2.2) (2026-07-31)
 
 ### Bug Fixes
