@@ -12,6 +12,8 @@ import { updateTasks } from './update-tasks.js'
 const mockTodoistApi = {
     updateTask: vi.fn(),
     moveTask: vi.fn(),
+    moveTasks: vi.fn(),
+    getTasks: vi.fn(),
     getUser: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
@@ -24,6 +26,9 @@ describe(`${UPDATE_TASKS} tool`, () => {
         // fallback limiters — reset them so queued work can't leak between cases.
         resetLimitersForTesting()
         mockTodoistApi.getUser.mockResolvedValue(createMockUser())
+        // No current state known by default, so every requested move is performed —
+        // the same behaviour as not checking at all.
+        mockTodoistApi.getTasks.mockResolvedValue({ results: [], nextCursor: null })
     })
 
     async function expectSingleFailure(
@@ -40,6 +45,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
             updateCount: 0,
             skippedCount: 0,
             failureCount: 1,
+            redundantMovesSkipped: 0,
         })
         return result
     }
@@ -814,17 +820,14 @@ describe(`${UPDATE_TASKS} tool`, () => {
 
     describe('task organisation', () => {
         describe('organizing multiple tasks', () => {
-            it('should move multiple tasks to the same destination', async () => {
+            it('should move tasks sharing a destination in a single request', async () => {
                 const sectionId = '6cfPqr9xgvmgW6J0'
                 const mockResponses = [
-                    createMockTask({ id: '6cPuJm79x4QhMwR4', content: 'First task', sectionId }),
+                    createMockTask({ id: '6cPHJm59x4WhMwR4', content: 'First task', sectionId }),
                     createMockTask({ id: '6cPHJj2MV4HMj92W', content: 'Second task', sectionId }),
                 ]
 
-                // Each task should be moved individually to avoid bulk operation issues
-                mockTodoistApi.moveTask
-                    .mockResolvedValueOnce(mockResponses[0] as Task)
-                    .mockResolvedValueOnce(mockResponses[1] as Task)
+                mockTodoistApi.moveTasks.mockResolvedValue(mockResponses as Task[])
 
                 const result = await updateTasks.execute(
                     {
@@ -836,14 +839,14 @@ describe(`${UPDATE_TASKS} tool`, () => {
                     mockTodoistApi,
                 )
 
-                // Should call moveTask twice, once for each task individually
-                expect(mockTodoistApi.moveTask).toHaveBeenCalledTimes(2)
-                expect(mockTodoistApi.moveTask).toHaveBeenNthCalledWith(1, '6cPHJm59x4WhMwR4', {
-                    sectionId,
-                })
-                expect(mockTodoistApi.moveTask).toHaveBeenNthCalledWith(2, '6cPHJj2MV4HMj92W', {
-                    sectionId,
-                })
+                // One request carrying both moves, rather than two concurrent requests
+                // contending on the same tree.
+                expect(mockTodoistApi.moveTasks).toHaveBeenCalledTimes(1)
+                expect(mockTodoistApi.moveTasks).toHaveBeenCalledWith(
+                    ['6cPHJm59x4WhMwR4', '6cPHJj2MV4HMj92W'],
+                    { sectionId },
+                )
+                expect(mockTodoistApi.moveTask).not.toHaveBeenCalled()
                 expect(mockTodoistApi.updateTask).not.toHaveBeenCalled()
 
                 // Verify result structure
@@ -851,6 +854,10 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 const { structuredContent } = result
                 expect(structuredContent.tasks).toHaveLength(2)
                 expect(structuredContent.totalCount).toBe(2)
+                expect(structuredContent.updatedTaskIds).toEqual([
+                    '6cPHJm59x4WhMwR4',
+                    '6cPHJj2MV4HMj92W',
+                ])
             })
 
             it('should move multiple tasks with different destinations', async () => {
@@ -1149,6 +1156,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 updateCount: 1,
                 skippedCount: 0,
                 failureCount: 1,
+                redundantMovesSkipped: 0,
             })
 
             // The text content surfaces the per-task failure alongside the success.
@@ -1190,6 +1198,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 updateCount: 0,
                 skippedCount: 0,
                 failureCount: 2,
+                redundantMovesSkipped: 0,
             })
             expect(result.textContent).toContain('Updated 0 tasks')
             expect(result.textContent).toContain('Failed (2)')
@@ -1216,6 +1225,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 updateCount: 1,
                 skippedCount: 1,
                 failureCount: 0,
+                redundantMovesSkipped: 0,
             })
         })
 
@@ -1252,6 +1262,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 updateCount: 0,
                 skippedCount: 1,
                 failureCount: 1,
+                redundantMovesSkipped: 0,
             })
         })
 
@@ -1294,6 +1305,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 updateCount: 1,
                 skippedCount: 0,
                 failureCount: 1,
+                redundantMovesSkipped: 0,
             })
         })
 
@@ -1328,6 +1340,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 updateCount: 1,
                 skippedCount: 0,
                 failureCount: 4,
+                redundantMovesSkipped: 0,
             })
 
             // ...but the text summary shows only the first 3 and notes the remainder.
@@ -1452,6 +1465,471 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 updateTasks.execute({ tasks: makeTasks(26) }, mockTodoistApi),
             ).rejects.toThrow('Too big')
             expect(mockTodoistApi.updateTask).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('redundant moves', () => {
+        const TASK_ID = 'task-in-place'
+        const PROJECT_ID = 'project-abc'
+
+        /** Makes the prefetch report `task` as the current state of its id. */
+        function currentlyIs(task: Task) {
+            mockTodoistApi.getTasks.mockResolvedValue({ results: [task], nextCursor: null })
+        }
+
+        it('skips the move when the caller echoes back the current project', async () => {
+            const task = createMockTask({
+                id: TASK_ID,
+                projectId: PROJECT_ID,
+                sectionId: null,
+                parentId: null,
+            })
+            currentlyIs(task)
+            mockTodoistApi.updateTask.mockResolvedValue({ ...task, content: 'renamed' })
+
+            const { structuredContent, textContent } = await updateTasks.execute(
+                { tasks: [{ id: TASK_ID, projectId: PROJECT_ID, content: 'renamed' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.moveTask).not.toHaveBeenCalled()
+            expect(mockTodoistApi.moveTasks).not.toHaveBeenCalled()
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledWith(TASK_ID, { content: 'renamed' })
+            expect(structuredContent.tasks).toHaveLength(1)
+            expect(structuredContent.appliedOperations).toEqual({
+                updateCount: 1,
+                skippedCount: 0,
+                failureCount: 0,
+                redundantMovesSkipped: 1,
+            })
+            expect(textContent).toContain('1 already in requested destination')
+        })
+
+        it('writes nothing at all when the echoed project is the only change', async () => {
+            currentlyIs(
+                createMockTask({
+                    id: TASK_ID,
+                    projectId: PROJECT_ID,
+                    sectionId: null,
+                    parentId: null,
+                }),
+            )
+
+            const { structuredContent } = await updateTasks.execute(
+                { tasks: [{ id: TASK_ID, projectId: PROJECT_ID }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.moveTask).not.toHaveBeenCalled()
+            expect(mockTodoistApi.moveTasks).not.toHaveBeenCalled()
+            expect(mockTodoistApi.updateTask).not.toHaveBeenCalled()
+            expect(structuredContent.tasks).toHaveLength(0)
+            expect(structuredContent.appliedOperations).toEqual({
+                updateCount: 0,
+                skippedCount: 1,
+                failureCount: 0,
+                redundantMovesSkipped: 1,
+            })
+        })
+
+        it('still moves a task whose project matches but which sits in a section', async () => {
+            currentlyIs(
+                createMockTask({
+                    id: TASK_ID,
+                    projectId: PROJECT_ID,
+                    sectionId: 'section-1',
+                    parentId: null,
+                }),
+            )
+            mockTodoistApi.moveTask.mockResolvedValue(createMockTask({ id: TASK_ID }))
+
+            const { structuredContent } = await updateTasks.execute(
+                { tasks: [{ id: TASK_ID, projectId: PROJECT_ID }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.moveTask).toHaveBeenCalledWith(TASK_ID, {
+                projectId: PROJECT_ID,
+            })
+            expect(structuredContent.appliedOperations.redundantMovesSkipped).toBe(0)
+        })
+
+        it('still moves a task whose project matches but which has a parent', async () => {
+            currentlyIs(
+                createMockTask({
+                    id: TASK_ID,
+                    projectId: PROJECT_ID,
+                    sectionId: null,
+                    parentId: 'parent-1',
+                }),
+            )
+            mockTodoistApi.moveTask.mockResolvedValue(createMockTask({ id: TASK_ID }))
+
+            await updateTasks.execute(
+                { tasks: [{ id: TASK_ID, projectId: PROJECT_ID }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.moveTask).toHaveBeenCalledWith(TASK_ID, {
+                projectId: PROJECT_ID,
+            })
+        })
+
+        it('skips the move when the caller echoes back the current section', async () => {
+            currentlyIs(createMockTask({ id: TASK_ID, sectionId: 'section-1', parentId: null }))
+
+            const { structuredContent } = await updateTasks.execute(
+                { tasks: [{ id: TASK_ID, sectionId: 'section-1' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.moveTask).not.toHaveBeenCalled()
+            expect(structuredContent.appliedOperations.redundantMovesSkipped).toBe(1)
+        })
+
+        it('skips the move when the caller echoes back the current parent', async () => {
+            currentlyIs(createMockTask({ id: TASK_ID, parentId: 'parent-1' }))
+
+            const { structuredContent } = await updateTasks.execute(
+                { tasks: [{ id: TASK_ID, parentId: 'parent-1' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.moveTask).not.toHaveBeenCalled()
+            expect(structuredContent.appliedOperations.redundantMovesSkipped).toBe(1)
+        })
+
+        it('performs the real move when an unchanged project accompanies a section change', async () => {
+            currentlyIs(
+                createMockTask({
+                    id: TASK_ID,
+                    projectId: PROJECT_ID,
+                    sectionId: null,
+                    parentId: null,
+                }),
+            )
+            mockTodoistApi.moveTask.mockResolvedValue(createMockTask({ id: TASK_ID }))
+
+            const { structuredContent } = await updateTasks.execute(
+                { tasks: [{ id: TASK_ID, projectId: PROJECT_ID, sectionId: 'section-2' }] },
+                mockTodoistApi,
+            )
+
+            // Previously rejected as "only one of projectId, sectionId, or parentId".
+            expect(structuredContent.failures).toHaveLength(0)
+            expect(mockTodoistApi.moveTask).toHaveBeenCalledWith(TASK_ID, {
+                sectionId: 'section-2',
+            })
+        })
+
+        it('applies field updates when every echoed container is unchanged', async () => {
+            currentlyIs(
+                createMockTask({
+                    id: TASK_ID,
+                    projectId: PROJECT_ID,
+                    sectionId: 'section-1',
+                    parentId: null,
+                }),
+            )
+            mockTodoistApi.updateTask.mockResolvedValue(createMockTask({ id: TASK_ID }))
+
+            const { structuredContent } = await updateTasks.execute(
+                {
+                    tasks: [
+                        {
+                            id: TASK_ID,
+                            projectId: PROJECT_ID,
+                            sectionId: 'section-1',
+                            content: 'renamed',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(structuredContent.failures).toHaveLength(0)
+            expect(mockTodoistApi.moveTask).not.toHaveBeenCalled()
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledWith(TASK_ID, { content: 'renamed' })
+        })
+
+        it('reads current state once for the whole batch', async () => {
+            mockTodoistApi.moveTasks.mockResolvedValue([
+                createMockTask({ id: 'task-a', projectId: PROJECT_ID }),
+                createMockTask({ id: 'task-b', projectId: PROJECT_ID }),
+            ])
+
+            await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'task-a', projectId: PROJECT_ID },
+                        { id: 'task-b', projectId: PROJECT_ID },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getTasks).toHaveBeenCalledTimes(1)
+            // Comma-separated, not an array: the API rejects the JSON-array form the
+            // SDK would otherwise serialise.
+            expect(mockTodoistApi.getTasks).toHaveBeenNthCalledWith(1, {
+                ids: 'task-a,task-b',
+                limit: 25,
+            })
+        })
+
+        it('does not read current state when no task is being moved', async () => {
+            mockTodoistApi.updateTask.mockResolvedValue(createMockTask({ id: TASK_ID }))
+
+            await updateTasks.execute(
+                { tasks: [{ id: TASK_ID, content: 'renamed' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getTasks).not.toHaveBeenCalled()
+        })
+
+        it('moves anyway when the state read fails', async () => {
+            mockTodoistApi.getTasks.mockRejectedValue(new Error('boom'))
+            mockTodoistApi.moveTask.mockResolvedValue(createMockTask({ id: TASK_ID }))
+
+            const { structuredContent } = await updateTasks.execute(
+                { tasks: [{ id: TASK_ID, projectId: PROJECT_ID }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.moveTask).toHaveBeenCalledWith(TASK_ID, {
+                projectId: PROJECT_ID,
+            })
+            expect(structuredContent.failures).toHaveLength(0)
+        })
+
+        it('moves anyway when the task is missing from the state read', async () => {
+            currentlyIs(createMockTask({ id: 'a-different-task', projectId: PROJECT_ID }))
+            mockTodoistApi.moveTask.mockResolvedValue(createMockTask({ id: TASK_ID }))
+
+            await updateTasks.execute(
+                { tasks: [{ id: TASK_ID, projectId: PROJECT_ID }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.moveTask).toHaveBeenCalledWith(TASK_ID, {
+                projectId: PROJECT_ID,
+            })
+        })
+    })
+
+    describe('batched moves', () => {
+        const DESTINATION = 'project-target'
+        const IDS = ['task-a', 'task-b', 'task-c']
+
+        function forbidden() {
+            return Object.assign(new Error('Request failed with status code 403'), {
+                httpStatusCode: 403,
+                responseData: {
+                    error: 'Not allowed to move objects out of a workspace',
+                    error_tag: 'FORBIDDEN',
+                    http_code: 403,
+                },
+            })
+        }
+
+        it('sends one request per destination, not per task', async () => {
+            mockTodoistApi.moveTask.mockResolvedValue(createMockTask({ id: 'task-c' }))
+            mockTodoistApi.moveTasks.mockResolvedValue([
+                createMockTask({ id: 'task-a' }),
+                createMockTask({ id: 'task-b' }),
+            ])
+
+            await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'task-a', projectId: DESTINATION },
+                        { id: 'task-b', projectId: DESTINATION },
+                        { id: 'task-c', projectId: 'somewhere-else' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.moveTasks).toHaveBeenCalledTimes(1)
+            expect(mockTodoistApi.moveTasks).toHaveBeenCalledWith(['task-a', 'task-b'], {
+                projectId: DESTINATION,
+            })
+            // A lone move keeps the single-task endpoint.
+            expect(mockTodoistApi.moveTask).toHaveBeenCalledTimes(1)
+            expect(mockTodoistApi.moveTask).toHaveBeenCalledWith('task-c', {
+                projectId: 'somewhere-else',
+            })
+        })
+
+        it('reports only the tasks the batch failed to move', async () => {
+            mockTodoistApi.moveTasks.mockRejectedValue(forbidden())
+            mockTodoistApi.getTasks
+                // Before the move, all three are elsewhere.
+                .mockResolvedValueOnce({
+                    results: IDS.map((id) => createMockTask({ id, projectId: 'original-project' })),
+                    nextCursor: null,
+                })
+                // Two of the three commands landed before the batch reported a problem.
+                .mockResolvedValueOnce({
+                    results: [
+                        createMockTask({ id: 'task-a', projectId: DESTINATION }),
+                        createMockTask({ id: 'task-b', projectId: DESTINATION }),
+                        createMockTask({ id: 'task-c', projectId: 'original-project' }),
+                    ],
+                    nextCursor: null,
+                })
+
+            const { structuredContent } = await updateTasks.execute(
+                { tasks: IDS.map((id) => ({ id, projectId: DESTINATION })) },
+                mockTodoistApi,
+            )
+
+            expect(structuredContent.updatedTaskIds).toEqual(['task-a', 'task-b'])
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('task-c')
+            expect(structuredContent.failures[0]?.error).toContain(
+                'Not allowed to move objects out of a workspace',
+            )
+        })
+
+        it('does not apply field updates to a task whose move failed', async () => {
+            mockTodoistApi.moveTasks.mockRejectedValue(forbidden())
+            mockTodoistApi.getTasks
+                .mockResolvedValueOnce({
+                    results: IDS.map((id) => createMockTask({ id, projectId: 'original-project' })),
+                    nextCursor: null,
+                })
+                .mockResolvedValueOnce({
+                    results: [
+                        createMockTask({ id: 'task-a', projectId: DESTINATION }),
+                        createMockTask({ id: 'task-b', projectId: 'original-project' }),
+                        createMockTask({ id: 'task-c', projectId: 'original-project' }),
+                    ],
+                    nextCursor: null,
+                })
+            mockTodoistApi.updateTask.mockResolvedValue(
+                createMockTask({ id: 'task-a', content: 'renamed' }),
+            )
+
+            const { structuredContent } = await updateTasks.execute(
+                { tasks: IDS.map((id) => ({ id, projectId: DESTINATION, content: 'renamed' })) },
+                mockTodoistApi,
+            )
+
+            // Only the task that actually moved gets its content applied.
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledTimes(1)
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledWith('task-a', {
+                content: 'renamed',
+            })
+            expect(structuredContent.updatedTaskIds).toEqual(['task-a'])
+            expect(structuredContent.failures.map((failure) => failure.item)).toEqual([
+                'task-b',
+                'task-c',
+            ])
+        })
+
+        it('fails the whole group when the state read also fails', async () => {
+            mockTodoistApi.moveTasks.mockRejectedValue(forbidden())
+            mockTodoistApi.getTasks.mockRejectedValue(new Error('unavailable'))
+
+            const { structuredContent } = await updateTasks.execute(
+                { tasks: IDS.map((id) => ({ id, projectId: DESTINATION })) },
+                mockTodoistApi,
+            )
+
+            expect(structuredContent.tasks).toHaveLength(0)
+            expect(structuredContent.failures).toHaveLength(3)
+            expect(structuredContent.failures[0]?.error).toContain(
+                'Not allowed to move objects out of a workspace',
+            )
+        })
+
+        it('checks rather than assumes when the response omits a task', async () => {
+            mockTodoistApi.moveTasks.mockResolvedValue([
+                createMockTask({ id: 'task-a', projectId: DESTINATION }),
+                createMockTask({ id: 'task-b', projectId: DESTINATION }),
+            ])
+            mockTodoistApi.getTasks.mockResolvedValue({
+                results: [createMockTask({ id: 'task-c', projectId: 'original-project' })],
+                nextCursor: null,
+            })
+
+            const { structuredContent } = await updateTasks.execute(
+                { tasks: IDS.map((id) => ({ id, projectId: DESTINATION })) },
+                mockTodoistApi,
+            )
+
+            expect(structuredContent.updatedTaskIds).toEqual(['task-a', 'task-b'])
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('task-c')
+            expect(structuredContent.failures[0]?.error).toContain('not returned by the move')
+        })
+
+        it('reports a partial outcome when a batched move lands but its field update fails', async () => {
+            mockTodoistApi.moveTasks.mockResolvedValue([
+                createMockTask({ id: 'task-a', projectId: DESTINATION }),
+                createMockTask({ id: 'task-b', projectId: DESTINATION }),
+            ])
+            mockTodoistApi.updateTask
+                .mockResolvedValueOnce(createMockTask({ id: 'task-a', content: 'renamed a' }))
+                .mockRejectedValueOnce(new Error('API Error: update rejected'))
+
+            const { structuredContent } = await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'task-a', projectId: DESTINATION, content: 'renamed a' },
+                        { id: 'task-b', projectId: DESTINATION, content: 'renamed b' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(structuredContent.updatedTaskIds).toEqual(['task-a', 'task-b'])
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('task-b')
+            expect(structuredContent.failures[0]?.code).toBe('PARTIAL_MOVE_APPLIED')
+            expect(structuredContent.failures[0]?.error).toContain('Move applied')
+        })
+
+        it('resolves the inbox once for the whole batch', async () => {
+            const inboxProjectId = createMockUser().inboxProjectId
+            mockTodoistApi.moveTasks.mockResolvedValue([
+                createMockTask({ id: 'task-a', projectId: inboxProjectId }),
+                createMockTask({ id: 'task-b', projectId: inboxProjectId }),
+                createMockTask({ id: 'task-c', projectId: inboxProjectId }),
+            ])
+
+            await updateTasks.execute(
+                { tasks: IDS.map((id) => ({ id, projectId: 'inbox' })) },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getUser).toHaveBeenCalledTimes(1)
+            expect(mockTodoistApi.moveTasks).toHaveBeenCalledWith(IDS, {
+                projectId: inboxProjectId,
+            })
+        })
+
+        it('fails only the inbox-bound tasks when the inbox lookup fails', async () => {
+            mockTodoistApi.getUser.mockRejectedValue(new Error('API Error: user unavailable'))
+            mockTodoistApi.updateTask.mockResolvedValue(
+                createMockTask({ id: 'task-b', content: 'renamed' }),
+            )
+
+            const { structuredContent } = await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'task-a', projectId: 'inbox' },
+                        { id: 'task-b', content: 'renamed' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(structuredContent.updatedTaskIds).toEqual(['task-b'])
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('task-a')
         })
     })
 
