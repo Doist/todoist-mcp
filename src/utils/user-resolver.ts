@@ -77,7 +77,8 @@ export class UserResolver {
             return { userId: trimmedInput, displayName: trimmedInput, email: trimmedInput }
         }
 
-        const cacheKey = await this.getCacheKey(client, `user_${trimmedInput}`)
+        const cacheScope = await this.getCacheScope(client)
+        const cacheKey = this.getCacheKey(cacheScope, `user_${trimmedInput}`)
         const cached = cacheKey ? userResolutionCache.get(cacheKey) : undefined
         if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
             return cached.result
@@ -92,7 +93,7 @@ export class UserResolver {
 
         try {
             // Get all collaborators from shared projects
-            let allCollaborators = await this.getAllCollaborators(client)
+            let allCollaborators = await this.getAllCollaborators(client, cacheScope)
 
             // Try to get current user and prepend to collaborators list
             // This ensures the current user is found even if they have no shared projects
@@ -199,8 +200,11 @@ export class UserResolver {
     async getProjectCollaborators(
         client: TodoistApi,
         projectId: string,
+        cacheScope?: string | null,
     ): Promise<ProjectCollaborator[]> {
-        const cacheKey = await this.getCacheKey(client, `project_${projectId}`)
+        const resolvedCacheScope =
+            cacheScope === undefined ? await this.getCacheScope(client) : cacheScope
+        const cacheKey = this.getCacheKey(resolvedCacheScope, `project_${projectId}`)
         const cached = cacheKey ? collaboratorsCache.get(cacheKey) : undefined
         if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
             return cached.result
@@ -230,8 +234,13 @@ export class UserResolver {
     /**
      * Get all collaborators from all shared projects, deduplicated by user ID.
      */
-    async getAllCollaborators(client: TodoistApi): Promise<ProjectCollaborator[]> {
-        const cacheKey = await this.getCacheKey(client, 'all_collaborators')
+    async getAllCollaborators(
+        client: TodoistApi,
+        cacheScope?: string | null,
+    ): Promise<ProjectCollaborator[]> {
+        const resolvedCacheScope =
+            cacheScope === undefined ? await this.getCacheScope(client) : cacheScope
+        const cacheKey = this.getCacheKey(resolvedCacheScope, 'all_collaborators')
         const cached = cacheKey ? collaboratorsCache.get(cacheKey) : undefined
         if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
             return cached.result
@@ -260,7 +269,7 @@ export class UserResolver {
             const seenIds = new Set<string>()
 
             const collaboratorPromises = sharedProjects.map((project) =>
-                this.getProjectCollaborators(client, project.id),
+                this.getProjectCollaborators(client, project.id, resolvedCacheScope),
             )
 
             const collaboratorResults = await Promise.allSettled(collaboratorPromises)
@@ -291,13 +300,17 @@ export class UserResolver {
         }
     }
 
-    private async getCacheKey(client: TodoistApi, cacheKey: string): Promise<string | null> {
+    private async getCacheScope(client: TodoistApi): Promise<string | null> {
         try {
             const currentUser = await client.getUser()
-            return currentUser?.id ? `${currentUser.id}:${cacheKey}` : null
+            return currentUser?.id ?? null
         } catch (_error) {
             return null
         }
+    }
+
+    private getCacheKey(cacheScope: string | null, cacheKey: string): string | null {
+        return cacheScope ? `${cacheScope}:${cacheKey}` : null
     }
 
     /**

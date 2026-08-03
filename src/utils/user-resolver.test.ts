@@ -101,6 +101,110 @@ describe('UserResolver', () => {
             // Only the two shared projects should have been queried for collaborators.
             expect(mockClient.getProjectCollaborators).toHaveBeenCalledTimes(2)
             expect(collaborators.map((c) => c.id).sort()).toEqual(['user-p1', 'user-p2'])
+            expect(mockClient.getUser).toHaveBeenCalledOnce()
+        })
+
+        it('keeps cached collaborators isolated between authenticated accounts', async () => {
+            const clientA = {
+                getUser: vi.fn().mockResolvedValue({
+                    id: 'account-a',
+                    fullName: 'Account A',
+                    email: 'a@example.com',
+                }),
+                getProjects: vi.fn().mockResolvedValue({
+                    results: [{ id: 'project-a', isShared: true }],
+                    nextCursor: null,
+                }),
+                getProjectCollaborators: vi.fn().mockResolvedValue({
+                    results: [{ id: 'collaborator-a', name: 'Alice', email: 'alice@example.com' }],
+                    nextCursor: null,
+                }),
+            } as unknown as Mocked<TodoistApi>
+            const clientB = {
+                getUser: vi.fn().mockResolvedValue({
+                    id: 'account-b',
+                    fullName: 'Account B',
+                    email: 'b@example.com',
+                }),
+                getProjects: vi.fn().mockResolvedValue({
+                    results: [{ id: 'project-b', isShared: true }],
+                    nextCursor: null,
+                }),
+                getProjectCollaborators: vi.fn().mockResolvedValue({
+                    results: [{ id: 'collaborator-b', name: 'Bob', email: 'bob@example.com' }],
+                    nextCursor: null,
+                }),
+            } as unknown as Mocked<TodoistApi>
+
+            await expect(resolver.getAllCollaborators(clientA)).resolves.toMatchObject([
+                { id: 'collaborator-a' },
+            ])
+            await expect(resolver.getAllCollaborators(clientB)).resolves.toMatchObject([
+                { id: 'collaborator-b' },
+            ])
+
+            expect(clientB.getProjects).toHaveBeenCalledOnce()
+            expect(clientB.getProjectCollaborators).toHaveBeenCalledWith('project-b')
+        })
+    })
+
+    describe('resolveUser', () => {
+        it('keeps cached user resolutions isolated between authenticated accounts', async () => {
+            const clientA = {
+                getUser: vi.fn().mockResolvedValue({
+                    id: 'account-a',
+                    fullName: 'Account A',
+                    email: 'a@example.com',
+                }),
+                getProjects: vi.fn().mockResolvedValue({
+                    results: [{ id: 'project-a', isShared: true }],
+                    nextCursor: null,
+                }),
+                getProjectCollaborators: vi.fn().mockResolvedValue({
+                    results: [{ id: 'alex-a', name: 'Alex', email: 'alex-a@example.com' }],
+                    nextCursor: null,
+                }),
+            } as unknown as Mocked<TodoistApi>
+            const clientB = {
+                getUser: vi.fn().mockResolvedValue({
+                    id: 'account-b',
+                    fullName: 'Account B',
+                    email: 'b@example.com',
+                }),
+                getProjects: vi.fn().mockResolvedValue({
+                    results: [{ id: 'project-b', isShared: true }],
+                    nextCursor: null,
+                }),
+                getProjectCollaborators: vi.fn().mockResolvedValue({
+                    results: [{ id: 'alex-b', name: 'Alex', email: 'alex-b@example.com' }],
+                    nextCursor: null,
+                }),
+            } as unknown as Mocked<TodoistApi>
+
+            await expect(resolver.resolveUser(clientA, 'Alex')).resolves.toMatchObject({
+                userId: 'alex-a',
+            })
+            await expect(resolver.resolveUser(clientB, 'Alex')).resolves.toMatchObject({
+                userId: 'alex-b',
+            })
+        })
+
+        it('resolves users without caching when the authenticated identity is unavailable', async () => {
+            mockClient.getUser.mockRejectedValue(new Error('Auth unavailable'))
+            mockClient.getProjects = vi.fn().mockResolvedValue({
+                results: [{ id: 'project-1', isShared: true }],
+                nextCursor: null,
+            }) as unknown as typeof mockClient.getProjects
+            mockClient.getProjectCollaborators = vi.fn().mockResolvedValue({
+                results: [{ id: 'ada-id', name: 'Ada', email: 'ada@example.com' }],
+                nextCursor: null,
+            }) as unknown as typeof mockClient.getProjectCollaborators
+
+            await expect(resolver.resolveUser(mockClient, 'Ada')).resolves.toEqual({
+                userId: 'ada-id',
+                displayName: 'Ada',
+                email: 'ada@example.com',
+            })
         })
     })
 })
