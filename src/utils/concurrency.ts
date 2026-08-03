@@ -111,6 +111,9 @@ function createLimiterPair(): LimiterPair {
  * Limiters are keyed by account rather than by client instance because the HTTP
  * transport builds a fresh `TodoistApi` for every request — instance-keyed
  * limiters would let concurrent requests for one account fan out without bound.
+ *
+ * This map lives in one process, so the limits it enforces are per process rather
+ * than per account globally. See the note on `ConcurrencyLimits`.
  */
 const limitersByAccount = new Map<string, LimiterPair>()
 

@@ -58,18 +58,28 @@ export const BatchLimits = {
 } as const
 
 // Concurrency Limits
+//
+// These bound in-flight requests per account **within one process**. Nothing is
+// shared between processes, so a deployment running N instances of this server
+// allows up to N times these numbers for a single account: requests for one
+// account are spread across instances by the load balancer, and a rolling
+// release temporarily doubles the instance count. Enforcing a true global
+// ceiling would need shared state, which this server deliberately does not have.
+// The purpose here is to stop one call, or one caller's parallel calls, from
+// fanning out without limit — not to promise the API an absolute number.
 export const ConcurrencyLimits = {
     /**
-     * In-flight task-move requests per account.
+     * In-flight task-move requests per account, per process.
      *
      * Kept at 1 because the API locks the whole task tree for a move, and a tree
      * spans a task's source as well as its destination — two moves of sibling
      * subtasks contend even when they target different projects, and the loser
      * fails. Batching same-destination moves into a single request means
-     * serialising costs little in practice.
+     * serialising costs little in practice. One per process is the smallest
+     * contribution a process can make; see the note above for the global picture.
      */
     TASK_MOVES: 1,
-    /** In-flight non-move write requests per account. */
+    /** In-flight non-move write requests per account, per process. */
     WRITES: 4,
     /**
      * How long a request may wait for a slot before it is abandoned unsent.
