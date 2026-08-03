@@ -13,25 +13,86 @@ export type ProjectCollaborator = {
     email: string
 }
 
-// User resolution cache for performance with TTL
-const userResolutionCache = new Map<
-    string,
-    {
-        result: ResolvedUser | null
-        timestamp: number
-    }
->()
-
-// Project collaborators cache
-const collaboratorsCache = new Map<
-    string,
-    {
-        result: ProjectCollaborator[]
-        timestamp: number
-    }
->()
-
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+const MAX_USER_RESOLUTION_CACHE_ENTRIES = 10_000
+const MAX_COLLABORATORS_CACHE_ENTRIES = 1_000
+
+type CacheEntry<T> = {
+    result: T
+    timestamp: number
+}
+
+/**
+ * A bounded, TTL-aware LRU cache. Expired entries are removed when read and
+ * when space is needed; the least recently used live entry is then evicted.
+ */
+export class BoundedTtlCache<T> {
+    private readonly entries = new Map<string, CacheEntry<T>>()
+
+    constructor(
+        private readonly maxEntries: number,
+        private readonly ttl: number,
+    ) {}
+
+    get(key: string): T | undefined {
+        const entry = this.entries.get(key)
+        if (!entry) return undefined
+
+        if (Date.now() - entry.timestamp >= this.ttl) {
+            this.entries.delete(key)
+            return undefined
+        }
+
+        // Reinsert so Map insertion order tracks least- to most-recent use.
+        this.entries.delete(key)
+        this.entries.set(key, entry)
+        return entry.result
+    }
+
+    set(key: string, result: T): void {
+        // Replacing an entry must not consume another cache slot.
+        this.entries.delete(key)
+
+        if (this.entries.size >= this.maxEntries) {
+            this.pruneExpiredEntries()
+        }
+        if (this.entries.size >= this.maxEntries) {
+            const oldestKey = this.entries.keys().next().value
+            if (oldestKey !== undefined) this.entries.delete(oldestKey)
+        }
+
+        this.entries.set(key, { result, timestamp: Date.now() })
+    }
+
+    clear(): void {
+        this.entries.clear()
+    }
+
+    get size(): number {
+        return this.entries.size
+    }
+
+    private pruneExpiredEntries(): void {
+        const now = Date.now()
+        for (const [key, entry] of this.entries) {
+            if (now - entry.timestamp >= this.ttl) {
+                this.entries.delete(key)
+            }
+        }
+    }
+}
+
+// User resolution cache for performance with TTL.
+const userResolutionCache = new BoundedTtlCache<ResolvedUser | null>(
+    MAX_USER_RESOLUTION_CACHE_ENTRIES,
+    CACHE_TTL,
+)
+
+// Project and aggregate collaborator caches store larger result sets, so use a lower limit.
+const collaboratorsCache = new BoundedTtlCache<ProjectCollaborator[]>(
+    MAX_COLLABORATORS_CACHE_ENTRIES,
+    CACHE_TTL,
+)
 
 /** Keyword that resolves to the current authenticated user. */
 export const SELF_USER_KEYWORD = 'me' as const
@@ -80,13 +141,11 @@ export class UserResolver {
         const cacheScope = await this.getCacheScope(client)
         const cacheKey = this.getCacheKey(cacheScope, `user_${trimmedInput}`)
         const cached = cacheKey ? userResolutionCache.get(cacheKey) : undefined
-        if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-            return cached.result
-        }
+        if (cached !== undefined) return cached
 
         const cacheResult = (result: ResolvedUser | null) => {
             if (cacheKey) {
-                userResolutionCache.set(cacheKey, { result, timestamp: Date.now() })
+                userResolutionCache.set(cacheKey, result)
             }
             return result
         }
@@ -206,9 +265,7 @@ export class UserResolver {
             cacheScope === undefined ? await this.getCacheScope(client) : cacheScope
         const cacheKey = this.getCacheKey(resolvedCacheScope, `project_${projectId}`)
         const cached = cacheKey ? collaboratorsCache.get(cacheKey) : undefined
-        if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-            return cached.result
-        }
+        if (cached !== undefined) return cached
 
         try {
             const response = await client.getProjectCollaborators(projectId)
@@ -218,10 +275,7 @@ export class UserResolver {
             const validCollaborators = collaborators.filter((c) => c?.id && c.name && c.email)
 
             if (cacheKey) {
-                collaboratorsCache.set(cacheKey, {
-                    result: validCollaborators,
-                    timestamp: Date.now(),
-                })
+                collaboratorsCache.set(cacheKey, validCollaborators)
             }
 
             return validCollaborators
@@ -242,9 +296,7 @@ export class UserResolver {
             cacheScope === undefined ? await this.getCacheScope(client) : cacheScope
         const cacheKey = this.getCacheKey(resolvedCacheScope, 'all_collaborators')
         const cached = cacheKey ? collaboratorsCache.get(cacheKey) : undefined
-        if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-            return cached.result
-        }
+        if (cached !== undefined) return cached
 
         try {
             // Get all projects to find shared ones (paginated — accounts with
@@ -259,7 +311,7 @@ export class UserResolver {
             if (sharedProjects.length === 0) {
                 const result: ProjectCollaborator[] = []
                 if (cacheKey) {
-                    collaboratorsCache.set(cacheKey, { result, timestamp: Date.now() })
+                    collaboratorsCache.set(cacheKey, result)
                 }
                 return result
             }
@@ -287,10 +339,7 @@ export class UserResolver {
             }
 
             if (cacheKey) {
-                collaboratorsCache.set(cacheKey, {
-                    result: allCollaborators,
-                    timestamp: Date.now(),
-                })
+                collaboratorsCache.set(cacheKey, allCollaborators)
             }
 
             return allCollaborators

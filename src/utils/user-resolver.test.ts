@@ -1,6 +1,50 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
-import { SELF_USER_KEYWORD, UserResolver } from './user-resolver.js'
+import { BoundedTtlCache, SELF_USER_KEYWORD, UserResolver } from './user-resolver.js'
+
+describe('BoundedTtlCache', () => {
+    it('evicts the least recently used entry at capacity', () => {
+        const cache = new BoundedTtlCache<string>(2, 1_000)
+
+        cache.set('first', 'one')
+        cache.set('second', 'two')
+        expect(cache.get('first')).toBe('one')
+
+        cache.set('third', 'three')
+
+        expect(cache.size).toBe(2)
+        expect(cache.get('first')).toBe('one')
+        expect(cache.get('second')).toBeUndefined()
+        expect(cache.get('third')).toBe('three')
+    })
+
+    it('removes expired entries when they are read', () => {
+        vi.useFakeTimers()
+        const cache = new BoundedTtlCache<string>(2, 1_000)
+        cache.set('expired', 'value')
+
+        vi.advanceTimersByTime(1_000)
+
+        expect(cache.get('expired')).toBeUndefined()
+        expect(cache.size).toBe(0)
+        vi.useRealTimers()
+    })
+
+    it('prunes expired entries before evicting live entries at capacity', () => {
+        vi.useFakeTimers()
+        const cache = new BoundedTtlCache<string>(2, 1_000)
+        cache.set('expired', 'old')
+        vi.advanceTimersByTime(1_000)
+        cache.set('live', 'current')
+        cache.set('new', 'next')
+
+        expect(cache.size).toBe(2)
+        expect(cache.get('expired')).toBeUndefined()
+        expect(cache.get('live')).toBe('current')
+        expect(cache.get('new')).toBe('next')
+        vi.useRealTimers()
+    })
+})
 
 describe('UserResolver', () => {
     let resolver: UserResolver
