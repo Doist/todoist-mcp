@@ -138,6 +138,17 @@ type PlannedMove = { item: PreparedTask; move: MoveTaskArgs }
 
 type MoveResult = { task: Task } | { error: string }
 
+/**
+ * A group of moves whose outcome the response did not settle, either because the
+ * request failed or because the tasks were absent from it.
+ */
+type UnresolvedMoveGroup = {
+    group: PlannedMove[]
+    destination: MoveTaskArgs
+    /** Absent when the request succeeded but omitted these tasks. */
+    error?: unknown
+}
+
 const DUE_DATE_REMOVAL_ALIASES = ['remove', 'no date'] as const
 const DEADLINE_REMOVAL_ALIASES = ['remove', 'no date', 'no deadline'] as const
 const DUE_DATE_REMOVAL_VALUE = 'no date' as const
@@ -231,7 +242,11 @@ const updateTasks = {
         // project/section/parent doesn't turn a field edit into a move.
         const currentTasks = await fetchCurrentTaskStates({
             client,
-            ids: ready.filter((item) => hasMoveRequest(item.moveRequest)).map((item) => item.id),
+            ids: [
+                ...new Set(
+                    ready.filter((item) => hasMoveRequest(item.moveRequest)).map((item) => item.id),
+                ),
+            ],
         })
 
         const moving: PlannedMove[] = []
@@ -254,7 +269,7 @@ const updateTasks = {
 
         const movedTasks = await applyMoves({ client, moving })
         for (const { item } of moving) {
-            const result = movedTasks.get(item.id)
+            const result = movedTasks.get(item.index)
             if (result && 'error' in result) {
                 // Already formatted by the move phase — formatting it again would
                 // flatten the API's specific objection into a bare status message.
@@ -272,7 +287,7 @@ const updateTasks = {
                 outcomes[item.index] = { kind: 'updated', task }
             },
             onFailed: (item, error) => {
-                const moved = movedTasks.get(item.id)
+                const moved = movedTasks.get(item.index)
                 if (moved && 'task' in moved) {
                     // The move already changed server state, so report it as partial
                     // rather than losing the fact that the task did relocate.
@@ -293,7 +308,7 @@ const updateTasks = {
             if (item.failed || hasFieldUpdates(item.updateArgs)) {
                 continue
             }
-            const moved = movedTasks.get(item.id)
+            const moved = movedTasks.get(item.index)
             if (moved && 'task' in moved) {
                 outcomes[item.index] = { kind: 'updated', task: moved.task }
             }
@@ -457,8 +472,11 @@ async function applyMoves({
 }: {
     client: TodoistApi
     moving: PlannedMove[]
-}): Promise<Map<string, MoveResult>> {
-    const results = new Map<string, MoveResult>()
+}): Promise<Map<number, MoveResult>> {
+    // Keyed by the caller's position, not by task id: the same id may legitimately
+    // appear twice in one batch, and keying by id would let the second entry's
+    // outcome overwrite the first's.
+    const results = new Map<number, MoveResult>()
     if (moving.length === 0) {
         return results
     }
@@ -475,21 +493,22 @@ async function applyMoves({
     }
 
     const moveLimiter = getMoveLimiter(client)
+    const unresolved: UnresolvedMoveGroup[] = []
 
     for (const group of groups.values()) {
         const ids = group.map(({ item }) => item.id)
         // `move` is identical across a group by construction.
         const destination = group[0]?.move as MoveTaskArgs
-        const soleId = ids.length === 1 ? ids[0] : undefined
+        const sole = group.length === 1 ? group[0] : undefined
 
         try {
-            if (soleId !== undefined) {
+            if (sole) {
                 // A lone move keeps the single-task endpoint: its response is that task
                 // and its errors already name it, so there is nothing to disambiguate.
                 const moved = await moveLimiter(() =>
-                    executeWithRetry(() => client.moveTask(soleId, destination)),
+                    executeWithRetry(() => client.moveTask(sole.item.id, destination)),
                 )
-                results.set(soleId, { task: moved })
+                results.set(sole.item.index, { task: moved })
                 continue
             }
 
@@ -498,69 +517,76 @@ async function applyMoves({
             )
 
             const byId = new Map(moved.map((task) => [task.id, task]))
-            const unaccounted: string[] = []
-            for (const id of ids) {
-                const task = byId.get(id)
+            const unaccounted: PlannedMove[] = []
+            for (const planned of group) {
+                const task = byId.get(planned.item.id)
                 if (task) {
-                    results.set(id, { task })
+                    results.set(planned.item.index, { task })
                 } else {
-                    unaccounted.push(id)
+                    unaccounted.push(planned)
                 }
             }
 
             // A response that omits a task says nothing about whether its move ran, so
             // check rather than assume.
             if (unaccounted.length > 0) {
-                await reconcileMoves({ client, ids: unaccounted, destination, results })
+                unresolved.push({ group: unaccounted, destination })
             }
         } catch (error) {
-            if (soleId !== undefined) {
-                results.set(soleId, { error: formatBatchItemError(error) })
+            if (sole) {
+                results.set(sole.item.index, { error: formatBatchItemError(error) })
                 continue
             }
 
             // A batched move is one request carrying many commands, and the API applies
             // them independently while reporting only the first problem. Treating the
-            // whole group as failed would misreport tasks that did move, so read back
-            // the group and let the server say which commands landed.
-            await reconcileMoves({ client, ids, destination, results, error })
+            // whole group as failed would misreport tasks that did move, so read the
+            // group back and let the server say which commands landed.
+            unresolved.push({ group, destination, error })
         }
+    }
+
+    // Reconcile every unresolved group from one read. Reading per group would turn a
+    // batch that fails as pairs into a dozen sequential reads on the error path.
+    if (unresolved.length > 0) {
+        await reconcileMoves({ client, unresolved, results })
     }
 
     return results
 }
 
 /**
- * Determines, from current state, which of `ids` reached `destination`. Tasks that
- * did not are reported as failures, carrying the batch error where there is one.
+ * Determines from current state which unresolved moves actually reached their
+ * destination. Those that did not are reported as failures, carrying the batch error
+ * where there is one.
  */
 async function reconcileMoves({
     client,
-    ids,
-    destination,
+    unresolved,
     results,
-    error,
 }: {
     client: TodoistApi
-    ids: string[]
-    destination: MoveTaskArgs
-    results: Map<string, MoveResult>
-    error?: unknown
+    unresolved: UnresolvedMoveGroup[]
+    results: Map<number, MoveResult>
 }): Promise<void> {
-    const reason =
-        error === undefined ? 'Task not returned by the move' : formatBatchItemError(error)
+    const ids = [...new Set(unresolved.flatMap(({ group }) => group.map(({ item }) => item.id)))]
     const states = await fetchCurrentTaskStates({ client, ids })
 
-    for (const id of ids) {
-        const current = states.get(id)
-        if (current && isMoveRedundant(current, destination)) {
-            results.set(id, { task: current })
-            continue
+    for (const { group, destination, error } of unresolved) {
+        const reason =
+            error === undefined ? 'Task not returned by the move' : formatBatchItemError(error)
+
+        for (const { item } of group) {
+            const current = states.get(item.id)
+            if (current && isMoveRedundant(current, destination)) {
+                results.set(item.index, { task: current })
+                continue
+            }
+            // Unreadable state counts as failed: over-reporting a failure is safer than
+            // claiming a move that never happened, and a corrective retry is now cheap
+            // because an already-moved task is recognised as needing no move.
+            results.set(item.index, { error: reason })
         }
-        // Unreadable state counts as failed: over-reporting a failure is safer than
-        // claiming a move that never happened, and a corrective retry is now cheap
-        // because an already-moved task is recognised as needing no move.
-        results.set(id, { error: reason })
     }
 }
 

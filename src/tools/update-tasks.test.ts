@@ -1829,6 +1829,72 @@ describe(`${UPDATE_TASKS} tool`, () => {
             ])
         })
 
+        it('reconciles every failed group from a single read', async () => {
+            // Three destinations, two tasks each, all failing: reading per group would
+            // cost three sequential reads on the error path.
+            const ids = ['a1', 'a2', 'b1', 'b2', 'c1', 'c2']
+            mockTodoistApi.moveTasks.mockRejectedValue(forbidden())
+            mockTodoistApi.getTasks.mockResolvedValue({
+                results: ids.map((id) => createMockTask({ id, projectId: 'original-project' })),
+                nextCursor: null,
+            })
+
+            const { structuredContent } = await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'a1', projectId: 'dest-a' },
+                        { id: 'a2', projectId: 'dest-a' },
+                        { id: 'b1', projectId: 'dest-b' },
+                        { id: 'b2', projectId: 'dest-b' },
+                        { id: 'c1', projectId: 'dest-c' },
+                        { id: 'c2', projectId: 'dest-c' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.moveTasks).toHaveBeenCalledTimes(3)
+            // One prefetch plus one reconcile, regardless of how many groups failed.
+            expect(mockTodoistApi.getTasks).toHaveBeenCalledTimes(2)
+            expect(structuredContent.failures).toHaveLength(6)
+        })
+
+        it('keeps outcomes separate when the same task id appears twice', async () => {
+            // The schema permits a repeated id. Keying results by id would let the
+            // second entry's outcome overwrite the first's.
+            mockTodoistApi.moveTask.mockImplementation(
+                async (id: string, args: { projectId?: string }) => {
+                    if (args.projectId === 'project-b') {
+                        throw new Error('API Error: cannot move to B')
+                    }
+                    return createMockTask({ id, projectId: args.projectId }) as Task
+                },
+            )
+
+            const { structuredContent } = await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'x', projectId: 'project-a' },
+                        { id: 'x', projectId: 'project-b' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.moveTask).toHaveBeenCalledTimes(2)
+            // The successful move is reported as a success, not tarred with the failure
+            // of the other entry for the same id.
+            expect(structuredContent.updatedTaskIds).toEqual(['x'])
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.error).toContain('cannot move to B')
+            expect(structuredContent.appliedOperations).toEqual({
+                updateCount: 1,
+                skippedCount: 0,
+                failureCount: 1,
+                redundantMovesSkipped: 0,
+            })
+        })
+
         it('fails the whole group when the state read also fails', async () => {
             mockTodoistApi.moveTasks.mockRejectedValue(forbidden())
             mockTodoistApi.getTasks.mockRejectedValue(new Error('unavailable'))
