@@ -1,4 +1,10 @@
-import { executeWithRetry, extractHttpStatusCode, isTransientError } from './retry.js'
+import {
+    executeWithRetry,
+    extractHttpStatusCode,
+    getRetryDelay,
+    isTransientError,
+    MIN_RETRY_DELAY_MS,
+} from './retry.js'
 
 const NO_DELAY: { baseDelayMs: number; maxDelayMs: number } = {
     baseDelayMs: 0,
@@ -222,7 +228,7 @@ describe('executeWithRetry', () => {
         expect(fn).toHaveBeenCalledTimes(2)
     })
 
-    it('should use exponential backoff delays', async () => {
+    it('should use exponential backoff delays, drawing up to the ceiling', async () => {
         vi.useFakeTimers()
 
         const error503 = Object.assign(new Error('HTTP 503: Service Unavailable'), {
@@ -231,7 +237,12 @@ describe('executeWithRetry', () => {
         const fn = vi.fn().mockRejectedValueOnce(error503).mockResolvedValue('recovered')
         const sleepSpy = vi.spyOn(globalThis, 'setTimeout')
 
-        const promise = executeWithRetry(fn, { baseDelayMs: 500, maxDelayMs: 2000 })
+        // random: () => 1 draws the top of the jitter range, making the ceiling exact
+        const promise = executeWithRetry(fn, {
+            baseDelayMs: 500,
+            maxDelayMs: 2000,
+            random: () => 1,
+        })
         await vi.advanceTimersByTimeAsync(500)
         const result = await promise
 
@@ -259,7 +270,11 @@ describe('executeWithRetry', () => {
             .mockResolvedValue('recovered')
         const sleepSpy = vi.spyOn(globalThis, 'setTimeout')
 
-        const promise = executeWithRetry(fn, { baseDelayMs: 1000, maxDelayMs: 1500 })
+        const promise = executeWithRetry(fn, {
+            baseDelayMs: 1000,
+            maxDelayMs: 1500,
+            random: () => 1,
+        })
         await vi.advanceTimersByTimeAsync(1000)
         await vi.advanceTimersByTimeAsync(1500)
         const result = await promise
@@ -275,6 +290,81 @@ describe('executeWithRetry', () => {
         expect(retryDelays).not.toContain(2000)
 
         vi.useRealTimers()
+    })
+
+    it('should spread concurrent retries instead of retrying in lockstep', async () => {
+        vi.useFakeTimers()
+
+        const error503 = Object.assign(new Error('HTTP 503: Service Unavailable'), {
+            httpStatusCode: 503,
+        })
+        const makeFn = () => vi.fn().mockRejectedValueOnce(error503).mockResolvedValue('recovered')
+        const sleepSpy = vi.spyOn(globalThis, 'setTimeout')
+
+        const first = executeWithRetry(makeFn(), {
+            baseDelayMs: 1000,
+            maxDelayMs: 2000,
+            random: () => 0.25,
+        })
+        const second = executeWithRetry(makeFn(), {
+            baseDelayMs: 1000,
+            maxDelayMs: 2000,
+            random: () => 0.75,
+        })
+
+        await vi.advanceTimersByTimeAsync(1000)
+        await Promise.all([first, second])
+
+        const retryDelays = sleepSpy.mock.calls
+            .filter(([, delay]) => typeof delay === 'number' && delay >= MIN_RETRY_DELAY_MS)
+            .map(([, delay]) => delay)
+
+        expect(retryDelays).toContain(250)
+        expect(retryDelays).toContain(750)
+
+        vi.useRealTimers()
+    })
+})
+
+describe('getRetryDelay', () => {
+    const CONFIG = { baseDelayMs: 500, maxDelayMs: 2000 }
+
+    it('should return the full ceiling on the highest draw', () => {
+        expect(getRetryDelay({ attempt: 0, ...CONFIG, random: () => 1 })).toBe(500)
+        expect(getRetryDelay({ attempt: 1, ...CONFIG, random: () => 1 })).toBe(1000)
+        expect(getRetryDelay({ attempt: 2, ...CONFIG, random: () => 1 })).toBe(2000)
+    })
+
+    it('should never return the ceiling when the draw is lower', () => {
+        expect(getRetryDelay({ attempt: 1, ...CONFIG, random: () => 0.5 })).toBe(500)
+    })
+
+    it('should floor a low draw at MIN_RETRY_DELAY_MS so retries are not immediate', () => {
+        expect(getRetryDelay({ attempt: 0, ...CONFIG, random: () => 0 })).toBe(MIN_RETRY_DELAY_MS)
+    })
+
+    it('should honour an explicit zero-delay config over the floor', () => {
+        expect(getRetryDelay({ attempt: 0, baseDelayMs: 0, maxDelayMs: 0, random: () => 1 })).toBe(
+            0,
+        )
+    })
+
+    it('should stay within [MIN_RETRY_DELAY_MS, ceiling] across many draws', () => {
+        const draws = Array.from({ length: 50 }, (_, index) => index / 50)
+        for (const draw of draws) {
+            const delay = getRetryDelay({ attempt: 1, ...CONFIG, random: () => draw })
+            expect(delay).toBeGreaterThanOrEqual(MIN_RETRY_DELAY_MS)
+            expect(delay).toBeLessThanOrEqual(1000)
+        }
+    })
+
+    it('should produce different delays for different draws', () => {
+        const delays = new Set(
+            [0.1, 0.4, 0.9].map((draw) =>
+                getRetryDelay({ attempt: 2, ...CONFIG, random: () => draw }),
+            ),
+        )
+        expect(delays.size).toBe(3)
     })
 
     it('should use default config when none provided', async () => {
