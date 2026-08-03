@@ -1,3 +1,9 @@
+## [12.2.4](https://github.com/Doist/todoist-mcp/compare/v12.2.3...v12.2.4) (2026-08-03)
+
+### Bug Fixes
+
+* **update-tasks:** bound concurrent write requests ([#547](https://github.com/Doist/todoist-mcp/issues/547)) ([f59a02b](https://github.com/Doist/todoist-mcp/commit/f59a02bac40029d1d6d31b24d3a1e28a3835d142))
+
 ## [12.2.3](https://github.com/Doist/todoist-mcp/compare/v12.2.2...v12.2.3) (2026-08-03)
 
 ### Bug Fixes
