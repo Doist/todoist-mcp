@@ -149,6 +149,10 @@ type UnresolvedMoveGroup = {
     error?: unknown
 }
 
+const hasMove = (request: MoveRequest) =>
+    Boolean(request.projectId || request.sectionId || request.parentId)
+const hasFields = (updateArgs: UpdateTaskArgs) => Object.keys(updateArgs).length > 0
+
 const DUE_DATE_REMOVAL_ALIASES = ['remove', 'no date'] as const
 const DEADLINE_REMOVAL_ALIASES = ['remove', 'no date', 'no deadline'] as const
 const DUE_DATE_REMOVAL_VALUE = 'no date' as const
@@ -244,7 +248,7 @@ const updateTasks = {
             client,
             ids: [
                 ...new Set(
-                    ready.filter((item) => hasMoveRequest(item.moveRequest)).map((item) => item.id),
+                    ready.filter((item) => hasMove(item.moveRequest)).map((item) => item.id),
                 ),
             ],
         })
@@ -335,7 +339,7 @@ const updateTasks = {
         // Tasks that only moved have no field update to report against, so take
         // their outcome straight from the move result.
         for (const item of ready) {
-            if (item.failed || hasFieldUpdates(item.updateArgs)) {
+            if (item.failed || hasFields(item.updateArgs)) {
                 continue
             }
             const moved = movedTasks.get(item.index)
@@ -433,22 +437,6 @@ async function resolveBatchInboxProjectId(
 }
 
 /**
- * Builds the query for reading a specific set of tasks.
- *
- * The endpoint expects `ids` as a comma-separated list, while the SDK serialises
- * array parameters as JSON — which the API rejects outright with
- * `INVALID_ARGUMENT_VALUE`. Passing the joined form is what actually works, so the
- * cast buys a query the API accepts rather than papering over a type mismatch.
- */
-function buildTaskIdsQuery(ids: string[]): GetTasksArgs {
-    return {
-        ids: ids.join(','),
-        // The batch cap bounds `ids`, so one page always covers the whole request.
-        limit: MAX_TASKS_PER_OPERATION,
-    } as unknown as GetTasksArgs
-}
-
-/**
  * Reads the current containers of every task that might be moved, in one request.
  *
  * Deliberately a single page rather than a paginated sweep: if the API ever ignored
@@ -476,7 +464,14 @@ async function fetchCurrentTaskStates({
 
     try {
         const requested = new Set(ids)
-        const { results } = await executeWithRetry(() => client.getTasks(buildTaskIdsQuery(ids)))
+        // The endpoint wants `ids` comma-separated, while the SDK serialises array
+        // parameters as JSON — which the API rejects with INVALID_ARGUMENT_VALUE. The
+        // cast buys a query the API accepts rather than papering over a type mismatch.
+        const query = {
+            ids: ids.join(','),
+            limit: MAX_TASKS_PER_OPERATION,
+        } as unknown as GetTasksArgs
+        const { results } = await executeWithRetry(() => client.getTasks(query))
         for (const task of results) {
             if (requested.has(task.id)) {
                 states.set(task.id, task)
@@ -655,7 +650,7 @@ async function applyFieldUpdates({
 
     await Promise.all(
         items
-            .filter((item) => hasFieldUpdates(item.updateArgs))
+            .filter((item) => hasFields(item.updateArgs))
             .map(async (item) => {
                 try {
                     const task = await writeLimiter(() =>
@@ -667,14 +662,6 @@ async function applyFieldUpdates({
                 }
             }),
     )
-}
-
-function hasMoveRequest(request: MoveRequest): boolean {
-    return Boolean(request.projectId || request.sectionId || request.parentId)
-}
-
-function hasFieldUpdates(updateArgs: UpdateTaskArgs): boolean {
-    return Object.keys(updateArgs).length > 0
 }
 
 /**

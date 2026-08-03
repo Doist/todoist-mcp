@@ -207,6 +207,30 @@ export const TEST_ERRORS = {
 } as const
 
 /**
+ * Creates an error shaped like a rejected Todoist API call, so tests exercise the
+ * signals `formatBatchItemError` reads (status, `error`, `error_tag`) rather than a
+ * bare `Error` whose message collapses to "HTTP 403".
+ */
+export function createApiError({
+    status,
+    error,
+    tag,
+}: {
+    status: number
+    error: string
+    tag?: string
+}): Error {
+    return Object.assign(new Error(`Request failed with status code ${status}`), {
+        httpStatusCode: status,
+        responseData: {
+            error,
+            ...(tag ? { error_tag: tag } : {}),
+            http_code: status,
+        },
+    })
+}
+
+/**
  * Creates multiple test cases for parameterized testing.
  */
 export function createTestCases<T, E = unknown>(

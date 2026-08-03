@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { resetLimitersForTesting } from '../utils/concurrency.js'
 import { ConcurrencyLimits } from '../utils/constants.js'
 import { convertPriorityToNumber } from '../utils/priorities.js'
-import { createMockTask, createMockUser, TEST_IDS } from '../utils/test-helpers.js'
+import { createApiError, createMockTask, createMockUser, TEST_IDS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { updateTasks } from './update-tasks.js'
 
@@ -18,6 +18,9 @@ const mockTodoistApi = {
 } as unknown as Mocked<TodoistApi>
 
 const { UPDATE_TASKS } = ToolNames
+
+/** The API's objection to a cross-workspace move — the dominant real move failure. */
+const FORBIDDEN_MOVE = 'Not allowed to move objects out of a workspace'
 
 describe(`${UPDATE_TASKS} tool`, () => {
     beforeEach(() => {
@@ -1119,14 +1122,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
             mockTodoistApi.updateTask.mockResolvedValue(okTask)
             // The forbidden cross-workspace move shape the API rejects with 403.
             mockTodoistApi.moveTask.mockRejectedValue(
-                Object.assign(new Error('Request failed with status code 403'), {
-                    httpStatusCode: 403,
-                    responseData: {
-                        error: 'Not allowed to move objects out of a workspace',
-                        error_tag: 'FORBIDDEN',
-                        http_code: 403,
-                    },
-                }),
+                createApiError({ status: 403, error: FORBIDDEN_MOVE, tag: 'FORBIDDEN' }),
             )
 
             const result = await updateTasks.execute(
@@ -1149,9 +1145,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
             // instead of the SDK's generic HTTP status message.
             expect(structuredContent.failures).toHaveLength(1)
             expect(structuredContent.failures[0]?.item).toBe('bad-task')
-            expect(structuredContent.failures[0]?.error).toContain(
-                'Not allowed to move objects out of a workspace',
-            )
+            expect(structuredContent.failures[0]?.error).toContain(FORBIDDEN_MOVE)
             expect(structuredContent.appliedOperations).toEqual({
                 updateCount: 1,
                 skippedCount: 0,
@@ -1167,13 +1161,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
 
         it('returns a structured result (does not throw) when every task fails', async () => {
             mockTodoistApi.moveTask.mockRejectedValue(
-                Object.assign(new Error('Request failed with status code 403'), {
-                    httpStatusCode: 403,
-                    responseData: {
-                        error: 'Not allowed to move objects out of a workspace',
-                        http_code: 403,
-                    },
-                }),
+                createApiError({ status: 403, error: FORBIDDEN_MOVE }),
             )
 
             const result = await updateTasks.execute(
@@ -1234,13 +1222,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
             // a successful no-op, so this is NOT a total failure and must return normally
             // with the failure listed — rather than throwing a batch-wide error.
             mockTodoistApi.moveTask.mockRejectedValue(
-                Object.assign(new Error('Request failed with status code 403'), {
-                    httpStatusCode: 403,
-                    responseData: {
-                        error: 'Not allowed to move objects out of a workspace',
-                        http_code: 403,
-                    },
-                }),
+                createApiError({ status: 403, error: FORBIDDEN_MOVE }),
             )
 
             const result = await updateTasks.execute(
@@ -1532,105 +1514,77 @@ describe(`${UPDATE_TASKS} tool`, () => {
             })
         })
 
-        it('still moves a task whose project matches but which sits in a section', async () => {
-            currentlyIs(
-                createMockTask({
-                    id: TASK_ID,
-                    projectId: PROJECT_ID,
-                    sectionId: 'section-1',
-                    parentId: null,
-                }),
-            )
-            mockTodoistApi.moveTask.mockResolvedValue(createMockTask({ id: TASK_ID }))
-
-            const { structuredContent } = await updateTasks.execute(
-                { tasks: [{ id: TASK_ID, projectId: PROJECT_ID }] },
-                mockTodoistApi,
-            )
-
-            expect(mockTodoistApi.moveTask).toHaveBeenCalledWith(TASK_ID, {
-                projectId: PROJECT_ID,
-            })
-            expect(structuredContent.appliedOperations.redundantMovesSkipped).toBe(0)
-        })
-
-        it('still moves a task whose project matches but which has a parent', async () => {
-            currentlyIs(
-                createMockTask({
-                    id: TASK_ID,
-                    projectId: PROJECT_ID,
-                    sectionId: null,
-                    parentId: 'parent-1',
-                }),
-            )
-            mockTodoistApi.moveTask.mockResolvedValue(createMockTask({ id: TASK_ID }))
-
-            const { structuredContent } = await updateTasks.execute(
-                { tasks: [{ id: TASK_ID, projectId: PROJECT_ID }] },
-                mockTodoistApi,
-            )
-
-            expect(mockTodoistApi.moveTask).toHaveBeenCalledWith(TASK_ID, {
-                projectId: PROJECT_ID,
-            })
-            expect(structuredContent.appliedOperations.redundantMovesSkipped).toBe(0)
-        })
-
-        it('skips the move when the caller echoes back the current section', async () => {
-            currentlyIs(createMockTask({ id: TASK_ID, sectionId: 'section-1', parentId: null }))
-
-            const { structuredContent } = await updateTasks.execute(
-                { tasks: [{ id: TASK_ID, sectionId: 'section-1' }] },
-                mockTodoistApi,
-            )
-
-            expect(mockTodoistApi.moveTask).not.toHaveBeenCalled()
-            expect(structuredContent.appliedOperations.redundantMovesSkipped).toBe(1)
-        })
-
-        it('skips the move when the caller echoes back the current parent', async () => {
-            currentlyIs(createMockTask({ id: TASK_ID, parentId: 'parent-1' }))
-
-            const { structuredContent } = await updateTasks.execute(
-                { tasks: [{ id: TASK_ID, parentId: 'parent-1' }] },
-                mockTodoistApi,
-            )
-
-            expect(mockTodoistApi.moveTask).not.toHaveBeenCalled()
-            expect(structuredContent.appliedOperations.redundantMovesSkipped).toBe(1)
-        })
-
-        it('performs the real move when an unchanged project accompanies a section change', async () => {
+        // Whether a container change is a real move depends on the task's whole
+        // position, not just the field named — a project move also lifts a task out of
+        // its section and out from under its parent.
+        it.each([
+            {
+                name: 'moves when the project matches but the task sits in a section',
+                current: { sectionId: 'section-1' },
+                request: { projectId: PROJECT_ID },
+                move: { projectId: PROJECT_ID },
+            },
+            {
+                name: 'moves when the project matches but the task has a parent',
+                current: { parentId: 'parent-1' },
+                request: { projectId: PROJECT_ID },
+                move: { projectId: PROJECT_ID },
+            },
+            {
+                name: 'skips an echoed section',
+                current: { sectionId: 'section-1' },
+                request: { sectionId: 'section-1' },
+                move: undefined,
+            },
+            {
+                name: 'skips an echoed parent',
+                current: { parentId: 'parent-1' },
+                request: { parentId: 'parent-1' },
+                move: undefined,
+            },
+            {
+                // Previously rejected outright as "only one of projectId, sectionId, or
+                // parentId", so a full echo alongside a real change always failed.
+                name: 'takes the real destination when an echoed project accompanies a section change',
+                current: {},
+                request: { projectId: PROJECT_ID, sectionId: 'section-2' },
+                move: { sectionId: 'section-2' },
+            },
+            {
+                name: 'skips a full echo of the project and section the task is in',
+                current: { sectionId: 'section-1' },
+                request: { projectId: PROJECT_ID, sectionId: 'section-1' },
+                move: undefined,
+            },
+        ])('$name', async ({ current, request, move }) => {
             currentlyIs(
                 createMockTask({
                     id: TASK_ID,
                     projectId: PROJECT_ID,
                     sectionId: null,
                     parentId: null,
+                    ...current,
                 }),
             )
             mockTodoistApi.moveTask.mockResolvedValue(createMockTask({ id: TASK_ID }))
 
             const { structuredContent } = await updateTasks.execute(
-                { tasks: [{ id: TASK_ID, projectId: PROJECT_ID, sectionId: 'section-2' }] },
+                { tasks: [{ id: TASK_ID, ...request }] },
                 mockTodoistApi,
             )
 
-            // Previously rejected as "only one of projectId, sectionId, or parentId".
             expect(structuredContent.failures).toHaveLength(0)
-            expect(mockTodoistApi.moveTask).toHaveBeenCalledWith(TASK_ID, {
-                sectionId: 'section-2',
-            })
+            if (move) {
+                expect(mockTodoistApi.moveTask).toHaveBeenCalledWith(TASK_ID, move)
+            } else {
+                expect(mockTodoistApi.moveTask).not.toHaveBeenCalled()
+                expect(mockTodoistApi.moveTasks).not.toHaveBeenCalled()
+            }
         })
 
         it('applies field updates when every echoed container is unchanged', async () => {
             currentlyIs(
-                createMockTask({
-                    id: TASK_ID,
-                    projectId: PROJECT_ID,
-                    sectionId: 'section-1',
-                    parentId: null,
-                }),
+                createMockTask({ id: TASK_ID, projectId: PROJECT_ID, sectionId: 'section-1' }),
             )
             mockTodoistApi.updateTask.mockResolvedValue(createMockTask({ id: TASK_ID }))
 
@@ -1723,17 +1677,6 @@ describe(`${UPDATE_TASKS} tool`, () => {
         const DESTINATION = 'project-target'
         const IDS = ['task-a', 'task-b', 'task-c']
 
-        function forbidden() {
-            return Object.assign(new Error('Request failed with status code 403'), {
-                httpStatusCode: 403,
-                responseData: {
-                    error: 'Not allowed to move objects out of a workspace',
-                    error_tag: 'FORBIDDEN',
-                    http_code: 403,
-                },
-            })
-        }
-
         it('sends one request per destination, not per task', async () => {
             mockTodoistApi.moveTask.mockResolvedValue(createMockTask({ id: 'task-c' }))
             mockTodoistApi.moveTasks.mockResolvedValue([
@@ -1764,7 +1707,9 @@ describe(`${UPDATE_TASKS} tool`, () => {
         })
 
         it('reports only the tasks the batch failed to move', async () => {
-            mockTodoistApi.moveTasks.mockRejectedValue(forbidden())
+            mockTodoistApi.moveTasks.mockRejectedValue(
+                createApiError({ status: 403, error: FORBIDDEN_MOVE, tag: 'FORBIDDEN' }),
+            )
             mockTodoistApi.getTasks
                 // Before the move, all three are elsewhere.
                 .mockResolvedValueOnce({
@@ -1789,13 +1734,13 @@ describe(`${UPDATE_TASKS} tool`, () => {
             expect(structuredContent.updatedTaskIds).toEqual(['task-a', 'task-b'])
             expect(structuredContent.failures).toHaveLength(1)
             expect(structuredContent.failures[0]?.item).toBe('task-c')
-            expect(structuredContent.failures[0]?.error).toContain(
-                'Not allowed to move objects out of a workspace',
-            )
+            expect(structuredContent.failures[0]?.error).toContain(FORBIDDEN_MOVE)
         })
 
         it('does not apply field updates to a task whose move failed', async () => {
-            mockTodoistApi.moveTasks.mockRejectedValue(forbidden())
+            mockTodoistApi.moveTasks.mockRejectedValue(
+                createApiError({ status: 403, error: FORBIDDEN_MOVE, tag: 'FORBIDDEN' }),
+            )
             mockTodoistApi.getTasks
                 .mockResolvedValueOnce({
                     results: IDS.map((id) => createMockTask({ id, projectId: 'original-project' })),
@@ -1834,7 +1779,9 @@ describe(`${UPDATE_TASKS} tool`, () => {
             // Three destinations, two tasks each, all failing: reading per group would
             // cost three sequential reads on the error path.
             const ids = ['a1', 'a2', 'b1', 'b2', 'c1', 'c2']
-            mockTodoistApi.moveTasks.mockRejectedValue(forbidden())
+            mockTodoistApi.moveTasks.mockRejectedValue(
+                createApiError({ status: 403, error: FORBIDDEN_MOVE, tag: 'FORBIDDEN' }),
+            )
             mockTodoistApi.getTasks.mockResolvedValue({
                 results: ids.map((id) => createMockTask({ id, projectId: 'original-project' })),
                 nextCursor: null,
@@ -1897,7 +1844,9 @@ describe(`${UPDATE_TASKS} tool`, () => {
         })
 
         it('fails the whole group when the state read also fails', async () => {
-            mockTodoistApi.moveTasks.mockRejectedValue(forbidden())
+            mockTodoistApi.moveTasks.mockRejectedValue(
+                createApiError({ status: 403, error: FORBIDDEN_MOVE, tag: 'FORBIDDEN' }),
+            )
             mockTodoistApi.getTasks.mockRejectedValue(new Error('unavailable'))
 
             const { structuredContent } = await updateTasks.execute(
@@ -1907,9 +1856,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
 
             expect(structuredContent.tasks).toHaveLength(0)
             expect(structuredContent.failures).toHaveLength(3)
-            expect(structuredContent.failures[0]?.error).toContain(
-                'Not allowed to move objects out of a workspace',
-            )
+            expect(structuredContent.failures[0]?.error).toContain(FORBIDDEN_MOVE)
         })
 
         it('checks rather than assumes when the response omits a task', async () => {
@@ -2026,69 +1973,76 @@ describe(`${UPDATE_TASKS} tool`, () => {
     })
 
     describe('request concurrency', () => {
-        /** Records the peak number of simultaneously in-flight calls to a mock. */
-        function trackInFlight(mock: Mocked<TodoistApi>[keyof TodoistApi], result: Task) {
-            const state = { max: 0, active: 0 }
-            const release: Array<() => void> = []
-            const mocked = mock as unknown as ReturnType<typeof vi.fn>
-            mocked.mockImplementation(async () => {
-                state.active++
-                state.max = Math.max(state.max, state.active)
-                await new Promise<void>((resolve) => release.push(resolve))
-                state.active--
-                return result
-            })
-            return {
-                state,
-                /**
-                 * Releases calls as they arrive until the operation finishes, so the
-                 * limiter — not the mock — decides how many run at once.
-                 */
-                async drain<T>(operation: Promise<T>): Promise<T> {
-                    let settled = false
-                    const tracked = operation.finally(() => {
-                        settled = true
-                    })
-                    while (!settled) {
-                        await new Promise((resolve) => setImmediate(resolve))
-                        for (const resolve of release.splice(0)) {
-                            resolve()
-                        }
-                    }
-                    return tracked
-                },
-            }
-        }
-
-        /** Records the order of move and update calls, resolving moves on a delay. */
-        function recordCallOrder() {
+        /**
+         * Instruments the write methods to record when each call starts and ends, and
+         * how many were ever in flight at once. One helper for both questions: the
+         * limits and the ordering are the same behaviour observed two ways.
+         */
+        function instrumentWrites() {
             const order: string[] = []
-            const moveTask = mockTodoistApi.moveTask as unknown as ReturnType<typeof vi.fn>
-            const updateTask = mockTodoistApi.updateTask as unknown as ReturnType<typeof vi.fn>
+            const peak: Record<string, number> = {}
+            const active: Record<string, number> = {}
 
-            moveTask.mockImplementation(async (id: string) => {
-                order.push(`move-start:${id}`)
-                await new Promise((resolve) => setTimeout(resolve, 20))
-                order.push(`move-end:${id}`)
-                return createMockTask({ id })
-            })
-            updateTask.mockImplementation(async (id: string) => {
-                order.push(`update:${id}`)
-                return createMockTask({ id })
-            })
+            const instrument = (label: string, method: keyof TodoistApi, delayMs: number) => {
+                const mock = mockTodoistApi[method] as unknown as ReturnType<typeof vi.fn>
+                mock.mockImplementation(async (id: string) => {
+                    order.push(`${label}-start:${id}`)
+                    active[label] = (active[label] ?? 0) + 1
+                    peak[label] = Math.max(peak[label] ?? 0, active[label])
+                    await new Promise((resolve) => setTimeout(resolve, delayMs))
+                    active[label] -= 1
+                    order.push(`${label}-end:${id}`)
+                    return createMockTask({ id })
+                })
+            }
 
-            return order
+            // Moves are slow enough that anything overlapping them is unambiguous.
+            instrument('move', 'moveTask', 20)
+            instrument('update', 'updateTask', 0)
+
+            return { order, peak }
         }
+
+        const movesTo = (...destinations: string[]) =>
+            destinations.map((projectId, index) => ({ id: `m${index}`, projectId }))
+
+        it('never has more than one move in flight', async () => {
+            const { peak } = instrumentWrites()
+
+            await updateTasks.execute(
+                { tasks: movesTo('project-a', 'project-b', 'project-c', 'project-d') },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.moveTask).toHaveBeenCalledTimes(4)
+            expect(peak.move).toBe(ConcurrencyLimits.TASK_MOVES)
+        })
+
+        it('bounds concurrent field updates', async () => {
+            const { peak } = instrumentWrites()
+
+            await updateTasks.execute(
+                {
+                    tasks: Array.from({ length: 10 }, (_, index) => ({
+                        id: `task-${index}`,
+                        content: 'renamed',
+                    })),
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledTimes(10)
+            expect(peak.update).toBe(ConcurrencyLimits.WRITES)
+        })
 
         it('does not hold a field-only update behind serialised moves', async () => {
-            const order = recordCallOrder()
+            const { order } = instrumentWrites()
 
             await updateTasks.execute(
                 {
                     tasks: [
-                        { id: 'm1', projectId: 'project-1' },
-                        { id: 'm2', projectId: 'project-2' },
-                        { id: 'field-only', content: 'renamed' },
+                        ...movesTo('project-1', 'project-2'),
+                        { id: 'solo', content: 'renamed' },
                     ],
                 },
                 mockTodoistApi,
@@ -2096,68 +2050,26 @@ describe(`${UPDATE_TASKS} tool`, () => {
 
             // Field updates use a separate lane and never contend with moves, so a task
             // with nothing to move must not wait for the move queue to drain.
-            expect(order.indexOf('update:field-only')).toBeLessThan(order.indexOf('move-end:m1'))
+            expect(order.indexOf('update-start:solo')).toBeLessThan(order.indexOf('move-end:m0'))
         })
 
         it('starts a moved task’s field update before later moves finish', async () => {
-            const order = recordCallOrder()
+            const { order } = instrumentWrites()
 
             await updateTasks.execute(
                 {
                     tasks: [
-                        { id: 'm1', projectId: 'project-1', content: 'a' },
-                        { id: 'm2', projectId: 'project-2', content: 'b' },
+                        { id: 'm0', projectId: 'project-1', content: 'a' },
+                        { id: 'm1', projectId: 'project-2', content: 'b' },
                     ],
                 },
                 mockTodoistApi,
             )
 
             // Each task keeps move-before-update...
-            expect(order.indexOf('update:m1')).toBeGreaterThan(order.indexOf('move-end:m1'))
+            expect(order.indexOf('update-start:m0')).toBeGreaterThan(order.indexOf('move-end:m0'))
             // ...but its update overlaps the next task's move rather than waiting for it.
-            expect(order.indexOf('update:m1')).toBeLessThan(order.indexOf('move-end:m2'))
-        })
-
-        it('never has more than one move in flight', async () => {
-            const moved = createMockTask({ id: 'task-0' })
-            const tracker = trackInFlight(mockTodoistApi.moveTask, moved)
-
-            await tracker.drain(
-                updateTasks.execute(
-                    {
-                        tasks: [
-                            { id: 'task-0', projectId: 'project-a' },
-                            { id: 'task-1', projectId: 'project-b' },
-                            { id: 'task-2', projectId: 'project-c' },
-                            { id: 'task-3', projectId: 'project-d' },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            )
-
-            expect(mockTodoistApi.moveTask).toHaveBeenCalledTimes(4)
-            expect(tracker.state.max).toBe(ConcurrencyLimits.TASK_MOVES)
-        })
-
-        it('bounds concurrent field updates', async () => {
-            const updated = createMockTask({ id: 'task-0' })
-            const tracker = trackInFlight(mockTodoistApi.updateTask, updated)
-
-            await tracker.drain(
-                updateTasks.execute(
-                    {
-                        tasks: Array.from({ length: 10 }, (_, index) => ({
-                            id: `task-${index}`,
-                            content: 'renamed',
-                        })),
-                    },
-                    mockTodoistApi,
-                ),
-            )
-
-            expect(mockTodoistApi.updateTask).toHaveBeenCalledTimes(10)
-            expect(tracker.state.max).toBe(ConcurrencyLimits.WRITES)
+            expect(order.indexOf('update-start:m0')).toBeLessThan(order.indexOf('move-end:m1'))
         })
     })
 })
