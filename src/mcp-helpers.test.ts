@@ -200,12 +200,19 @@ describe('registerTool error path', () => {
                         content: 'Lavendel abschneiden',
                         dueString: 'recurring every year on July 1',
                     },
+                    {
+                        content: 'Frauenmantel abschneiden',
+                        dueString: 'recurring every year on July 1',
+                    },
                 ],
             },
             {},
         )
 
         expect(output.isError).toBe(true)
+        expect(output.content[0]?.text).toContain('All 2 task(s) failed to create')
+        expect(output.content[0]?.text).toContain('Lavendel abschneiden')
+        expect(output.content[0]?.text).toContain('Frauenmantel abschneiden')
         expect(output.content[0]?.text).toContain('`dueString` could not be parsed')
         expect(output.content[0]?.text).toContain('`every year on July 1`')
         expect(output.content[0]?.text).toContain("don't prefix it with `recurring`")

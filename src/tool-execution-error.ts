@@ -506,27 +506,18 @@ function formatGenericError(error: unknown): string {
     return 'An unknown error occurred'
 }
 
-function extractDueStringRecovery(error: unknown): string | undefined {
-    if (!(error instanceof Error)) {
-        return undefined
+export class DueStringParseError extends Error {
+    constructor(message: string) {
+        super(message)
+        this.name = 'DueStringParseError'
     }
+}
 
-    const marker = "wasn't created because `dueString` could not be parsed."
-    const markerIndex = error.message.indexOf(marker)
-    if (markerIndex === -1) {
-        return undefined
+export class BatchDueStringParseError extends Error {
+    constructor(message: string) {
+        super(message)
+        this.name = 'BatchDueStringParseError'
     }
-
-    const taskStart = error.message.lastIndexOf('Task "', markerIndex)
-    const retryEnd = error.message.indexOf('retry.', markerIndex)
-    if (taskStart === -1 || retryEnd === -1) {
-        return undefined
-    }
-
-    // A batch that entirely fails wraps its per-task error in a new Error.
-    // Preserve this known recovery message verbatim rather than truncating it
-    // through the generic-error formatter before MCP can return it to the caller.
-    return error.message.slice(taskStart, retryEnd + 'retry.'.length)
 }
 
 /**
@@ -537,9 +528,8 @@ function extractDueStringRecovery(error: unknown): string | undefined {
  * recognizable after aggregation.
  */
 export function formatBatchItemError(error: unknown): string {
-    const dueStringRecovery = extractDueStringRecovery(error)
-    if (dueStringRecovery) {
-        return dueStringRecovery
+    if (error instanceof DueStringParseError) {
+        return error.message
     }
 
     const parsedApiError = extractApiErrorInfo(error)
@@ -565,7 +555,11 @@ export function formatBatchItemError(error: unknown): string {
  */
 export function formatDueStringParseError(
     error: unknown,
-    { taskContent, dueString }: { taskContent: string; dueString: string | undefined },
+    {
+        taskContent,
+        dueString,
+        deadlineDate,
+    }: { taskContent: string; dueString: string | undefined; deadlineDate?: string },
 ): string | undefined {
     if (!dueString) {
         return undefined
@@ -574,9 +568,8 @@ export function formatDueStringParseError(
     const parsedApiError = extractApiErrorInfo(error)
     const tag = parsedApiError?.tag?.toUpperCase()
     const isStableDueStringTag = tag === 'INVALID_DUE_STRING'
-    const isCurrentGenericDueFormatError = /^invalid date format\.?$/i.test(
-        parsedApiError?.message ?? '',
-    )
+    const isCurrentGenericDueFormatError =
+        !deadlineDate && /^invalid date format\.?$/i.test(parsedApiError?.message ?? '')
     // Do not infer the field from a generic API error alone. This fallback is
     // deliberately limited to the exact API text observed for due-string
     // parsing and is only used by add-tasks after it supplied dueString.
@@ -586,11 +579,15 @@ export function formatDueStringParseError(
 
     const withoutRecurringPrefix = dueString
         .trim()
-        .replace(/^recurring\s+/i, '')
+        .replace(/^recurring(?:\s+|$)/i, '')
         .trim()
 
-    if (withoutRecurringPrefix !== dueString.trim()) {
+    if (withoutRecurringPrefix !== dueString.trim() && withoutRecurringPrefix) {
         return `Task "${taskContent}" wasn't created because \`dueString\` could not be parsed. Use Todoist recurrence syntax, for example \`${withoutRecurringPrefix}\`; don't prefix it with \`recurring\`. Change only \`dueString\` and retry.`
+    }
+
+    if (withoutRecurringPrefix !== dueString.trim()) {
+        return `Task "${taskContent}" wasn't created because \`dueString\` could not be parsed. Use a complete Todoist recurrence expression; \`recurring\` alone is not valid. Change only \`dueString\` and retry.`
     }
 
     return `Task "${taskContent}" wasn't created because \`dueString\` could not be parsed. Change only \`dueString\` and retry.`
@@ -604,9 +601,8 @@ export function formatToolExecutionError(error: unknown): string {
         return error.message
     }
 
-    const dueStringRecovery = extractDueStringRecovery(error)
-    if (dueStringRecovery) {
-        return dueStringRecovery
+    if (error instanceof DueStringParseError || error instanceof BatchDueStringParseError) {
+        return error.message
     }
 
     const parsedApiError = extractApiErrorInfo(error)
