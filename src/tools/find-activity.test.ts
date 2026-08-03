@@ -1,5 +1,6 @@
 import type { ActivityEvent, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
+import { z } from 'zod'
 import { ToolNames } from '../utils/tool-names.js'
 import { findActivity } from './find-activity.js'
 
@@ -103,6 +104,19 @@ describe(`${FIND_ACTIVITY} tool`, () => {
     })
 
     describe('filtering', () => {
+        it.each(['dateFrom', 'dateTo'] as const)('should reject non-ISO values for %s', (field) => {
+            const result = z.object(findActivity.parameters).safeParse({ [field]: 'tomorrow' })
+
+            expect(result.success).toBe(false)
+        })
+
+        it('should normalize empty date filters to undefined', () => {
+            const parsed = z.object(findActivity.parameters).parse({ dateFrom: '', dateTo: '' })
+
+            expect(parsed.dateFrom).toBeUndefined()
+            expect(parsed.dateTo).toBeUndefined()
+        })
+
         it('should filter activity events by an inclusive/exclusive date range', async () => {
             const mockEvents: ActivityEvent[] = [
                 createMockActivityEvent({

@@ -4,7 +4,14 @@ import { mapActivityEvent } from '../tool-helpers.js'
 import { ApiLimits } from '../utils/constants.js'
 import { ActivityEventSchema } from '../utils/output-schemas.js'
 import { summarizeList } from '../utils/response-builders.js'
+import { optionalString } from '../utils/schema-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
+
+const IsoDateOrDateTime = z.union([z.iso.date(), z.iso.datetime({ offset: true })])
+
+function optionalIsoDateOrDateTime(description: string) {
+    return optionalString(description).pipe(IsoDateOrDateTime.optional())
+}
 
 const ArgsSchema = {
     objectType: z
@@ -38,19 +45,13 @@ const ArgsSchema = {
 
     initiatorId: z.string().optional().describe('Filter by the user ID who initiated the event.'),
 
-    dateFrom: z
-        .string()
-        .optional()
-        .describe(
-            'Inclusive start of the activity range, as an ISO 8601 date or date-time. For all events on one local calendar day, use that day\'s start, for example "2026-08-02T00:00:00-04:00".',
-        ),
+    dateFrom: optionalIsoDateOrDateTime(
+        'Inclusive start of the activity range, as an ISO 8601 date or date-time. For all events on one local calendar day, use that day\'s start, for example "2026-08-02T00:00:00-04:00". Natural-language dates such as "tomorrow" are not supported.',
+    ),
 
-    dateTo: z
-        .string()
-        .optional()
-        .describe(
-            'Exclusive end of the activity range, as an ISO 8601 date or date-time. For all events on 2026-08-02, use "2026-08-03T00:00:00-04:00".',
-        ),
+    dateTo: optionalIsoDateOrDateTime(
+        'Exclusive end of the activity range, as an ISO 8601 date or date-time. For all events on 2026-08-02, use "2026-08-03T00:00:00-04:00". Natural-language dates such as "tomorrow" are not supported.',
+    ),
 
     limit: z
         .number()
