@@ -1,6 +1,8 @@
 import type { Task, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
+import { resetLimitersForTesting } from '../utils/concurrency.js'
+import { ConcurrencyLimits } from '../utils/constants.js'
 import { convertPriorityToNumber } from '../utils/priorities.js'
 import { createMockTask, createMockUser, TEST_IDS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -18,6 +20,9 @@ const { UPDATE_TASKS } = ToolNames
 describe(`${UPDATE_TASKS} tool`, () => {
     beforeEach(() => {
         vi.clearAllMocks()
+        // The mock client is never registered, so it shares the process-wide
+        // fallback limiters — reset them so queued work can't leak between cases.
+        resetLimitersForTesting()
         mockTodoistApi.getUser.mockResolvedValue(createMockUser())
     })
 
@@ -1447,6 +1452,84 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 updateTasks.execute({ tasks: makeTasks(26) }, mockTodoistApi),
             ).rejects.toThrow('Too big')
             expect(mockTodoistApi.updateTask).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('request concurrency', () => {
+        /** Records the peak number of simultaneously in-flight calls to a mock. */
+        function trackInFlight(mock: Mocked<TodoistApi>[keyof TodoistApi], result: Task) {
+            const state = { max: 0, active: 0 }
+            const release: Array<() => void> = []
+            const mocked = mock as unknown as ReturnType<typeof vi.fn>
+            mocked.mockImplementation(async () => {
+                state.active++
+                state.max = Math.max(state.max, state.active)
+                await new Promise<void>((resolve) => release.push(resolve))
+                state.active--
+                return result
+            })
+            return {
+                state,
+                /**
+                 * Releases calls as they arrive until the operation finishes, so the
+                 * limiter — not the mock — decides how many run at once.
+                 */
+                async drain<T>(operation: Promise<T>): Promise<T> {
+                    let settled = false
+                    const tracked = operation.finally(() => {
+                        settled = true
+                    })
+                    while (!settled) {
+                        await new Promise((resolve) => setImmediate(resolve))
+                        for (const resolve of release.splice(0)) {
+                            resolve()
+                        }
+                    }
+                    return tracked
+                },
+            }
+        }
+
+        it('never has more than one move in flight', async () => {
+            const moved = createMockTask({ id: 'task-0' })
+            const tracker = trackInFlight(mockTodoistApi.moveTask, moved)
+
+            await tracker.drain(
+                updateTasks.execute(
+                    {
+                        tasks: [
+                            { id: 'task-0', projectId: 'project-a' },
+                            { id: 'task-1', projectId: 'project-b' },
+                            { id: 'task-2', projectId: 'project-c' },
+                            { id: 'task-3', projectId: 'project-d' },
+                        ],
+                    },
+                    mockTodoistApi,
+                ),
+            )
+
+            expect(mockTodoistApi.moveTask).toHaveBeenCalledTimes(4)
+            expect(tracker.state.max).toBe(ConcurrencyLimits.TASK_MOVES)
+        })
+
+        it('bounds concurrent field updates', async () => {
+            const updated = createMockTask({ id: 'task-0' })
+            const tracker = trackInFlight(mockTodoistApi.updateTask, updated)
+
+            await tracker.drain(
+                updateTasks.execute(
+                    {
+                        tasks: Array.from({ length: 10 }, (_, index) => ({
+                            id: `task-${index}`,
+                            content: 'renamed',
+                        })),
+                    },
+                    mockTodoistApi,
+                ),
+            )
+
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledTimes(10)
+            expect(tracker.state.max).toBe(ConcurrencyLimits.WRITES)
         })
     })
 })

@@ -57,6 +57,22 @@ export const BatchLimits = {
     TASKS_PER_OPERATION: 25,
 } as const
 
+// Concurrency Limits
+export const ConcurrencyLimits = {
+    /**
+     * In-flight task-move requests per account.
+     *
+     * Kept at 1 because the API locks the whole task tree for a move, and a tree
+     * spans a task's source as well as its destination — two moves of sibling
+     * subtasks contend even when they target different projects, and the loser
+     * fails. Batching same-destination moves into a single request means
+     * serialising costs little in practice.
+     */
+    TASK_MOVES: 1,
+    /** In-flight non-move write requests per account. */
+    WRITES: 4,
+} as const
+
 // Response Builder Configuration
 export const ResponseConfig = {
     /** Maximum characters per line in text responses */

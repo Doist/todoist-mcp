@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { type CustomFetch, type CustomFetchResponse, TodoistApi } from '@doist/todoist-sdk'
 import packageJson from '../package.json' with { type: 'json' }
+import { registerClientLimiters } from './utils/concurrency.js'
 
 const TODOIST_MCP_NAME = 'todoist-mcp'
 const TODOIST_MCP_VERSION = packageJson.version
@@ -245,10 +246,15 @@ export function createTodoistClient(
         tracking?: UsageTrackingConfig
     } = {},
 ): TodoistApi {
-    return new TodoistApi(apiKey, {
+    const client = new TodoistApi(apiKey, {
         customFetch: createTrackedFetch(globalThis.fetch, tracking),
         ...(baseUrl ? { baseUrl } : {}),
     })
+    // The HTTP transport builds a client per request, so request-bounded limits
+    // would not bound anything. Registering by account shares one set of limits
+    // across every client for that account.
+    registerClientLimiters(client, apiKey)
+    return client
 }
 
 export { TODOIST_MCP_VERSION }

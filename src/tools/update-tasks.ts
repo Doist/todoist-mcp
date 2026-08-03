@@ -4,6 +4,7 @@ import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
 import { createMoveTaskArgs, mapTask, resolveInboxProjectId } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
+import { getMoveLimiter, getWriteLimiter } from '../utils/concurrency.js'
 import { BatchLimits, DisplayLimits } from '../utils/constants.js'
 import { DurationParseError, parseDuration } from '../utils/duration-parser.js'
 import { FailureSchema, TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
@@ -294,23 +295,31 @@ async function processTaskUpdate(task: TaskUpdate, client: TodoistApi): Promise<
     // are retried per item. The registerTool() wrapper's retry only fires when execute()
     // throws, which never happens now that we settle each task — and the SDK transport
     // only retries network/timeout errors, not 5xx responses.
+    //
+    // The limiters bound how many of those calls are in flight at once. Moves get
+    // their own, tighter lane because the API locks a task's whole tree while
+    // moving it, so overlapping moves contend and one of them loses.
+    const moveLimiter = getMoveLimiter(client)
+    const writeLimiter = getWriteLimiter(client)
+    const updateTask = () =>
+        writeLimiter(() => executeWithRetry(() => client.updateTask(id, updateArgs)))
 
     // If no move parameters are provided, use updateTask without moveTask
     if (!resolvedProjectId && !sectionId && !parentId) {
         return {
             kind: 'updated',
-            task: await executeWithRetry(() => client.updateTask(id, updateArgs)),
+            task: await updateTask(),
         }
     }
 
     const moveArgs = createMoveTaskArgs(id, resolvedProjectId, sectionId, parentId)
-    const movedTask = await executeWithRetry(() => client.moveTask(id, moveArgs))
+    const movedTask = await moveLimiter(() => executeWithRetry(() => client.moveTask(id, moveArgs)))
 
     if (Object.keys(updateArgs).length > 0) {
         try {
             return {
                 kind: 'updated',
-                task: await executeWithRetry(() => client.updateTask(id, updateArgs)),
+                task: await updateTask(),
             }
         } catch (error) {
             return {
