@@ -1,7 +1,12 @@
 import type { AddTaskArgs, Task, TodoistApi } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { formatBatchItemError } from '../tool-execution-error.js'
+import {
+    BatchDueStringParseError,
+    DueStringParseError,
+    formatBatchItemError,
+    formatDueStringParseError,
+} from '../tool-execution-error.js'
 import { isInboxProjectId, mapTask } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
 import { BatchLimits } from '../utils/constants.js'
@@ -30,7 +35,9 @@ const TaskSchema = z.object({
         'Additional details, notes, or context for the task. Use this for longer content rather than putting it in the task name. Supports Markdown.',
     ),
     priority: PrioritySchema.optional().describe(PRIORITY_INPUT_DESCRIPTION),
-    dueString: optionalString('The due date for the task, in natural language.'),
+    dueString: optionalString(
+        'The due date for the task, in natural language. Also use natural language for recurrences; do not prefix it with "recurring".',
+    ),
     deadlineDate: optionalString(
         'The deadline date for the task in ISO 8601 format (YYYY-MM-DD, e.g., "2025-12-31"). Deadlines are immovable constraints shown with a different indicator than due dates.',
     ),
@@ -127,11 +134,13 @@ const addTasks = {
 
         const newTasks: Task[] = []
         const failures: Array<{ item: string; error: string }> = []
+        let hasDueStringParseFailure = false
 
         for (const { index, result } of indexed) {
             if (result.status === 'fulfilled') {
                 newTasks.push(result.value)
             } else {
+                hasDueStringParseFailure ||= result.reason instanceof DueStringParseError
                 failures.push({
                     item: tasks[index]?.content ?? `Task ${index + 1}`,
                     // Keep API error signals (status/code/tag) — `error.message`
@@ -145,7 +154,11 @@ const addTasks = {
         // If all tasks failed, throw an error
         if (newTasks.length === 0 && failures.length > 0) {
             const details = failures.map((f) => `"${f.item}": ${f.error}`).join('; ')
-            throw new Error(`All ${failures.length} task(s) failed to create: ${details}`)
+            const message = `All ${failures.length} task(s) failed to create: ${details}`
+            if (hasDueStringParseFailure) {
+                throw new BatchDueStringParseError(message)
+            }
+            throw new Error(message)
         }
 
         const mappedTasks = newTasks.map(mapTask)
@@ -299,7 +312,19 @@ async function processTask(
         taskArgs.assigneeId = validation.resolvedUser?.userId
     }
 
-    return await client.addTask(taskArgs)
+    try {
+        return await client.addTask(taskArgs)
+    } catch (error) {
+        const recovery = formatDueStringParseError(error, {
+            taskContent: task.content,
+            dueString: task.dueString,
+            deadlineDate: task.deadlineDate,
+        })
+        if (recovery) {
+            throw new DueStringParseError(recovery)
+        }
+        throw error
+    }
 }
 
 function generateTextContent({

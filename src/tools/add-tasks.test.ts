@@ -640,6 +640,65 @@ describe(`${ADD_TASKS} tool`, () => {
                 }),
             )
         })
+
+        it('returns dueString retry guidance for a partial invalid-date failure', async () => {
+            const createdTask = createMockTask({ id: '8485093753', content: 'Created task' })
+            const invalidDueString = Object.assign(new Error('HTTP 400: Bad Request'), {
+                httpStatusCode: 400,
+                responseData: { error: 'Invalid date format' },
+            })
+            mockTodoistApi.addTask
+                .mockResolvedValueOnce(createdTask)
+                .mockRejectedValueOnce(invalidDueString)
+
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        { content: 'Created task' },
+                        {
+                            content: 'Lavendel abschneiden',
+                            dueString: 'recurring every year on July 1',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const expectedRecovery =
+                'Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed. Use Todoist recurrence syntax, for example `every year on July 1`; don\'t prefix it with `recurring`. Change only `dueString` and retry.'
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'Lavendel abschneiden', error: expectedRecovery },
+            ])
+            expect(result.textContent).toContain(expectedRecovery)
+        })
+
+        it('returns dueString retry guidance when every task in the batch fails', async () => {
+            const invalidDueString = Object.assign(new Error('HTTP 400: Bad Request'), {
+                httpStatusCode: 400,
+                responseData: { error: 'Invalid date format' },
+            })
+            mockTodoistApi.addTask.mockRejectedValue(invalidDueString)
+
+            await expect(
+                addTasks.execute(
+                    {
+                        tasks: [
+                            {
+                                content: 'Lavendel abschneiden',
+                                dueString: 'recurring every year on July 1',
+                            },
+                            {
+                                content: 'Frauenmantel abschneiden',
+                                dueString: 'recurring every year on July 1',
+                            },
+                        ],
+                    },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow(
+                'Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed',
+            )
+        })
     })
 
     describe('next steps logic', () => {

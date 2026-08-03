@@ -1,5 +1,11 @@
 import z from 'zod'
-import { formatBatchItemError, formatToolExecutionError } from './tool-execution-error.js'
+import {
+    BatchDueStringParseError,
+    DueStringParseError,
+    formatBatchItemError,
+    formatDueStringParseError,
+    formatToolExecutionError,
+} from './tool-execution-error.js'
 
 describe('formatToolExecutionError', () => {
     it('formats Todoist API errors with actionable details', () => {
@@ -244,6 +250,90 @@ describe('formatToolExecutionError', () => {
             expect(formatBatchItemError(new Error('Section "xyz" not found'))).toBe(
                 'Section "xyz" not found',
             )
+        })
+    })
+
+    describe('formatDueStringParseError', () => {
+        it('gives an explicit retry for the malformed recurring prefix', () => {
+            const error = Object.assign(new Error('HTTP 400: Bad Request'), {
+                httpStatusCode: 400,
+                responseData: { error: 'Invalid date format' },
+            })
+
+            expect(
+                formatDueStringParseError(error, {
+                    taskContent: 'Lavendel abschneiden',
+                    dueString: 'recurring every year on July 1',
+                }),
+            ).toBe(
+                'Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed. Use Todoist recurrence syntax, for example `every year on July 1`; don\'t prefix it with `recurring`. Change only `dueString` and retry.',
+            )
+        })
+
+        it('preserves every retry guidance after an all-failed batch wraps it', () => {
+            const output = formatToolExecutionError(
+                new BatchDueStringParseError(
+                    'All 2 task(s) failed to create: "Lavendel abschneiden": Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed. Use Todoist recurrence syntax, for example `every year on July 1`; don\'t prefix it with `recurring`. Change only `dueString` and retry.; "Frauenmantel abschneiden": Task "Frauenmantel abschneiden" wasn\'t created because `dueString` could not be parsed. Use Todoist recurrence syntax, for example `every year on July 1`; don\'t prefix it with `recurring`. Change only `dueString` and retry.',
+                ),
+            )
+
+            expect(output).toContain('All 2 task(s) failed to create')
+            expect(output).toContain('Lavendel abschneiden')
+            expect(output).toContain('Frauenmantel abschneiden')
+        })
+
+        it('preserves dueString recovery guidance in batch-item output', () => {
+            const recovery =
+                'Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed. Change only `dueString` and retry.'
+
+            expect(formatBatchItemError(new DueStringParseError(recovery))).toBe(recovery)
+        })
+
+        it('returns a safe generic dueString retry for a non-recurring expression', () => {
+            const error = Object.assign(new Error('HTTP 400: Bad Request'), {
+                httpStatusCode: 400,
+                responseData: { error: 'Invalid date format' },
+            })
+
+            expect(
+                formatDueStringParseError(error, {
+                    taskContent: 'Lavendel abschneiden',
+                    dueString: 'tomorrow',
+                }),
+            ).toBe(
+                'Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed. Change only `dueString` and retry.',
+            )
+        })
+
+        it('does not give an empty example for a bare recurring prefix', () => {
+            const error = Object.assign(new Error('HTTP 400: Bad Request'), {
+                httpStatusCode: 400,
+                responseData: { error: 'Invalid date format' },
+            })
+
+            expect(
+                formatDueStringParseError(error, {
+                    taskContent: 'Lavendel abschneiden',
+                    dueString: 'recurring',
+                }),
+            ).toBe(
+                'Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed. Use a complete Todoist recurrence expression; `recurring` alone is not valid. Change only `dueString` and retry.',
+            )
+        })
+
+        it('does not attribute a generic date error to dueString when deadlineDate is supplied', () => {
+            const error = Object.assign(new Error('HTTP 400: Bad Request'), {
+                httpStatusCode: 400,
+                responseData: { error: 'Invalid date format' },
+            })
+
+            expect(
+                formatDueStringParseError(error, {
+                    taskContent: 'Task',
+                    dueString: 'tomorrow',
+                    deadlineDate: 'not-a-date',
+                }),
+            ).toBeUndefined()
         })
     })
 
