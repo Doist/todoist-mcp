@@ -2,6 +2,7 @@ import type { Task, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { assignmentValidator } from '../utils/assignment-validator.js'
 import { convertPriorityToNumber } from '../utils/priorities.js'
+import { createProfilingClient, expectRequestProfile } from '../utils/request-profile.js'
 import {
     createMockProject,
     createMockSection,
@@ -1167,6 +1168,57 @@ describe(`${ADD_TASKS} tool`, () => {
     describe('batch limits', () => {
         it('should export MAX_TASKS_PER_OPERATION constant', () => {
             expect(MAX_TASKS_PER_OPERATION).toBe(25)
+        })
+    })
+
+    describe('request profile', () => {
+        const batch = (count: number, projectId?: string) =>
+            Array.from({ length: count }, (_, index) => ({
+                content: `task-${index}`,
+                ...(projectId ? { projectId } : {}),
+            }))
+
+        function profiling() {
+            return createProfilingClient({
+                getProject: (id: string) => createMockProject({ id }),
+                addTask: (args: { content: string }) => createMockTask({ content: args.content }),
+            })
+        }
+
+        it('checks a shared destination project once, not once per task', async () => {
+            const { client, profile } = profiling()
+
+            await addTasks.execute({ tasks: batch(25, 'project-1') }, client)
+
+            // The archived-project check used to run per task, so a batch bound for one
+            // project made 25 identical reads.
+            expectRequestProfile(profile, {
+                getProject: { count: 1, peak: 1 },
+                addTask: { count: 25, peak: 1 },
+            })
+        })
+
+        it('checks each distinct project once', async () => {
+            const { client, profile } = profiling()
+
+            await addTasks.execute(
+                {
+                    tasks: [...batch(3, 'project-1'), ...batch(3, 'project-2')],
+                },
+                client,
+            )
+
+            expect(profile.count('getProject')).toBe(2)
+        })
+
+        it('reads nothing when no project is named', async () => {
+            const { client, profile } = profiling()
+
+            await addTasks.execute({ tasks: batch(5) }, client)
+
+            // Sequential rather than concurrent: they share a destination, and creating
+            // siblings in order is what preserves the order the caller asked for.
+            expectRequestProfile(profile, { addTask: { count: 5, peak: 1 } })
         })
     })
 })

@@ -1,5 +1,6 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
+import { createProfilingClient } from '../utils/request-profile.js'
 import { createMockTask } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { buildRescheduleDate, rescheduleTasks } from './reschedule-tasks.js'
@@ -358,5 +359,48 @@ describe('buildRescheduleDate', () => {
             isRecurring: true,
         })
         expect(result).toBe('2026-03-20T14:00:00')
+    })
+})
+
+describe('request profile', () => {
+    /** Reschedule needs an existing due date, so every task gets one. */
+    const withDueDate = (id: string) =>
+        createMockTask({
+            id,
+            due: {
+                date: '2026-08-01',
+                isRecurring: false,
+                lang: 'en',
+                string: 'Aug 1',
+                timezone: null,
+            },
+        })
+
+    it('batches the writes but reads each task separately', async () => {
+        const { client, profile } = createProfilingClient({
+            getTask: withDueDate,
+            sync: () => ({ syncToken: 'x', items: [] }),
+        })
+
+        await rescheduleTasks.execute(
+            {
+                tasks: Array.from({ length: 10 }, (_, index) => ({
+                    id: `task-${index}`,
+                    date: '2026-09-01',
+                })),
+            },
+            client,
+        )
+
+        // The writes are already collapsed into a single sync request.
+        expect(profile.count('sync')).toBe(1)
+
+        // The reads are not, and this records the current cost rather than endorsing it:
+        // two reads per task, all in flight at once. `getTasks({ ids })` would make this
+        // one request. Left as is here because switching reads is a change in its own
+        // right, and it needs the comma-separated `ids` workaround; this assertion is
+        // what will fail — deliberately — when that lands.
+        expect(profile.count('getTask')).toBe(20)
+        expect(profile.peak('getTask')).toBe(10)
     })
 })

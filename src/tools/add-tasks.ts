@@ -2,7 +2,7 @@ import type { AddTaskArgs, Task, TodoistApi } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
-import { isInboxProjectId, mapTask } from '../tool-helpers.js'
+import { isInboxProjectId, mapTask, type Project } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
 import { BatchLimits } from '../utils/constants.js'
 import { DurationParseError, parseDuration } from '../utils/duration-parser.js'
@@ -101,6 +101,9 @@ const addTasks = {
 
         // Resolve each section's project at most once across the whole batch
         const sectionProjectCache = new Map<string, string>()
+        // Same for the archived check: a batch bound for one project asked the same
+        // question once per task, which is 25 identical reads at the batch cap.
+        const projectCache = new Map<string, Promise<Project>>()
 
         // Process groups in parallel; within each group, process sequentially
         type IndexedResult = { index: number; result: PromiseSettledResult<Task> }
@@ -109,7 +112,10 @@ const addTasks = {
                 const results: IndexedResult[] = []
                 for (const { task, index } of group) {
                     try {
-                        const created = await processTask(task, client, sectionProjectCache)
+                        const created = await processTask(task, client, {
+                            sectionProjectCache,
+                            projectCache,
+                        })
                         results.push({ index, result: { status: 'fulfilled', value: created } })
                     } catch (error) {
                         results.push({
@@ -181,8 +187,12 @@ function destinationKey(task: z.infer<typeof TaskSchema>): string {
 async function processTask(
     task: z.infer<typeof TaskSchema>,
     client: TodoistApi,
-    sectionProjectCache: Map<string, string>,
+    caches: {
+        sectionProjectCache: Map<string, string>
+        projectCache: Map<string, Promise<Project>>
+    },
 ): Promise<Task> {
+    const { sectionProjectCache, projectCache } = caches
     const {
         duration: durationStr,
         projectId,
@@ -201,7 +211,14 @@ async function processTask(
 
     // Validate project is not archived
     if (resolvedProjectId) {
-        const project = await client.getProject(resolvedProjectId)
+        // Cached as the promise, not the result, so tasks racing for the same project
+        // share one request rather than each starting their own.
+        let pending = projectCache.get(resolvedProjectId)
+        if (!pending) {
+            pending = client.getProject(resolvedProjectId)
+            projectCache.set(resolvedProjectId, pending)
+        }
+        const project = await pending
         if (project.isArchived) {
             throw new Error(
                 `Task "${task.content}": Cannot create task in archived project "${project.name}"`,

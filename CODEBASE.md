@@ -143,6 +143,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; imp
 - `sanitize-data.ts` — HTML sanitization (dompurify) for comment content
 - `validate-todoist-token.ts` — token validation for HTTP middleware
 - `test-helpers.ts` — `createMockTask`, `createMockProject`, `createMockSection`, `TEST_IDS`, `TODAY`
+- `request-profile.ts` — test-only. `createProfilingClient` returns a mock client plus a profile of the requests a tool made (count and peak concurrency per method); `expectRequestProfile` asserts the whole profile, so an unexpected request fails the test. Use it for any batch tool: it is what catches a read that scales with batch size, or writes fanning out concurrently
 
 ## Todoist SDK + auth
 
@@ -157,6 +158,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; imp
 - **Runner:** `vitest` with globals. `npm test` / `npm run test:watch` / `npm run test:coverage`.
 - **Location:** co-located at `src/tools/<tool>.test.ts`; utility tests alongside (`src/utils/retry.test.ts`, etc.).
 - **Mocks:** `vi.fn()` against `TodoistApi` methods. Use factories from `src/utils/test-helpers.ts` — do NOT hand-build mock entities.
+- **Batch tools:** assert the request profile, not just the result. `createProfilingClient` / `expectRequestProfile` (`src/utils/request-profile.ts`) pin how many requests a batch of N makes and how many run at once. Checking only the return value leaves request volume unverified, which is how a per-task lookup inside a batch survived here unnoticed.
 - **Coverage:** 333+ tests currently. All must pass before commit.
 
 ## Build & release

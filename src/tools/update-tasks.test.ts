@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { resetLimitersForTesting } from '../utils/concurrency.js'
 import { ConcurrencyLimits } from '../utils/constants.js'
 import { convertPriorityToNumber } from '../utils/priorities.js'
+import { createProfilingClient, expectRequestProfile } from '../utils/request-profile.js'
 import { createMockTask, createMockUser, TEST_IDS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { updateTasks } from './update-tasks.js'
@@ -2158,6 +2159,101 @@ describe(`${UPDATE_TASKS} tool`, () => {
 
             expect(mockTodoistApi.updateTask).toHaveBeenCalledTimes(10)
             expect(tracker.state.max).toBe(ConcurrencyLimits.WRITES)
+        })
+    })
+
+    describe('request profile', () => {
+        const manyTasks = (count: number, extra: (index: number) => object = () => ({})) =>
+            Array.from({ length: count }, (_, index) => ({ id: `task-${index}`, ...extra(index) }))
+
+        function profiling() {
+            return createProfilingClient({
+                getUser: () => createMockUser(),
+                getTasks: () => ({ results: [], nextCursor: null }),
+                updateTask: (id: string) => createMockTask({ id }),
+                moveTask: (id: string) => createMockTask({ id }),
+                moveTasks: (ids: string[]) => ids.map((id) => createMockTask({ id })),
+            })
+        }
+
+        it('costs one request per task for a field-only batch', async () => {
+            const { client, profile } = profiling()
+
+            await updateTasks.execute({ tasks: manyTasks(25, () => ({ content: 'x' })) }, client)
+
+            // No move params, so no state to read and no user to resolve.
+            expectRequestProfile(profile, {
+                updateTask: { count: 25, peak: ConcurrencyLimits.WRITES },
+            })
+        })
+
+        it('costs two requests to move a whole batch to one destination', async () => {
+            const { client, profile } = profiling()
+
+            await updateTasks.execute(
+                { tasks: manyTasks(25, () => ({ projectId: 'destination' })) },
+                client,
+            )
+
+            // The point of the batching: 25 tasks, one read and one write — not 25 moves.
+            expectRequestProfile(profile, {
+                getTasks: { count: 1, peak: 1 },
+                moveTasks: { count: 1, peak: 1 },
+            })
+            expect(profile.total).toBe(2)
+        })
+
+        it('resolves the inbox once however many tasks target it', async () => {
+            const { client, profile } = profiling()
+
+            await updateTasks.execute(
+                { tasks: manyTasks(25, () => ({ projectId: 'inbox' })) },
+                client,
+            )
+
+            // One getUser, not one per task. This is the assertion whose absence let the
+            // per-task lookup live here unnoticed.
+            expect(profile.count('getUser')).toBe(1)
+        })
+
+        it('never has two moves in flight, however many destinations', async () => {
+            const { client, profile } = profiling()
+
+            await updateTasks.execute(
+                { tasks: manyTasks(10, (index) => ({ projectId: `destination-${index}` })) },
+                client,
+            )
+
+            expect(profile.count('moveTask')).toBe(10)
+            expect(profile.peak('moveTask')).toBe(ConcurrencyLimits.TASK_MOVES)
+        })
+
+        it('makes no write requests at all when every move is redundant', async () => {
+            const { client, profile } = createProfilingClient({
+                getUser: () => createMockUser(),
+                getTasks: () => ({
+                    results: manyTasks(25).map(({ id }) =>
+                        createMockTask({
+                            id,
+                            projectId: 'destination',
+                            sectionId: null,
+                            parentId: null,
+                        }),
+                    ),
+                    nextCursor: null,
+                }),
+                updateTask: (id: string) => createMockTask({ id }),
+                moveTask: (id: string) => createMockTask({ id }),
+                moveTasks: (ids: string[]) => ids.map((id) => createMockTask({ id })),
+            })
+
+            await updateTasks.execute(
+                { tasks: manyTasks(25, () => ({ projectId: 'destination' })) },
+                client,
+            )
+
+            // One read establishes there is nothing to do, and nothing is written.
+            expectRequestProfile(profile, { getTasks: { count: 1, peak: 1 } })
         })
     })
 })
