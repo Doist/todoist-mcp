@@ -1,3 +1,9 @@
+## [12.4.0](https://github.com/Doist/todoist-mcp/compare/v12.3.2...v12.4.0) (2026-08-03)
+
+### Features
+
+* add date filters for activity completion history ([#553](https://github.com/Doist/todoist-mcp/issues/553)) ([da428b4](https://github.com/Doist/todoist-mcp/commit/da428b40f3a7e383fc8a1720ae9a6b2be72b934e))
+
 ## [12.3.2](https://github.com/Doist/todoist-mcp/compare/v12.3.1...v12.3.2) (2026-08-03)
 
 ### Bug Fixes
