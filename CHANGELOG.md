@@ -1,3 +1,9 @@
+## [12.3.1](https://github.com/Doist/todoist-mcp/compare/v12.3.0...v12.3.1) (2026-08-03)
+
+### Bug Fixes
+
+* **update-tasks:** skip redundant moves and batch them by destination ([#548](https://github.com/Doist/todoist-mcp/issues/548)) ([bfef29c](https://github.com/Doist/todoist-mcp/commit/bfef29c65932cbf8984cd775e7067ab4cb81d7dd))
+
 ## [12.3.0](https://github.com/Doist/todoist-mcp/compare/v12.2.4...v12.3.0) (2026-08-03)
 
 ### Features
