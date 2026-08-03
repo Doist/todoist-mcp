@@ -1,3 +1,9 @@
+## [12.3.2](https://github.com/Doist/todoist-mcp/compare/v12.3.1...v12.3.2) (2026-08-03)
+
+### Bug Fixes
+
+* add due string recovery guidance ([#552](https://github.com/Doist/todoist-mcp/issues/552)) ([2039416](https://github.com/Doist/todoist-mcp/commit/20394162918f30505d839d1c364296abce79da83)), closes [Doist/Issues#20569](https://github.com/Doist/Issues/issues/20569) [#20569](https://github.com/Doist/todoist-mcp/issues/20569)
+
 ## [12.3.1](https://github.com/Doist/todoist-mcp/compare/v12.3.0...v12.3.1) (2026-08-03)
 
 ### Bug Fixes
