@@ -1,3 +1,9 @@
+## [12.3.0](https://github.com/Doist/todoist-mcp/compare/v12.2.4...v12.3.0) (2026-08-03)
+
+### Features
+
+* **move-planner:** decide when a requested container change is a real move ([#550](https://github.com/Doist/todoist-mcp/issues/550)) ([89481c4](https://github.com/Doist/todoist-mcp/commit/89481c4e0b7971050076c93740de668aac3755e8))
+
 ## [12.2.4](https://github.com/Doist/todoist-mcp/compare/v12.2.3...v12.2.4) (2026-08-03)
 
 ### Bug Fixes
