@@ -122,7 +122,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; imp
 
 ## `src/utils/` catalog — don't reimplement
 
-- `constants.ts` — `ApiLimits` (batch sizes, max string lengths)
+- `constants.ts` — `ApiLimits` (batch sizes, max string lengths), `BatchLimits`, `ConcurrencyLimits`
 - `tool-names.ts` — `ToolNames` enum of every registered tool name
 - `output-schemas.ts` — Reusable Zod schemas: TaskSchema, ProjectSchema, SectionSchema, CommentSchema, etc.
 - `schema-helpers.ts` — Zod builders used across tools
@@ -137,7 +137,9 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; imp
 - `assignment-validator.ts` — validate collaborator assignments
 - `user-resolver.ts` / `workspace-resolver.ts` — resolve user/workspace refs
 - `response-builders.ts` — `summarizeTaskOperation`, `summarizeBatch`, `appendFailureSummary`, `previewTasks` (keep output messages consistent)
-- `retry.ts` — `executeWithRetry()` used inside `registerTool`
+- `retry.ts` — `executeWithRetry()` used inside `registerTool`; exponential backoff with full jitter
+- `concurrency.ts` — `getMoveLimiter`/`getWriteLimiter` bound how many write requests a batch tool has in flight. Limiters are per account (registered by `createTodoistClient`), because the HTTP transport builds a client per request. Task moves get their own single-slot lane: the API locks a task's whole tree for a move, so overlapping moves contend
+- `move-planner.ts` — `planMove`/`isMoveRedundant`/`destinationKey`: decides whether a requested container change is a real move, and groups tasks bound for the same destination so they can share one request
 - `sanitize-data.ts` — HTML sanitization (dompurify) for comment content
 - `validate-todoist-token.ts` — token validation for HTTP middleware
 - `test-helpers.ts` — `createMockTask`, `createMockProject`, `createMockSection`, `TEST_IDS`, `TODAY`

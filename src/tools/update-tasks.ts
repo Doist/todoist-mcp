@@ -1,12 +1,24 @@
-import type { Task, TodoistApi, UpdateTaskArgs } from '@doist/todoist-sdk'
+import type {
+    GetTasksArgs,
+    MoveTaskArgs,
+    Task,
+    TodoistApi,
+    UpdateTaskArgs,
+} from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
-import { createMoveTaskArgs, mapTask, resolveInboxProjectId } from '../tool-helpers.js'
+import { isInboxProjectId, mapTask } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
 import { getMoveLimiter, getWriteLimiter } from '../utils/concurrency.js'
 import { BatchLimits, DisplayLimits } from '../utils/constants.js'
 import { DurationParseError, parseDuration } from '../utils/duration-parser.js'
+import {
+    destinationKey,
+    isMoveRedundant,
+    type MoveRequest,
+    planMove,
+} from '../utils/move-planner.js'
 import { FailureSchema, TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import {
     convertPriorityToNumber,
@@ -35,10 +47,18 @@ const TasksUpdateSchema = z.object({
         .string()
         .optional()
         .describe(
-            'The new project ID for the task. Project ID should be an ID string, or the text "inbox", for inbox tasks.',
+            'Move the task to this project ID, or the text "inbox" for the inbox. Omit unless the project should change: moving a task to a project also lifts it out of its section and out from under its parent.',
         ),
-    sectionId: z.string().optional().describe('The new section ID for the task.'),
-    parentId: z.string().optional().describe('The new parent task ID (for subtasks).'),
+    sectionId: z
+        .string()
+        .optional()
+        .describe(
+            'Move the task to this section ID. Omit unless the section should change: moving a task to a section also lifts it out from under its parent.',
+        ),
+    parentId: z
+        .string()
+        .optional()
+        .describe('Make the task a subtask of this task ID. Omit unless the parent should change.'),
     order: z.number().optional().describe('The new order of the task within its parent/section.'),
     priority: PrioritySchema.optional().describe(PRIORITY_INPUT_DESCRIPTION),
     dueString: z
@@ -98,6 +118,41 @@ type TaskUpdateOutcome =
     | { kind: 'updated'; task: Task }
     | { kind: 'partial'; task: Task; error: string }
 
+/** A task's outcome, including a failure that must not abort the rest of the batch. */
+type BatchOutcome = TaskUpdateOutcome | { kind: 'failed'; error: string }
+
+/** One task's requested changes, normalised into what the API needs. */
+type PreparedTask = {
+    /** Position in the caller's array, so results keep the order they were sent in. */
+    index: number
+    id: string
+    updateArgs: UpdateTaskArgs
+    moveRequest: MoveRequest
+    redundantMoveSkipped: boolean
+    /** Set once a task has an outcome that later phases must not overwrite. */
+    failed: boolean
+}
+
+/** A prepared task paired with the single move it actually needs. */
+type PlannedMove = { item: PreparedTask; move: MoveTaskArgs }
+
+type MoveResult = { task: Task } | { error: string }
+
+/**
+ * A group of moves whose outcome the response did not settle, either because the
+ * request failed or because the tasks were absent from it.
+ */
+type UnresolvedMoveGroup = {
+    group: PlannedMove[]
+    destination: MoveTaskArgs
+    /** Absent when the request succeeded but omitted these tasks. */
+    error?: unknown
+}
+
+const hasMove = (request: MoveRequest) =>
+    Boolean(request.projectId || request.sectionId || request.parentId)
+const hasFields = (updateArgs: UpdateTaskArgs) => Object.keys(updateArgs).length > 0
+
 const DUE_DATE_REMOVAL_ALIASES = ['remove', 'no date'] as const
 const DEADLINE_REMOVAL_ALIASES = ['remove', 'no date', 'no deadline'] as const
 const DUE_DATE_REMOVAL_VALUE = 'no date' as const
@@ -128,13 +183,19 @@ const OutputSchema = {
             updateCount: z.number().describe('The number of tasks actually updated.'),
             skippedCount: z.number().describe('The number of tasks skipped (no changes).'),
             failureCount: z.number().describe('The number of tasks that failed to update.'),
+            redundantMovesSkipped: z
+                .number()
+                .describe(
+                    'Moves not performed because the task was already in the requested destination. A non-zero count means container fields were sent that did not need to be.',
+                ),
         })
         .describe('Summary of operations performed.'),
 }
 
 const updateTasks = {
     name: ToolNames.UPDATE_TASKS,
-    description: 'Update existing tasks including content, dates, priorities, and assignments.',
+    description:
+        'Update existing tasks including content, dates, priorities, and assignments. Send only the fields that change.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
@@ -149,37 +210,146 @@ const updateTasks = {
         // single opaque batch error that nudges the caller into retrying everything —
         // a retry loop that can trip server-side abuse penalties. So we settle every
         // task and report per-task outcomes.
-        const settled = await Promise.allSettled(
-            tasks.map((task) => processTaskUpdate(task, client)),
+        const outcomes: BatchOutcome[] = tasks.map(() => ({ kind: 'skipped' }))
+        const failWith = (index: number, error: string) => {
+            outcomes[index] = { kind: 'failed', error }
+        }
+        const fail = (index: number, error: unknown) => {
+            failWith(index, formatBatchItemError(error))
+        }
+
+        const actionable = tasks
+            .map((task, index) => ({ task, index }))
+            .filter(({ task }) => hasUpdatesToMake(task))
+
+        // Resolve "inbox" once for the whole batch rather than once per task.
+        const inbox = await resolveBatchInboxProjectId(
+            actionable.map(({ task }) => task),
+            client,
         )
 
-        const updatedTasks: Task[] = []
-        const failures: Array<{ item: string; error: string; code?: string }> = []
-        let skippedCount = 0
+        const prepared = await Promise.allSettled(
+            actionable.map(({ task, index }) => prepareTaskUpdate({ task, index, client, inbox })),
+        )
 
-        for (const [index, result] of settled.entries()) {
+        const ready: PreparedTask[] = []
+        for (const [position, result] of prepared.entries()) {
+            const index = actionable[position]?.index ?? position
             if (result.status === 'fulfilled') {
-                if (result.value.kind === 'skipped') {
-                    skippedCount++
-                    continue
-                }
+                ready.push(result.value)
+            } else {
+                fail(index, result.reason)
+            }
+        }
 
-                updatedTasks.push(result.value.task)
-                if (result.value.kind === 'partial') {
-                    failures.push({
-                        item: tasks[index]?.id ?? `Task ${index + 1}`,
-                        error: result.value.error,
-                        code: 'PARTIAL_MOVE_APPLIED',
-                    })
+        // Read current containers so a caller echoing back a task's existing
+        // project/section/parent doesn't turn a field edit into a move.
+        const currentTasks = await fetchCurrentTaskStates({
+            client,
+            ids: [
+                ...new Set(
+                    ready.filter((item) => hasMove(item.moveRequest)).map((item) => item.id),
+                ),
+            ],
+        })
+
+        const moving: PlannedMove[] = []
+        for (const item of ready) {
+            try {
+                const plan = planMove({
+                    taskId: item.id,
+                    request: item.moveRequest,
+                    current: currentTasks.get(item.id),
+                })
+                item.redundantMoveSkipped = plan.redundantMoveSkipped
+                if (plan.move) {
+                    moving.push({ item, move: plan.move })
                 }
+            } catch (error) {
+                fail(item.index, error)
+                item.failed = true
+            }
+        }
+
+        const movedTasks = new Map<number, MoveResult>()
+        const fieldUpdates: Array<Promise<void>> = []
+
+        const queueFieldUpdates = (items: PreparedTask[]) => {
+            const pending = items.filter((item) => !item.failed)
+            if (pending.length === 0) {
+                return
+            }
+            fieldUpdates.push(
+                applyFieldUpdates({
+                    client,
+                    items: pending,
+                    onUpdated: (item, task) => {
+                        outcomes[item.index] = { kind: 'updated', task }
+                    },
+                    onFailed: (item, error) => {
+                        const moved = movedTasks.get(item.index)
+                        if (moved && 'task' in moved) {
+                            // The move already changed server state, so report it as
+                            // partial rather than losing the fact that it did relocate.
+                            outcomes[item.index] = {
+                                kind: 'partial',
+                                task: moved.task,
+                                error: `Move applied; field update failed: ${formatBatchItemError(error)}`,
+                            }
+                            return
+                        }
+                        fail(item.index, error)
+                    },
+                }),
+            )
+        }
+
+        // Field updates use their own lane and don't contend with moves, so nothing
+        // waits on the move phase longer than it has to: tasks with no move to make
+        // start straight away, and a moved task's update is queued as soon as its own
+        // move lands rather than after every other group has finished.
+        const movingIndexes = new Set(moving.map(({ item }) => item.index))
+        queueFieldUpdates(ready.filter((item) => !movingIndexes.has(item.index)))
+
+        await applyMoves({
+            client,
+            moving,
+            results: movedTasks,
+            onResolved: (entries) => {
+                const moved: PreparedTask[] = []
+                for (const { item } of entries) {
+                    const result = movedTasks.get(item.index)
+                    if (result && 'error' in result) {
+                        // Already formatted by the move phase — formatting it again
+                        // would flatten the API's objection into a bare status message.
+                        failWith(item.index, result.error)
+                        // A failed move means the field update is not attempted, so the
+                        // task is not left reporting a change that never applied to it.
+                        item.failed = true
+                        continue
+                    }
+                    moved.push(item)
+                }
+                queueFieldUpdates(moved)
+            },
+        })
+
+        await Promise.all(fieldUpdates)
+
+        // Tasks that only moved have no field update to report against, so take
+        // their outcome straight from the move result.
+        for (const item of ready) {
+            if (item.failed || hasFields(item.updateArgs)) {
                 continue
             }
-
-            failures.push({
-                item: tasks[index]?.id ?? `Task ${index + 1}`,
-                error: formatBatchItemError(result.reason),
-            })
+            const moved = movedTasks.get(item.index)
+            if (moved && 'task' in moved) {
+                outcomes[item.index] = { kind: 'updated', task: moved.task }
+            }
         }
+
+        const { updatedTasks, failures, skippedCount } = collectOutcomes({ tasks, outcomes })
+        const redundantMovesSkipped = ready.filter((item) => item.redundantMoveSkipped).length
 
         // Never throw for per-item problems — even when every task fails. Returning the
         // structured result (empty `tasks`, populated `failures`) keeps total and partial
@@ -191,6 +361,7 @@ const updateTasks = {
             tasks: mappedTasks,
             failures,
             skippedCount,
+            redundantMovesSkipped,
         })
 
         return {
@@ -204,6 +375,7 @@ const updateTasks = {
                     updateCount: mappedTasks.length,
                     skippedCount,
                     failureCount: failures.length,
+                    redundantMovesSkipped,
                 },
             },
         }
@@ -211,16 +383,304 @@ const updateTasks = {
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
 
 /**
- * Applies a single task's update and/or move. A move followed by a failed field update is
- * returned as a partial outcome because the move already changed server state. Other API
- * and validation errors throw so the caller records the task as a failure without aborting
- * the rest of the batch.
+ * Folds per-task outcomes into the response's parallel lists, keeping the order the
+ * caller sent them in.
  */
-async function processTaskUpdate(task: TaskUpdate, client: TodoistApi): Promise<TaskUpdateOutcome> {
-    if (!hasUpdatesToMake(task)) {
-        return { kind: 'skipped' }
+function collectOutcomes({ tasks, outcomes }: { tasks: TaskUpdate[]; outcomes: BatchOutcome[] }): {
+    updatedTasks: Task[]
+    failures: Array<{ item: string; error: string; code?: string }>
+    skippedCount: number
+} {
+    const updatedTasks: Task[] = []
+    const failures: Array<{ item: string; error: string; code?: string }> = []
+    let skippedCount = 0
+
+    for (const [index, outcome] of outcomes.entries()) {
+        const item = tasks[index]?.id ?? `Task ${index + 1}`
+        if (outcome.kind === 'skipped') {
+            skippedCount++
+            continue
+        }
+        if (outcome.kind === 'failed') {
+            failures.push({ item, error: outcome.error })
+            continue
+        }
+
+        updatedTasks.push(outcome.task)
+        if (outcome.kind === 'partial') {
+            failures.push({ item, error: outcome.error, code: 'PARTIAL_MOVE_APPLIED' })
+        }
     }
 
+    return { updatedTasks, failures, skippedCount }
+}
+
+/**
+ * Fetches the current user once when any task in the batch targets the inbox, so a
+ * 25-task batch costs one lookup rather than 25. A failure is carried rather than
+ * thrown so it only fails the tasks that actually needed the resolution.
+ */
+async function resolveBatchInboxProjectId(
+    tasks: TaskUpdate[],
+    client: TodoistApi,
+): Promise<{ projectId?: string; error?: unknown }> {
+    if (!tasks.some((task) => isInboxProjectId(task.projectId))) {
+        return {}
+    }
+
+    try {
+        const user = await executeWithRetry(() => client.getUser())
+        return { projectId: user.inboxProjectId }
+    } catch (error) {
+        return { error }
+    }
+}
+
+/**
+ * Reads the current containers of every task that might be moved, in one request.
+ *
+ * Deliberately a single page rather than a paginated sweep: if the API ever ignored
+ * the `ids` filter, following cursors would walk the caller's entire account. One
+ * page covers the batch cap, and the results are filtered locally so an unfiltered
+ * response can't be mistaken for task state.
+ *
+ * Any task missing from the response — and a failure of the read itself — leaves the
+ * state unknown, which means the requested move goes ahead. The server remains the
+ * authority; the worst case is the redundant write we would have made anyway. A
+ * malformed id fails the whole read rather than being omitted from it, which costs
+ * this batch its no-op detection but nothing more.
+ */
+async function fetchCurrentTaskStates({
+    client,
+    ids,
+}: {
+    client: TodoistApi
+    ids: string[]
+}): Promise<Map<string, Task>> {
+    const states = new Map<string, Task>()
+    if (ids.length === 0) {
+        return states
+    }
+
+    try {
+        const requested = new Set(ids)
+        // The endpoint wants `ids` comma-separated, while the SDK serialises array
+        // parameters as JSON — which the API rejects with INVALID_ARGUMENT_VALUE. The
+        // cast buys a query the API accepts rather than papering over a type mismatch.
+        const query = {
+            ids: ids.join(','),
+            limit: MAX_TASKS_PER_OPERATION,
+        } as unknown as GetTasksArgs
+        const { results } = await executeWithRetry(() => client.getTasks(query))
+        for (const task of results) {
+            if (requested.has(task.id)) {
+                states.set(task.id, task)
+            }
+        }
+    } catch {
+        // Unknown state, so every requested move goes ahead.
+    }
+
+    return states
+}
+
+/**
+ * Sends the planned moves, collapsing tasks bound for the same destination into a
+ * single request.
+ *
+ * Groups run one at a time: the API locks a task's whole tree for a move, and a tree
+ * spans the source as well as the destination, so overlapping moves contend even when
+ * they target different places.
+ */
+async function applyMoves({
+    client,
+    moving,
+    results,
+    onResolved,
+}: {
+    client: TodoistApi
+    moving: PlannedMove[]
+    /**
+     * Keyed by the caller's position, not by task id: the same id may legitimately
+     * appear twice in one batch, and keying by id would let the second entry's
+     * outcome overwrite the first's.
+     */
+    results: Map<number, MoveResult>
+    /** Called with a group's entries as soon as their outcome is known. */
+    onResolved: (entries: PlannedMove[]) => void
+}): Promise<void> {
+    if (moving.length === 0) {
+        return
+    }
+
+    const groups = new Map<string, PlannedMove[]>()
+    for (const planned of moving) {
+        const key = destinationKey(planned.move)
+        const group = groups.get(key)
+        if (group) {
+            group.push(planned)
+        } else {
+            groups.set(key, [planned])
+        }
+    }
+
+    const moveLimiter = getMoveLimiter(client)
+    const unresolved: UnresolvedMoveGroup[] = []
+
+    for (const group of groups.values()) {
+        // One command per task, even when a caller named the same task twice for the
+        // same destination. The second would be a no-op, and two moves of one task in
+        // a single request is the tree contention this batching exists to avoid.
+        const ids = [...new Set(group.map(({ item }) => item.id))]
+        // `move` is identical across a group by construction.
+        const destination = group[0]?.move as MoveTaskArgs
+        const sole = group.length === 1 ? group[0] : undefined
+
+        try {
+            if (sole) {
+                // A lone move keeps the single-task endpoint: its response is that task
+                // and its errors already name it, so there is nothing to disambiguate.
+                const moved = await moveLimiter(() =>
+                    executeWithRetry(() => client.moveTask(sole.item.id, destination)),
+                )
+                results.set(sole.item.index, { task: moved })
+                onResolved(group)
+                continue
+            }
+
+            const moved = await moveLimiter(() =>
+                executeWithRetry(() => client.moveTasks(ids, destination)),
+            )
+
+            const byId = new Map(moved.map((task) => [task.id, task]))
+            const unaccounted: PlannedMove[] = []
+            const resolved: PlannedMove[] = []
+            for (const planned of group) {
+                const task = byId.get(planned.item.id)
+                if (task) {
+                    results.set(planned.item.index, { task })
+                    resolved.push(planned)
+                } else {
+                    unaccounted.push(planned)
+                }
+            }
+            onResolved(resolved)
+
+            // A response that omits a task says nothing about whether its move ran, so
+            // check rather than assume.
+            if (unaccounted.length > 0) {
+                unresolved.push({ group: unaccounted, destination })
+            }
+        } catch (error) {
+            if (sole) {
+                results.set(sole.item.index, { error: formatBatchItemError(error) })
+                onResolved(group)
+                continue
+            }
+
+            // A batched move is one request carrying many commands, and the API applies
+            // them independently while reporting only the first problem. Treating the
+            // whole group as failed would misreport tasks that did move, so read the
+            // group back and let the server say which commands landed.
+            unresolved.push({ group, destination, error })
+        }
+    }
+
+    // Reconcile every unresolved group from one read. Reading per group would turn a
+    // batch that fails as pairs into a dozen sequential reads on the error path.
+    if (unresolved.length > 0) {
+        await reconcileMoves({ client, unresolved, results })
+        for (const { group } of unresolved) {
+            onResolved(group)
+        }
+    }
+}
+
+/**
+ * Determines from current state which unresolved moves actually reached their
+ * destination. Those that did not are reported as failures, carrying the batch error
+ * where there is one.
+ */
+async function reconcileMoves({
+    client,
+    unresolved,
+    results,
+}: {
+    client: TodoistApi
+    unresolved: UnresolvedMoveGroup[]
+    results: Map<number, MoveResult>
+}): Promise<void> {
+    const ids = [...new Set(unresolved.flatMap(({ group }) => group.map(({ item }) => item.id)))]
+    const states = await fetchCurrentTaskStates({ client, ids })
+
+    for (const { group, destination, error } of unresolved) {
+        const reason =
+            error === undefined ? 'Task not returned by the move' : formatBatchItemError(error)
+
+        for (const { item } of group) {
+            const current = states.get(item.id)
+            if (current && isMoveRedundant(current, destination)) {
+                results.set(item.index, { task: current })
+                continue
+            }
+            // Unreadable state counts as failed: over-reporting a failure is safer than
+            // claiming a move that never happened, and a corrective retry is now cheap
+            // because an already-moved task is recognised as needing no move.
+            results.set(item.index, { error: reason })
+        }
+    }
+}
+
+/**
+ * Applies field updates for every prepared task that has them, bounded so a large
+ * batch doesn't fan out unbounded writes.
+ */
+async function applyFieldUpdates({
+    client,
+    items,
+    onUpdated,
+    onFailed,
+}: {
+    client: TodoistApi
+    items: PreparedTask[]
+    onUpdated: (item: PreparedTask, task: Task) => void
+    onFailed: (item: PreparedTask, error: unknown) => void
+}): Promise<void> {
+    const writeLimiter = getWriteLimiter(client)
+
+    await Promise.all(
+        items
+            .filter((item) => hasFields(item.updateArgs))
+            .map(async (item) => {
+                try {
+                    const task = await writeLimiter(() =>
+                        executeWithRetry(() => client.updateTask(item.id, item.updateArgs)),
+                    )
+                    onUpdated(item, task)
+                } catch (error) {
+                    onFailed(item, error)
+                }
+            }),
+    )
+}
+
+/**
+ * Turns one task's requested changes into the arguments the API needs: normalised
+ * field updates plus the containers it was asked to move to. Validation and parsing
+ * problems throw so the caller records that task as a failure without aborting the
+ * rest of the batch.
+ */
+async function prepareTaskUpdate({
+    task,
+    index,
+    client,
+    inbox,
+}: {
+    task: TaskUpdate
+    index: number
+    client: TodoistApi
+    inbox: { projectId?: string; error?: unknown }
+}): Promise<PreparedTask> {
     const {
         id,
         projectId,
@@ -235,10 +695,10 @@ async function processTaskUpdate(task: TaskUpdate, client: TodoistApi): Promise<
         ...otherUpdateArgs
     } = task
 
-    // Resolve "inbox" to actual inbox project ID if needed
-    const resolvedProjectId = await executeWithRetry(() =>
-        resolveInboxProjectId({ projectId, client }),
-    )
+    if (isInboxProjectId(projectId) && inbox.error !== undefined) {
+        throw inbox.error
+    }
+    const resolvedProjectId = isInboxProjectId(projectId) ? inbox.projectId : projectId
 
     let updateArgs: UpdateTaskArgs = {
         ...otherUpdateArgs,
@@ -291,46 +751,18 @@ async function processTaskUpdate(task: TaskUpdate, client: TodoistApi): Promise<
         }
     }
 
-    // Each SDK call goes through executeWithRetry so transient 5xx responses (502/503/504)
-    // are retried per item. The registerTool() wrapper's retry only fires when execute()
-    // throws, which never happens now that we settle each task — and the SDK transport
-    // only retries network/timeout errors, not 5xx responses.
-    //
-    // The limiters bound how many of those calls are in flight at once. Moves get
-    // their own, tighter lane because the API locks a task's whole tree while
-    // moving it, so overlapping moves contend and one of them loses.
-    const moveLimiter = getMoveLimiter(client)
-    const writeLimiter = getWriteLimiter(client)
-    const updateTask = () =>
-        writeLimiter(() => executeWithRetry(() => client.updateTask(id, updateArgs)))
-
-    // If no move parameters are provided, use updateTask without moveTask
-    if (!resolvedProjectId && !sectionId && !parentId) {
-        return {
-            kind: 'updated',
-            task: await updateTask(),
-        }
+    return {
+        index,
+        id,
+        updateArgs,
+        moveRequest: {
+            projectId: resolvedProjectId,
+            sectionId,
+            parentId,
+        },
+        redundantMoveSkipped: false,
+        failed: false,
     }
-
-    const moveArgs = createMoveTaskArgs(id, resolvedProjectId, sectionId, parentId)
-    const movedTask = await moveLimiter(() => executeWithRetry(() => client.moveTask(id, moveArgs)))
-
-    if (Object.keys(updateArgs).length > 0) {
-        try {
-            return {
-                kind: 'updated',
-                task: await updateTask(),
-            }
-        } catch (error) {
-            return {
-                kind: 'partial',
-                task: movedTask,
-                error: `Move applied; field update failed: ${formatBatchItemError(error)}`,
-            }
-        }
-    }
-
-    return { kind: 'updated', task: movedTask }
 }
 
 /**
@@ -366,14 +798,19 @@ function generateTextContent({
     tasks,
     failures,
     skippedCount,
+    redundantMovesSkipped,
 }: {
     tasks: ReturnType<typeof mapTask>[]
     failures: Array<{ item: string; error: string; code?: string }>
     skippedCount: number
+    redundantMovesSkipped: number
 }) {
     const contextParts: string[] = []
     if (skippedCount > 0) {
         contextParts.push(`${skippedCount} skipped - no changes`)
+    }
+    if (redundantMovesSkipped > 0) {
+        contextParts.push(`${redundantMovesSkipped} already in requested destination`)
     }
     if (failures.length > 0) {
         contextParts.push(`${failures.length} failed`)
