@@ -267,40 +267,70 @@ const updateTasks = {
             }
         }
 
-        const movedTasks = await applyMoves({ client, moving })
-        for (const { item } of moving) {
-            const result = movedTasks.get(item.index)
-            if (result && 'error' in result) {
-                // Already formatted by the move phase — formatting it again would
-                // flatten the API's specific objection into a bare status message.
-                failWith(item.index, result.error)
-                // A failed move means the field update is not attempted, so the task
-                // is not left reporting a change that never applied to it.
-                item.failed = true
+        const movedTasks = new Map<number, MoveResult>()
+        const fieldUpdates: Array<Promise<void>> = []
+
+        const queueFieldUpdates = (items: PreparedTask[]) => {
+            const pending = items.filter((item) => !item.failed)
+            if (pending.length === 0) {
+                return
             }
+            fieldUpdates.push(
+                applyFieldUpdates({
+                    client,
+                    items: pending,
+                    onUpdated: (item, task) => {
+                        outcomes[item.index] = { kind: 'updated', task }
+                    },
+                    onFailed: (item, error) => {
+                        const moved = movedTasks.get(item.index)
+                        if (moved && 'task' in moved) {
+                            // The move already changed server state, so report it as
+                            // partial rather than losing the fact that it did relocate.
+                            outcomes[item.index] = {
+                                kind: 'partial',
+                                task: moved.task,
+                                error: `Move applied; field update failed: ${formatBatchItemError(error)}`,
+                            }
+                            return
+                        }
+                        fail(item.index, error)
+                    },
+                }),
+            )
         }
 
-        await applyFieldUpdates({
+        // Field updates use their own lane and don't contend with moves, so nothing
+        // waits on the move phase longer than it has to: tasks with no move to make
+        // start straight away, and a moved task's update is queued as soon as its own
+        // move lands rather than after every other group has finished.
+        const movingIndexes = new Set(moving.map(({ item }) => item.index))
+        queueFieldUpdates(ready.filter((item) => !movingIndexes.has(item.index)))
+
+        await applyMoves({
             client,
-            items: ready.filter((item) => !item.failed),
-            onUpdated: (item, task) => {
-                outcomes[item.index] = { kind: 'updated', task }
-            },
-            onFailed: (item, error) => {
-                const moved = movedTasks.get(item.index)
-                if (moved && 'task' in moved) {
-                    // The move already changed server state, so report it as partial
-                    // rather than losing the fact that the task did relocate.
-                    outcomes[item.index] = {
-                        kind: 'partial',
-                        task: moved.task,
-                        error: `Move applied; field update failed: ${formatBatchItemError(error)}`,
+            moving,
+            results: movedTasks,
+            onResolved: (entries) => {
+                const moved: PreparedTask[] = []
+                for (const { item } of entries) {
+                    const result = movedTasks.get(item.index)
+                    if (result && 'error' in result) {
+                        // Already formatted by the move phase — formatting it again
+                        // would flatten the API's objection into a bare status message.
+                        failWith(item.index, result.error)
+                        // A failed move means the field update is not attempted, so the
+                        // task is not left reporting a change that never applied to it.
+                        item.failed = true
+                        continue
                     }
-                    return
+                    moved.push(item)
                 }
-                fail(item.index, error)
+                queueFieldUpdates(moved)
             },
         })
+
+        await Promise.all(fieldUpdates)
 
         // Tasks that only moved have no field update to report against, so take
         // their outcome straight from the move result.
@@ -413,7 +443,8 @@ async function resolveBatchInboxProjectId(
 function buildTaskIdsQuery(ids: string[]): GetTasksArgs {
     return {
         ids: ids.join(','),
-        limit: Math.max(ids.length, MAX_TASKS_PER_OPERATION),
+        // The batch cap bounds `ids`, so one page always covers the whole request.
+        limit: MAX_TASKS_PER_OPERATION,
     } as unknown as GetTasksArgs
 }
 
@@ -469,16 +500,22 @@ async function fetchCurrentTaskStates({
 async function applyMoves({
     client,
     moving,
+    results,
+    onResolved,
 }: {
     client: TodoistApi
     moving: PlannedMove[]
-}): Promise<Map<number, MoveResult>> {
-    // Keyed by the caller's position, not by task id: the same id may legitimately
-    // appear twice in one batch, and keying by id would let the second entry's
-    // outcome overwrite the first's.
-    const results = new Map<number, MoveResult>()
+    /**
+     * Keyed by the caller's position, not by task id: the same id may legitimately
+     * appear twice in one batch, and keying by id would let the second entry's
+     * outcome overwrite the first's.
+     */
+    results: Map<number, MoveResult>
+    /** Called with a group's entries as soon as their outcome is known. */
+    onResolved: (entries: PlannedMove[]) => void
+}): Promise<void> {
     if (moving.length === 0) {
-        return results
+        return
     }
 
     const groups = new Map<string, PlannedMove[]>()
@@ -496,7 +533,10 @@ async function applyMoves({
     const unresolved: UnresolvedMoveGroup[] = []
 
     for (const group of groups.values()) {
-        const ids = group.map(({ item }) => item.id)
+        // One command per task, even when a caller named the same task twice for the
+        // same destination. The second would be a no-op, and two moves of one task in
+        // a single request is the tree contention this batching exists to avoid.
+        const ids = [...new Set(group.map(({ item }) => item.id))]
         // `move` is identical across a group by construction.
         const destination = group[0]?.move as MoveTaskArgs
         const sole = group.length === 1 ? group[0] : undefined
@@ -509,6 +549,7 @@ async function applyMoves({
                     executeWithRetry(() => client.moveTask(sole.item.id, destination)),
                 )
                 results.set(sole.item.index, { task: moved })
+                onResolved(group)
                 continue
             }
 
@@ -518,14 +559,17 @@ async function applyMoves({
 
             const byId = new Map(moved.map((task) => [task.id, task]))
             const unaccounted: PlannedMove[] = []
+            const resolved: PlannedMove[] = []
             for (const planned of group) {
                 const task = byId.get(planned.item.id)
                 if (task) {
                     results.set(planned.item.index, { task })
+                    resolved.push(planned)
                 } else {
                     unaccounted.push(planned)
                 }
             }
+            onResolved(resolved)
 
             // A response that omits a task says nothing about whether its move ran, so
             // check rather than assume.
@@ -535,6 +579,7 @@ async function applyMoves({
         } catch (error) {
             if (sole) {
                 results.set(sole.item.index, { error: formatBatchItemError(error) })
+                onResolved(group)
                 continue
             }
 
@@ -550,9 +595,10 @@ async function applyMoves({
     // batch that fails as pairs into a dozen sequential reads on the error path.
     if (unresolved.length > 0) {
         await reconcileMoves({ client, unresolved, results })
+        for (const { group } of unresolved) {
+            onResolved(group)
+        }
     }
-
-    return results
 }
 
 /**
