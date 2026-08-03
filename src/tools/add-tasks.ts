@@ -36,7 +36,7 @@ const TaskSchema = z.object({
     ),
     priority: PrioritySchema.optional().describe(PRIORITY_INPUT_DESCRIPTION),
     dueString: optionalString(
-        'The due date for the task, in natural language. For yearly recurrences, use Todoist syntax such as "every year on July 1"; do not prefix it with "recurring".',
+        'The due date for the task, in natural language. Also use natural language for recurrences; do not prefix it with "recurring".',
     ),
     deadlineDate: optionalString(
         'The deadline date for the task in ISO 8601 format (YYYY-MM-DD, e.g., "2025-12-31"). Deadlines are immovable constraints shown with a different indicator than due dates.',
