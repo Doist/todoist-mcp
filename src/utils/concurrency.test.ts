@@ -31,8 +31,16 @@ beforeEach(() => {
 })
 
 describe('createLimiter', () => {
-    it('should reject a limit below 1', () => {
-        expect(() => createLimiter(0)).toThrow('maxConcurrent must be at least 1, received 0')
+    it.each([
+        { label: 'zero', value: 0 },
+        { label: 'a negative number', value: -1 },
+        // Each of these would silently defeat the cap: NaN leaves every task queued,
+        // Infinity removes the bound, and a fraction admits an extra task.
+        { label: 'NaN', value: Number.NaN },
+        { label: 'Infinity', value: Number.POSITIVE_INFINITY },
+        { label: 'a fractional limit', value: 1.5 },
+    ])('should reject $label', ({ value }) => {
+        expect(() => createLimiter(value)).toThrow('maxConcurrent must be a positive integer')
     })
 
     it('should never exceed the configured concurrency', async () => {
@@ -153,6 +161,86 @@ describe('createLimiter', () => {
     it('should return the task result', async () => {
         const limit = createLimiter(1)
         await expect(limit(() => Promise.resolve(42))).resolves.toBe(42)
+    })
+
+    describe('queue deadline', () => {
+        it('should abandon a task that waits too long, without sending it', async () => {
+            vi.useFakeTimers()
+            const limit = createLimiter(1, { queueTimeoutMs: 1000 })
+            const holding = deferred()
+            const ran = vi.fn()
+
+            const held = limit(() => holding.promise)
+            const queued = limit(async () => {
+                ran()
+            })
+            const assertion = expect(queued).rejects.toThrow(
+                'Timed out after 1000ms waiting for an earlier request to finish; this request was not sent',
+            )
+
+            await vi.advanceTimersByTimeAsync(1000)
+            await assertion
+            // The point of the deadline: the request is never issued.
+            expect(ran).not.toHaveBeenCalled()
+
+            holding.resolve()
+            await held
+            vi.useRealTimers()
+        })
+
+        it('should not shrink the pool when a queued task is abandoned', async () => {
+            vi.useFakeTimers()
+            const limit = createLimiter(1, { queueTimeoutMs: 1000 })
+            const holding = deferred()
+
+            const held = limit(() => holding.promise)
+            const assertion = expect(limit(() => Promise.resolve('never runs'))).rejects.toThrow(
+                'Timed out',
+            )
+            await vi.advanceTimersByTimeAsync(1000)
+            await assertion
+
+            holding.resolve()
+            await held
+
+            // A slot handed to an abandoned task would never come back, so this hangs
+            // if the timeout left the queue in an inconsistent state.
+            vi.useRealTimers()
+            await expect(limit(() => Promise.resolve('ok'))).resolves.toBe('ok')
+        })
+
+        it('should not abandon a task admitted before its deadline', async () => {
+            vi.useFakeTimers()
+            const limit = createLimiter(1, { queueTimeoutMs: 1000 })
+            const holding = deferred()
+
+            const held = limit(() => holding.promise)
+            const queued = limit(() => Promise.resolve('ran'))
+
+            await vi.advanceTimersByTimeAsync(500)
+            holding.resolve()
+            await held
+            await expect(queued).resolves.toBe('ran')
+
+            // A cleared timer must not fire later and reject an already-settled task.
+            await vi.advanceTimersByTimeAsync(1000)
+            vi.useRealTimers()
+        })
+
+        it('should wait indefinitely when the deadline is disabled', async () => {
+            vi.useFakeTimers()
+            const limit = createLimiter(1, { queueTimeoutMs: 0 })
+            const holding = deferred()
+
+            const held = limit(() => holding.promise)
+            const queued = limit(() => Promise.resolve('ran'))
+
+            await vi.advanceTimersByTimeAsync(60_000)
+            holding.resolve()
+            await held
+            await expect(queued).resolves.toBe('ran')
+            vi.useRealTimers()
+        })
     })
 })
 

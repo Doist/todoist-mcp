@@ -13,6 +13,12 @@ type LimiterPair = {
     writes: Limiter
 }
 
+type QueuedTask = {
+    admit: () => void
+    abandon: (reason: Error) => void
+    timer?: NodeJS.Timeout
+}
+
 /**
  * A FIFO semaphore. Tasks beyond `maxConcurrent` queue and start as slots free up.
  *
@@ -20,13 +26,24 @@ type LimiterPair = {
  * `customFetch`: the SDK installs its request-timeout `AbortSignal` *before*
  * calling `customFetch`, so gating there would charge queue time against the
  * request timeout and fail long-queued requests that never actually ran.
+ *
+ * That same property is why queued tasks need their own deadline. A task's request
+ * timeout only starts once it reaches the front of the queue, so without one a task
+ * can wait indefinitely — long past the point its caller gave up — and then still
+ * issue its request. `queueTimeoutMs` bounds the wait instead, failing the task with
+ * a reason that says the request was never sent.
  */
-function createLimiter(maxConcurrent: number): Limiter {
-    if (maxConcurrent < 1) {
-        throw new Error(`maxConcurrent must be at least 1, received ${maxConcurrent}`)
+function createLimiter(
+    maxConcurrent: number,
+    { queueTimeoutMs = ConcurrencyLimits.QUEUE_WAIT_MS }: { queueTimeoutMs?: number } = {},
+): Limiter {
+    if (!Number.isInteger(maxConcurrent) || maxConcurrent < 1) {
+        throw new Error(
+            `maxConcurrent must be a positive integer, received ${String(maxConcurrent)}`,
+        )
     }
 
-    const queue: Array<() => void> = []
+    const queue: QueuedTask[] = []
     let active = 0
 
     async function acquire(): Promise<void> {
@@ -34,14 +51,39 @@ function createLimiter(maxConcurrent: number): Limiter {
             active++
             return
         }
+
         // A queued task inherits the releasing task's slot, so `active` stays put.
-        await new Promise<void>((resolve) => queue.push(resolve))
+        await new Promise<void>((resolve, reject) => {
+            const queued: QueuedTask = { admit: resolve, abandon: reject }
+            queue.push(queued)
+
+            if (queueTimeoutMs <= 0) {
+                return
+            }
+
+            queued.timer = setTimeout(() => {
+                // Drop it from the queue first: a slot handed to an abandoned task
+                // would never be released, shrinking the pool for good.
+                const position = queue.indexOf(queued)
+                if (position !== -1) {
+                    queue.splice(position, 1)
+                }
+                queued.abandon(
+                    new Error(
+                        `Timed out after ${queueTimeoutMs}ms waiting for an earlier request to finish; this request was not sent`,
+                    ),
+                )
+            }, queueTimeoutMs)
+            // Never keep the process alive purely to time out a queued task.
+            queued.timer.unref?.()
+        })
     }
 
     function release() {
         const next = queue.shift()
         if (next) {
-            next()
+            clearTimeout(next.timer)
+            next.admit()
             return
         }
         active--
