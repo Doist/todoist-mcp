@@ -1565,7 +1565,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
             )
             mockTodoistApi.moveTask.mockResolvedValue(createMockTask({ id: TASK_ID }))
 
-            await updateTasks.execute(
+            const { structuredContent } = await updateTasks.execute(
                 { tasks: [{ id: TASK_ID, projectId: PROJECT_ID }] },
                 mockTodoistApi,
             )
@@ -1573,6 +1573,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
             expect(mockTodoistApi.moveTask).toHaveBeenCalledWith(TASK_ID, {
                 projectId: PROJECT_ID,
             })
+            expect(structuredContent.appliedOperations.redundantMovesSkipped).toBe(0)
         })
 
         it('skips the move when the caller echoes back the current section', async () => {
@@ -1958,6 +1959,31 @@ describe(`${UPDATE_TASKS} tool`, () => {
             expect(structuredContent.failures[0]?.error).toContain('Move applied')
         })
 
+        it('sends one command per task when an id is repeated for one destination', async () => {
+            mockTodoistApi.moveTasks.mockResolvedValue([
+                createMockTask({ id: 'x', projectId: DESTINATION }),
+            ])
+
+            const { structuredContent } = await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'x', projectId: DESTINATION },
+                        { id: 'x', projectId: DESTINATION },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            // Two moves of one task in a single request is the tree contention this
+            // batching exists to avoid, and the second is a no-op regardless.
+            expect(mockTodoistApi.moveTasks).toHaveBeenCalledWith(['x'], {
+                projectId: DESTINATION,
+            })
+            // Both entries asked for the same end state, so both are satisfied.
+            expect(structuredContent.failures).toHaveLength(0)
+            expect(structuredContent.tasks).toHaveLength(2)
+        })
+
         it('resolves the inbox once for the whole batch', async () => {
             const inboxProjectId = createMockUser().inboxProjectId
             mockTodoistApi.moveTasks.mockResolvedValue([
@@ -2033,6 +2059,64 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 },
             }
         }
+
+        /** Records the order of move and update calls, resolving moves on a delay. */
+        function recordCallOrder() {
+            const order: string[] = []
+            const moveTask = mockTodoistApi.moveTask as unknown as ReturnType<typeof vi.fn>
+            const updateTask = mockTodoistApi.updateTask as unknown as ReturnType<typeof vi.fn>
+
+            moveTask.mockImplementation(async (id: string) => {
+                order.push(`move-start:${id}`)
+                await new Promise((resolve) => setTimeout(resolve, 20))
+                order.push(`move-end:${id}`)
+                return createMockTask({ id })
+            })
+            updateTask.mockImplementation(async (id: string) => {
+                order.push(`update:${id}`)
+                return createMockTask({ id })
+            })
+
+            return order
+        }
+
+        it('does not hold a field-only update behind serialised moves', async () => {
+            const order = recordCallOrder()
+
+            await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'm1', projectId: 'project-1' },
+                        { id: 'm2', projectId: 'project-2' },
+                        { id: 'field-only', content: 'renamed' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            // Field updates use a separate lane and never contend with moves, so a task
+            // with nothing to move must not wait for the move queue to drain.
+            expect(order.indexOf('update:field-only')).toBeLessThan(order.indexOf('move-end:m1'))
+        })
+
+        it('starts a moved task’s field update before later moves finish', async () => {
+            const order = recordCallOrder()
+
+            await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'm1', projectId: 'project-1', content: 'a' },
+                        { id: 'm2', projectId: 'project-2', content: 'b' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            // Each task keeps move-before-update...
+            expect(order.indexOf('update:m1')).toBeGreaterThan(order.indexOf('move-end:m1'))
+            // ...but its update overlaps the next task's move rather than waiting for it.
+            expect(order.indexOf('update:m1')).toBeLessThan(order.indexOf('move-end:m2'))
+        })
 
         it('never has more than one move in flight', async () => {
             const moved = createMockTask({ id: 'task-0' })
