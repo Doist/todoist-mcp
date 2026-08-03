@@ -1,7 +1,7 @@
 import type { AddTaskArgs, Task, TodoistApi } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { formatBatchItemError } from '../tool-execution-error.js'
+import { formatBatchItemError, formatDueStringParseError } from '../tool-execution-error.js'
 import { isInboxProjectId, mapTask } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
 import { BatchLimits } from '../utils/constants.js'
@@ -30,7 +30,9 @@ const TaskSchema = z.object({
         'Additional details, notes, or context for the task. Use this for longer content rather than putting it in the task name. Supports Markdown.',
     ),
     priority: PrioritySchema.optional().describe(PRIORITY_INPUT_DESCRIPTION),
-    dueString: optionalString('The due date for the task, in natural language.'),
+    dueString: optionalString(
+        'The due date for the task, in natural language. For yearly recurrences, use Todoist syntax such as "every year on July 1"; do not prefix it with "recurring".',
+    ),
     deadlineDate: optionalString(
         'The deadline date for the task in ISO 8601 format (YYYY-MM-DD, e.g., "2025-12-31"). Deadlines are immovable constraints shown with a different indicator than due dates.',
     ),
@@ -299,7 +301,18 @@ async function processTask(
         taskArgs.assigneeId = validation.resolvedUser?.userId
     }
 
-    return await client.addTask(taskArgs)
+    try {
+        return await client.addTask(taskArgs)
+    } catch (error) {
+        const recovery = formatDueStringParseError(error, {
+            taskContent: task.content,
+            dueString: task.dueString,
+        })
+        if (recovery) {
+            throw new Error(recovery)
+        }
+        throw error
+    }
 }
 
 function generateTextContent({

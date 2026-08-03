@@ -1,5 +1,9 @@
 import z from 'zod'
-import { formatBatchItemError, formatToolExecutionError } from './tool-execution-error.js'
+import {
+    formatBatchItemError,
+    formatDueStringParseError,
+    formatToolExecutionError,
+} from './tool-execution-error.js'
 
 describe('formatToolExecutionError', () => {
     it('formats Todoist API errors with actionable details', () => {
@@ -244,6 +248,57 @@ describe('formatToolExecutionError', () => {
             expect(formatBatchItemError(new Error('Section "xyz" not found'))).toBe(
                 'Section "xyz" not found',
             )
+        })
+    })
+
+    describe('formatDueStringParseError', () => {
+        it('gives an explicit retry for the malformed recurring prefix', () => {
+            const error = Object.assign(new Error('HTTP 400: Bad Request'), {
+                httpStatusCode: 400,
+                responseData: { error: 'Invalid date format' },
+            })
+
+            expect(
+                formatDueStringParseError(error, {
+                    taskContent: 'Lavendel abschneiden',
+                    dueString: 'recurring every year on July 1',
+                }),
+            ).toBe(
+                'Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed. Use Todoist recurrence syntax, for example `every year on July 1`; don\'t prefix it with `recurring`. Change only `dueString` and retry.',
+            )
+        })
+
+        it('preserves retry guidance after an all-failed batch wraps it', () => {
+            const output = formatToolExecutionError(
+                new Error(
+                    'All 1 task(s) failed to create: "Lavendel abschneiden": Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed. Use Todoist recurrence syntax, for example `every year on July 1`; don\'t prefix it with `recurring`. Change only `dueString` and retry.',
+                ),
+            )
+
+            expect(output).toBe(
+                'Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed. Use Todoist recurrence syntax, for example `every year on July 1`; don\'t prefix it with `recurring`. Change only `dueString` and retry.',
+            )
+        })
+
+        it('does not truncate dueString recovery guidance in batch-item output', () => {
+            const longTaskContent = `Task ${'x'.repeat(240)}`
+            const recovery = `Task "${longTaskContent}" wasn't created because \`dueString\` could not be parsed. Use Todoist recurrence syntax, for example \`every year on July 1\`; don't prefix it with \`recurring\`. Change only \`dueString\` and retry.`
+
+            expect(formatBatchItemError(new Error(recovery))).toBe(recovery)
+        })
+
+        it('does not attribute unrelated generic API errors to dueString', () => {
+            const error = Object.assign(new Error('HTTP 400: Bad Request'), {
+                httpStatusCode: 400,
+                responseData: { error: 'Invalid project' },
+            })
+
+            expect(
+                formatDueStringParseError(error, {
+                    taskContent: 'Task',
+                    dueString: 'tomorrow',
+                }),
+            ).toBeUndefined()
         })
     })
 

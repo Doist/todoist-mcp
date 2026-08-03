@@ -506,6 +506,29 @@ function formatGenericError(error: unknown): string {
     return 'An unknown error occurred'
 }
 
+function extractDueStringRecovery(error: unknown): string | undefined {
+    if (!(error instanceof Error)) {
+        return undefined
+    }
+
+    const marker = "wasn't created because `dueString` could not be parsed."
+    const markerIndex = error.message.indexOf(marker)
+    if (markerIndex === -1) {
+        return undefined
+    }
+
+    const taskStart = error.message.lastIndexOf('Task "', markerIndex)
+    const retryEnd = error.message.indexOf('retry.', markerIndex)
+    if (taskStart === -1 || retryEnd === -1) {
+        return undefined
+    }
+
+    // A batch that entirely fails wraps its per-task error in a new Error.
+    // Preserve this known recovery message verbatim rather than truncating it
+    // through the generic-error formatter before MCP can return it to the caller.
+    return error.message.slice(taskStart, retryEnd + 'retry.'.length)
+}
+
 /**
  * Compact single-line variant of {@link formatToolExecutionError} for batch
  * tools that report per-item failures. Unlike `error.message` (which for SDK
@@ -514,6 +537,11 @@ function formatGenericError(error: unknown): string {
  * recognizable after aggregation.
  */
 export function formatBatchItemError(error: unknown): string {
+    const dueStringRecovery = extractDueStringRecovery(error)
+    if (dueStringRecovery) {
+        return dueStringRecovery
+    }
+
     const parsedApiError = extractApiErrorInfo(error)
     if (!parsedApiError) {
         return formatGenericError(error)
@@ -530,11 +558,55 @@ export function formatBatchItemError(error: unknown): string {
 }
 
 /**
+ * Return task-specific recovery guidance only when Todoist rejected a supplied
+ * natural-language due string. The REST API currently returns the generic
+ * text "Invalid date format" without a stable field/tag, so callers must pass
+ * the known field context before we use that fallback.
+ */
+export function formatDueStringParseError(
+    error: unknown,
+    { taskContent, dueString }: { taskContent: string; dueString: string | undefined },
+): string | undefined {
+    if (!dueString) {
+        return undefined
+    }
+
+    const parsedApiError = extractApiErrorInfo(error)
+    const tag = parsedApiError?.tag?.toUpperCase()
+    const isStableDueStringTag = tag === 'INVALID_DUE_STRING'
+    const isCurrentGenericDueFormatError = /^invalid date format\.?$/i.test(
+        parsedApiError?.message ?? '',
+    )
+    // Do not infer the field from a generic API error alone. This fallback is
+    // deliberately limited to the exact API text observed for due-string
+    // parsing and is only used by add-tasks after it supplied dueString.
+    if (!isStableDueStringTag && !isCurrentGenericDueFormatError) {
+        return undefined
+    }
+
+    const withoutRecurringPrefix = dueString
+        .trim()
+        .replace(/^recurring\s+/i, '')
+        .trim()
+
+    if (withoutRecurringPrefix !== dueString.trim()) {
+        return `Task "${taskContent}" wasn't created because \`dueString\` could not be parsed. Use Todoist recurrence syntax, for example \`${withoutRecurringPrefix}\`; don't prefix it with \`recurring\`. Change only \`dueString\` and retry.`
+    }
+
+    return `Task "${taskContent}" wasn't created because \`dueString\` could not be parsed. Change only \`dueString\` and retry.`
+}
+
+/**
  * Format tool execution errors in a consistent, actionable format.
  */
 export function formatToolExecutionError(error: unknown): string {
     if (error instanceof ZodError) {
         return error.message
+    }
+
+    const dueStringRecovery = extractDueStringRecovery(error)
+    if (dueStringRecovery) {
+        return dueStringRecovery
     }
 
     const parsedApiError = extractApiErrorInfo(error)

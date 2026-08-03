@@ -1,6 +1,8 @@
+import type { TodoistApi } from '@doist/todoist-sdk'
 import type { ContentBlock } from '@modelcontextprotocol/sdk/types.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { registerTool, stripEmailsFromObject, stripEmailsFromText } from './mcp-helpers.js'
+import { addTasks } from './tools/add-tasks.js'
 
 type RegisterToolArgs = Parameters<typeof registerTool>[0]
 type ToolFixture = RegisterToolArgs['tool']
@@ -169,6 +171,45 @@ describe('registerTool error path', () => {
         expect(output.content[0]?.text).toContain(
             'Try next: Todoist API may be temporarily unavailable. Retry shortly.',
         )
+    })
+
+    it('returns add-tasks dueString recovery guidance to the MCP caller', async () => {
+        const { mock, server } = captureRegisterToolMock()
+        const invalidDueString = Object.assign(new Error('HTTP 400: Bad Request'), {
+            httpStatusCode: 400,
+            responseData: { error: 'Invalid date format' },
+        })
+        const client = {
+            addTask: vi.fn().mockRejectedValue(invalidDueString),
+        } as unknown as TodoistApi
+
+        registerTool({ tool: addTasks, server, client })
+
+        const callback = mock.mock.calls[0]?.[2] as (
+            args: Record<string, unknown>,
+            context: unknown,
+        ) => Promise<{
+            content: Array<{ text: string }>
+            isError: boolean
+        }>
+
+        const output = await callback(
+            {
+                tasks: [
+                    {
+                        content: 'Lavendel abschneiden',
+                        dueString: 'recurring every year on July 1',
+                    },
+                ],
+            },
+            {},
+        )
+
+        expect(output.isError).toBe(true)
+        expect(output.content[0]?.text).toContain('`dueString` could not be parsed')
+        expect(output.content[0]?.text).toContain('`every year on July 1`')
+        expect(output.content[0]?.text).toContain("don't prefix it with `recurring`")
+        expect(output.content[0]?.text).toContain('Change only `dueString` and retry.')
     })
 })
 
