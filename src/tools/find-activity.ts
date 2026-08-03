@@ -38,6 +38,20 @@ const ArgsSchema = {
 
     initiatorId: z.string().optional().describe('Filter by the user ID who initiated the event.'),
 
+    dateFrom: z
+        .string()
+        .optional()
+        .describe(
+            'Inclusive start of the activity range, as an ISO 8601 date or date-time. For all events on one local calendar day, use that day\'s start, for example "2026-08-02T00:00:00-04:00".',
+        ),
+
+    dateTo: z
+        .string()
+        .optional()
+        .describe(
+            'Exclusive end of the activity range, as an ISO 8601 date or date-time. For all events on 2026-08-02, use "2026-08-03T00:00:00-04:00".',
+        ),
+
     limit: z
         .number()
         .int()
@@ -65,13 +79,23 @@ const OutputSchema = {
 const findActivity = {
     name: ToolNames.FIND_ACTIVITY,
     description:
-        'Retrieve recent activity logs to monitor and audit changes in Todoist. Shows events from all users by default (use initiatorId to filter by specific user). Track task completions, updates, deletions, project changes, and more with flexible filtering. Note: Date-based filtering is not supported by the Todoist API.',
+        'Retrieve activity logs to monitor and audit changes in Todoist. Shows events from all users by default (use initiatorId to filter by specific user). To answer what someone completed in a period, including recurring task occurrences, use objectType "task", eventType "completed", and dateFrom/dateTo. Track task completions, updates, deletions, project changes, and more with flexible filtering. Activity history availability and retention depend on the user plan.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     async execute(args, client) {
-        const { objectType, objectId, eventType, projectId, taskId, initiatorId, limit, cursor } =
-            args
+        const {
+            objectType,
+            objectId,
+            eventType,
+            projectId,
+            taskId,
+            initiatorId,
+            dateFrom,
+            dateTo,
+            limit,
+            cursor,
+        } = args
 
         // Build API arguments
         const apiArgs: Parameters<typeof client.getActivityLogs>[0] = {
@@ -87,6 +111,8 @@ const findActivity = {
         if (projectId) apiArgs.parentProjectId = projectId
         if (taskId) apiArgs.parentItemId = taskId
         if (initiatorId) apiArgs.initiatorId = initiatorId
+        if (dateFrom) apiArgs.dateFrom = dateFrom
+        if (dateTo) apiArgs.dateTo = dateTo
 
         // Fetch activity logs from API
         const { results, nextCursor } = await client.getActivityLogs(apiArgs)
@@ -146,6 +172,12 @@ function generateTextContent({
     }
     if (args.initiatorId) {
         filterHints.push(`initiator: ${args.initiatorId}`)
+    }
+    if (args.dateFrom) {
+        filterHints.push(`from: ${args.dateFrom}`)
+    }
+    if (args.dateTo) {
+        filterHints.push(`until (exclusive): ${args.dateTo}`)
     }
 
     // Generate helpful suggestions for empty results

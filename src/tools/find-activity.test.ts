@@ -103,6 +103,41 @@ describe(`${FIND_ACTIVITY} tool`, () => {
     })
 
     describe('filtering', () => {
+        it('should filter activity events by an inclusive/exclusive date range', async () => {
+            const mockEvents: ActivityEvent[] = [
+                createMockActivityEvent({
+                    eventType: 'completed',
+                    eventDate: new Date('2026-08-02T12:00:00-04:00'),
+                }),
+            ]
+
+            mockTodoistApi.getActivityLogs.mockResolvedValue({
+                results: mockEvents,
+                nextCursor: null,
+            })
+
+            const result = await findActivity.execute(
+                {
+                    objectType: 'task',
+                    eventType: 'completed',
+                    dateFrom: '2026-08-02T00:00:00-04:00',
+                    dateTo: '2026-08-03T00:00:00-04:00',
+                    limit: 20,
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getActivityLogs).toHaveBeenCalledWith({
+                objectEventTypes: 'task:completed',
+                dateFrom: '2026-08-02T00:00:00-04:00',
+                dateTo: '2026-08-03T00:00:00-04:00',
+                limit: 20,
+                cursor: null,
+            })
+            expect(result.textContent).toContain('from: 2026-08-02T00:00:00-04:00')
+            expect(result.textContent).toContain('until (exclusive): 2026-08-03T00:00:00-04:00')
+        })
+
         it.each([
             ['task', 'added'],
             ['project', 'updated'],

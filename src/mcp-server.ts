@@ -78,7 +78,7 @@ You have access to comprehensive Todoist management tools for personal productiv
 - **uncomplete-tasks**: Reopen completed tasks using task IDs
 - **find-tasks**: Search by text, project/section/parent container, responsible user, labels, a raw Todoist \`filter\` string (e.g. "today", "p1", "##Work", "(today | overdue) & p1"), or a saved filter by ID or name (\`filterIdOrName\`). Requires at least one search parameter. \`filter\`/\`filterIdOrName\` cannot be combined with projectId/sectionId/parentId, and \`filter\` and \`filterIdOrName\` are mutually exclusive.
 - **find-tasks-by-date**: Get tasks by date range (startDate: YYYY-MM-DD or 'today' which includes overdue tasks) or specific day counts
-- **find-completed-tasks**: View completed tasks by completion date or original due date; if since/until are omitted, defaults to the last 7 days (returns all collaborators unless filtered)
+- **find-completed-tasks**: View completed tasks by completion date or original due date; if since/until are omitted, defaults to the last 7 days (returns all collaborators unless filtered). For a history of actual task-completion events, including recurring task occurrences, use find-activity instead.
 
 **Project & Organization:**
 - **add-projects/update-projects/find-projects**: Manage project lifecycle with names, descriptions (Markdown), favorites, view styles (list/board/calendar), and workspace assignment for new projects (by name or ID). find-projects returns active projects by default; pass archivedStatus ('archived' or 'all') to include archived projects. Every returned project includes an isArchived field
@@ -108,7 +108,7 @@ You have access to comprehensive Todoist management tools for personal productiv
 - **update-filters**: Modify existing filters' name, query, color, or favorite status
 
 **Activity & Audit:**
-- **find-activity**: Retrieve recent activity logs to monitor and audit changes. Shows events from all users by default; use initiatorId to filter by specific user. Filter by object type (task/project/comment), event type (added/updated/deleted/completed/uncompleted/archived/unarchived/shared/left), and specific objects (objectId, projectId, taskId). Useful for tracking who did what and when. Note: Date-based filtering is not supported.
+- **find-activity**: Retrieve activity logs to monitor and audit changes. Shows events from all users by default; use initiatorId to filter by specific user. Filter by object type (task/project/comment), event type (added/updated/deleted/completed/uncompleted/archived/unarchived/shared/left), objects (objectId, projectId, taskId), and an inclusive dateFrom/exclusive dateTo range. For “what did I complete?” or “what got done?” questions, including recurring task occurrences, use objectType="task", eventType="completed", and the requested date range. Activity history retention depends on the user plan.
 - **get-productivity-stats**: Get comprehensive productivity statistics including daily/weekly completion breakdowns, goal streaks (current, last, max), karma score and trends, and historical karma data. No parameters required.
 
 **Project Health & Insights:**
@@ -148,6 +148,7 @@ You have access to comprehensive Todoist management tools for personal productiv
 - **User Lookup**: find-project-collaborators with just a searchTerm (no projectId) to resolve a name or email to a Todoist user ID across all shared-project collaborators you can access
 - **Task Search**: find-tasks with multiple filters → update-tasks or complete-tasks based on results
 - **Project Organization**: add-projects → add-sections → add-tasks with projectId and sectionId
+- **Completion History**: find-activity with objectType="task", eventType="completed", dateFrom, and dateTo to report what was actually completed in a period, including recurring task occurrences; use initiatorId for one collaborator
 - **Progress Reviews**: find-completed-tasks (defaults to last 7 days; optionally use explicit date ranges) → get-overview for project summaries
 - **Activity Auditing**: find-activity with event/object filters to track changes, monitor team activity, or investigate specific actions
 - **Productivity Analysis**: Use the productivity-analysis prompt for comprehensive analysis combining user-info, get-productivity-stats, and find-completed-tasks data into actionable insights
