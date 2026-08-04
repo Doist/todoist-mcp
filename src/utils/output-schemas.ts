@@ -37,6 +37,7 @@ const TaskSchema = z.object({
     assignedByUid: z.string().optional().describe('The UID of the user who assigned this task.'),
     checked: z.boolean().describe('Whether the task is checked/completed.'),
     completedAt: z.string().optional().describe('When the task was completed (ISO 8601 format).'),
+    addedAt: z.string().optional().describe('When the task was created (ISO 8601 format).'),
 })
 
 /**
@@ -45,6 +46,7 @@ const TaskSchema = z.object({
 const ProjectSchema = z.object({
     id: z.string().describe('The unique ID of the project.'),
     name: z.string().describe('The name of the project.'),
+    description: z.string().describe('The description of the project (empty string if none).'),
     color: ColorOutputSchema,
     isFavorite: z.boolean().describe('Whether the project is marked as favorite.'),
     isShared: z.boolean().describe('Whether the project is shared.'),
@@ -62,6 +64,7 @@ const ProjectSchema = z.object({
         .optional()
         .describe('The ID of the folder this project belongs to (workspace projects only).'),
     childOrder: z.number().describe('The ordering index of the project among its siblings.'),
+    isArchived: z.boolean().describe('Whether the project is archived.'),
 })
 
 /**
@@ -70,16 +73,23 @@ const ProjectSchema = z.object({
 const SectionSchema = z.object({
     id: z.string().describe('The unique ID of the section.'),
     name: z.string().describe('The name of the section.'),
+    sectionOrder: z.number().describe('The ordering index of the section within its project.'),
+    description: z
+        .string()
+        .optional()
+        .describe('The description of the section. Supports Markdown.'),
 })
 
 type SectionSummary = z.infer<typeof SectionSchema>
 
 /**
- * Strip an SDK Section (or any object with id/name) down to the fields
- * declared in SectionSchema. Keeps tool responses aligned with the schema.
+ * Strip an SDK Section down to the fields declared in SectionSchema. Keeps tool
+ * responses aligned with the schema. The output schema uses an optional string
+ * (Gemini-compatible), so the read's `string | null` description maps `null` to
+ * `undefined`.
  */
-function toSectionSummary({ id, name }: Section): SectionSummary {
-    return { id, name }
+function toSectionSummary({ id, name, sectionOrder, description }: Section): SectionSummary {
+    return { id, name, sectionOrder, description: description ?? undefined }
 }
 
 /**

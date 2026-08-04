@@ -2,7 +2,7 @@ import type { Section } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { resolveInboxProjectId, searchAllSections } from '../tool-helpers.js'
-import { SectionSchema as SectionOutputSchema } from '../utils/output-schemas.js'
+import { SectionSchema as SectionOutputSchema, toSectionSummary } from '../utils/output-schemas.js'
 import { summarizeList } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
 
@@ -63,7 +63,7 @@ const findSections = {
             results = response.results
         }
 
-        const sections = results.map(({ id, name }) => ({ id, name }))
+        const sections = results.map(toSectionSummary)
 
         const textContent = generateTextContent({
             sections,

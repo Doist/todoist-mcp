@@ -6,6 +6,7 @@ type ApiErrorInfo = {
     tag?: string
     message?: string
     details?: string
+    rawText?: string[]
     fieldHints: string[]
 }
 
@@ -269,9 +270,69 @@ function hasKnownApiErrorKeys(responseData: Record<string, unknown> | undefined)
     return KNOWN_TODOIST_API_ERROR_KEYS.some((key) => responseData[key] !== undefined)
 }
 
-function getNextStepHint(statusCode: number | undefined, hasFieldHints: boolean): string {
-    if (statusCode === 401 || statusCode === 403) {
-        return 'Verify your API token and access permissions, then retry.'
+/**
+ * Targeted guidance for specific Todoist API errors, keyed by canonical
+ * `error_tag`. These take precedence over the generic status-code hints:
+ * e.g. a full project surfaces as HTTP 403, and without this mapping the
+ * error would be indistinguishable from an auth/permission failure.
+ */
+const TODOIST_ERROR_TAG_HINTS: Record<string, string> = {
+    MAX_ITEMS_LIMIT_REACHED:
+        'This project has reached the maximum number of active tasks per project (subtasks count toward it; completed tasks do not). ' +
+        'The cap is the same on every Todoist plan — upgrading will not raise it — and it is not an authentication or permission problem. ' +
+        'Complete, delete, or move existing tasks out of the project, or add the task to a different project, then retry.',
+}
+
+function findKnownTagHintInText(...texts: Array<string | undefined>): string | undefined {
+    for (const text of texts) {
+        if (!text) {
+            continue
+        }
+
+        const normalized = text.toUpperCase()
+        const tag = Object.keys(TODOIST_ERROR_TAG_HINTS).find((knownTag) =>
+            normalized.includes(knownTag),
+        )
+        if (tag) {
+            return TODOIST_ERROR_TAG_HINTS[tag]
+        }
+    }
+
+    return undefined
+}
+
+function getKnownErrorHint(error: ApiErrorInfo): string | undefined {
+    if (error.tag) {
+        const hint = TODOIST_ERROR_TAG_HINTS[error.tag.toUpperCase()]
+        if (hint) {
+            return hint
+        }
+    }
+
+    // Wrapper errors (e.g. batch tools embedding per-item failures into a new
+    // Error) lose the structured fields; recover known tags from raw text
+    // before sanitized display text can truncate the tag.
+    return findKnownTagHintInText(...(error.rawText ?? []), error.message, error.details)
+}
+
+function getNextStepHint(error: ApiErrorInfo): string {
+    const knownErrorHint = getKnownErrorHint(error)
+    if (knownErrorHint) {
+        return knownErrorHint
+    }
+
+    const { statusCode } = error
+    const hasFieldHints = error.fieldHints.length > 0
+
+    if (statusCode === 401) {
+        return 'Authentication failed. Verify your API token, then retry.'
+    }
+
+    if (statusCode === 403) {
+        // 403 is not transient. It can denote either a scope/access denial (use a
+        // token/account with the required access) or a permission decision such as a
+        // workspace-boundary move (change the request or target).
+        return "Access denied. Retrying the same request will not help. If it's a scope/access problem (for example, insufficient token scope), use a token or account with the required access. Otherwise, change the request or target instead."
     }
 
     if (statusCode === 404) {
@@ -387,11 +448,12 @@ function extractApiErrorInfo(error: unknown): ApiErrorInfo | null {
         tag: tag ? sanitizeErrorText(tag, 80) : undefined,
         message: message ? sanitizeErrorText(message) : undefined,
         details: details ? sanitizeErrorText(details) : undefined,
+        rawText: rawMessageCandidates,
         fieldHints,
     }
 }
 
-function formatApiErrorMessage(error: ApiErrorInfo): string {
+function buildErrorContext(error: ApiErrorInfo): string[] {
     const context: string[] = []
     if (error.statusCode !== undefined) {
         context.push(`HTTP ${error.statusCode}`)
@@ -402,6 +464,12 @@ function formatApiErrorMessage(error: ApiErrorInfo): string {
     if (error.tag) {
         context.push(`tag ${error.tag}`)
     }
+
+    return context
+}
+
+function formatApiErrorMessage(error: ApiErrorInfo): string {
+    const context = buildErrorContext(error)
 
     const lines = [
         context.length > 0
@@ -421,7 +489,7 @@ function formatApiErrorMessage(error: ApiErrorInfo): string {
         lines.push(`Field hints: ${error.fieldHints.join('; ')}`)
     }
 
-    lines.push(`Try next: ${getNextStepHint(error.statusCode, error.fieldHints.length > 0)}`)
+    lines.push(`Try next: ${getNextStepHint(error)}`)
 
     return lines.join('\n')
 }
@@ -438,13 +506,102 @@ function formatGenericError(error: unknown): string {
     return 'An unknown error occurred'
 }
 
+export class DueStringParseError extends Error {
+    constructor(message: string) {
+        super(message)
+        this.name = 'DueStringParseError'
+    }
+}
+
+export class BatchDueStringParseError extends Error {
+    constructor(message: string) {
+        super(message)
+        this.name = 'BatchDueStringParseError'
+    }
+}
+
+/**
+ * Compact single-line variant of {@link formatToolExecutionError} for batch
+ * tools that report per-item failures. Unlike `error.message` (which for SDK
+ * errors is just "HTTP 403: Forbidden"), this preserves the API error signals
+ * (status, code, tag) so failures like MAX_ITEMS_LIMIT_REACHED stay
+ * recognizable after aggregation.
+ */
+export function formatBatchItemError(error: unknown): string {
+    if (error instanceof DueStringParseError) {
+        return error.message
+    }
+
+    const parsedApiError = extractApiErrorInfo(error)
+    if (!parsedApiError) {
+        return formatGenericError(error)
+    }
+
+    const context = buildErrorContext(parsedApiError)
+    const message =
+        parsedApiError.message &&
+        !(context.length > 0 && isGenericHttpMessage(parsedApiError.message))
+            ? parsedApiError.message
+            : 'Todoist API request failed'
+
+    return context.length > 0 ? `${message} (${context.join(', ')})` : message
+}
+
+/**
+ * Return task-specific recovery guidance only when Todoist rejected a supplied
+ * natural-language due string. The REST API currently returns the generic
+ * text "Invalid date format" without a stable field/tag, so callers must pass
+ * the known field context before we use that fallback.
+ */
+export function formatDueStringParseError(
+    error: unknown,
+    {
+        taskContent,
+        dueString,
+        deadlineDate,
+    }: { taskContent: string; dueString: string | undefined; deadlineDate?: string },
+): string | undefined {
+    if (!dueString) {
+        return undefined
+    }
+
+    const parsedApiError = extractApiErrorInfo(error)
+    const tag = parsedApiError?.tag?.toUpperCase()
+    const isStableDueStringTag = tag === 'INVALID_DUE_STRING'
+    const isCurrentGenericDueFormatError =
+        !deadlineDate && /^invalid date format\.?$/i.test(parsedApiError?.message ?? '')
+    // Do not infer the field from a generic API error alone. This fallback is
+    // deliberately limited to the exact API text observed for due-string
+    // parsing and is only used by add-tasks after it supplied dueString.
+    if (!isStableDueStringTag && !isCurrentGenericDueFormatError) {
+        return undefined
+    }
+
+    const withoutRecurringPrefix = dueString
+        .trim()
+        .replace(/^recurring(?:\s+|$)/i, '')
+        .trim()
+
+    if (withoutRecurringPrefix !== dueString.trim() && withoutRecurringPrefix) {
+        return `Task "${taskContent}" wasn't created because \`dueString\` could not be parsed. Use Todoist recurrence syntax, for example \`${withoutRecurringPrefix}\`; don't prefix it with \`recurring\`. Change only \`dueString\` and retry.`
+    }
+
+    if (withoutRecurringPrefix !== dueString.trim()) {
+        return `Task "${taskContent}" wasn't created because \`dueString\` could not be parsed. Use a complete Todoist recurrence expression; \`recurring\` alone is not valid. Change only \`dueString\` and retry.`
+    }
+
+    return `Task "${taskContent}" wasn't created because \`dueString\` could not be parsed. Change only \`dueString\` and retry.`
+}
+
 /**
  * Format tool execution errors in a consistent, actionable format.
- *
- * This is the only public API exposed by this module.
  */
 export function formatToolExecutionError(error: unknown): string {
     if (error instanceof ZodError) {
+        return error.message
+    }
+
+    if (error instanceof DueStringParseError || error instanceof BatchDueStringParseError) {
         return error.message
     }
 

@@ -1,9 +1,12 @@
 import type { PersonalProject, WorkspaceProject } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
 import { mapProject } from '../tool-helpers.js'
 import { ColorSchema } from '../utils/colors.js'
-import { ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
+import { FailureSchema, ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
+import { appendFailureSummary } from '../utils/response-builders.js'
+import { executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const ProjectUpdateSchema = z.object({
@@ -11,6 +14,19 @@ const ProjectUpdateSchema = z.object({
     name: z.string().min(1).optional().describe('The new name of the project.'),
     isFavorite: z.boolean().optional().describe('Whether the project is a favorite.'),
     viewStyle: z.enum(['list', 'board', 'calendar']).optional().describe('The project view style.'),
+    description: z
+        .preprocess(
+            // `null` is the advertised clear value; the param schema stays a
+            // plain string (Gemini forbids nullable schemas, not preprocessing),
+            // so `null` is normalised to "" before the project wire clear.
+            (value) => (value === null ? '' : value),
+            z
+                .string()
+                .describe(
+                    'The description of the project (Markdown). Pass null (or an empty string) to clear it.',
+                ),
+        )
+        .optional(),
     color: ColorSchema,
 })
 
@@ -25,10 +41,16 @@ const OutputSchema = {
     projects: z.array(ProjectOutputSchema).describe('The updated projects.'),
     totalCount: z.number().describe('The total number of projects updated.'),
     updatedProjectIds: z.array(z.string()).describe('The IDs of the updated projects.'),
+    failures: z
+        .array(FailureSchema)
+        .describe(
+            'Projects that could not be updated, with the reason for each. A failure here does not affect the other projects in the batch — do not retry the whole batch; address or drop the failed items.',
+        ),
     appliedOperations: z
         .object({
             updateCount: z.number().describe('The number of projects actually updated.'),
             skippedCount: z.number().describe('The number of projects skipped (no changes).'),
+            failureCount: z.number().describe('The number of projects that failed to update.'),
         })
         .describe('Summary of operations performed.'),
 }
@@ -42,42 +64,56 @@ const updateProjects = {
     async execute(args, client) {
         const { projects } = args
 
-        type Result =
+        type Outcome =
             | { kind: 'updated'; project: PersonalProject | WorkspaceProject }
             | { kind: 'skipped'; reason: SkipReason }
 
-        const results: Result[] = await Promise.all(
-            projects.map(async (project): Promise<Result> => {
+        // Each project is updated independently: a failure on one (for example, the API
+        // rejecting it with a 403 permission error) must not discard the projects that
+        // succeeded nor collapse into one opaque batch error that invites a full retry.
+        // Per-item calls go through executeWithRetry so transient 5xx failures still get
+        // the same backoff the registerTool() wrapper applies to single-call tools.
+        const settled = await Promise.allSettled(
+            projects.map(async (project): Promise<Outcome> => {
                 const skipReason = getSkipReason(project)
                 if (skipReason !== null) return { kind: 'skipped', reason: skipReason }
 
+                // An empty `description` clears it. That is already the project
+                // wire value (backend NULL_KEEPS_UNCHANGED), so forward as-is.
                 const { id, ...updateArgs } = project
-                const updated = await client.updateProject(id, updateArgs)
+                const updated = await executeWithRetry(() => client.updateProject(id, updateArgs))
                 return { kind: 'updated', project: updated }
             }),
         )
 
-        const updatedProjects = results
-            .filter(
-                (r): r is { kind: 'updated'; project: PersonalProject | WorkspaceProject } =>
-                    r.kind === 'updated',
-            )
-            .map((r) => mapProject(r.project))
+        const updatedProjects: ReturnType<typeof mapProject>[] = []
+        const failures: Array<{ item: string; error: string }> = []
+        let skippedNoFields = 0
+        let skippedNoValidValues = 0
 
-        const skippedNoFields = results.filter(
-            (r): r is { kind: 'skipped'; reason: SkipReason } =>
-                r.kind === 'skipped' && r.reason === 'no-fields',
-        ).length
+        for (const [index, result] of settled.entries()) {
+            if (result.status === 'rejected') {
+                failures.push({
+                    item: projects[index]?.id ?? `Project ${index + 1}`,
+                    error: formatBatchItemError(result.reason),
+                })
+                continue
+            }
 
-        const skippedNoValidValues = results.filter(
-            (r): r is { kind: 'skipped'; reason: SkipReason } =>
-                r.kind === 'skipped' && r.reason === 'no-valid-values',
-        ).length
+            if (result.value.kind === 'updated') {
+                updatedProjects.push(mapProject(result.value.project))
+            } else if (result.value.reason === 'no-fields') {
+                skippedNoFields++
+            } else {
+                skippedNoValidValues++
+            }
+        }
 
         const textContent = generateTextContent({
             projects: updatedProjects,
             skippedNoFields,
             skippedNoValidValues,
+            failures,
         })
 
         return {
@@ -86,9 +122,11 @@ const updateProjects = {
                 projects: updatedProjects,
                 totalCount: updatedProjects.length,
                 updatedProjectIds: updatedProjects.map((project) => project.id),
+                failures,
                 appliedOperations: {
                     updateCount: updatedProjects.length,
                     skippedCount: skippedNoFields + skippedNoValidValues,
+                    failureCount: failures.length,
                 },
             },
         }
@@ -99,10 +137,12 @@ function generateTextContent({
     projects,
     skippedNoFields,
     skippedNoValidValues,
+    failures,
 }: {
     projects: Array<{ id: string; name: string }>
     skippedNoFields: number
     skippedNoValidValues: number
+    failures: Array<{ item: string; error: string }>
 }) {
     const count = projects.length
     const projectList = projects.map((project) => `• ${project.name} (id=${project.id})`).join('\n')
@@ -125,7 +165,7 @@ function generateTextContent({
         summary += `:\n${projectList}`
     }
 
-    return summary
+    return appendFailureSummary(summary, failures)
 }
 
 function getSkipReason({ id: _id, ...otherUpdateArgs }: ProjectUpdate): SkipReason | null {

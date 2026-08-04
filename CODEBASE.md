@@ -13,7 +13,7 @@ binaries:
 - `todoist-mcp` → `dist/main.js` — stdio MCP server (primary)
 - `todoist-mcp-http` → `dist/main-http.js` — Express HTTP wrapper
 
-TypeScript · ESM-only · Node 18+ · `zod` v4 for schemas · MCP SDK ≥1.25.
+TypeScript · ESM-only · Node >=24 · npm >=11 · `zod` v4 for schemas · MCP SDK ≥1.25.
 
 ## Top-level layout
 
@@ -36,20 +36,20 @@ TypeScript · ESM-only · Node 18+ · `zod` v4 for schemas · MCP SDK ≥1.25.
 ```
 src/
 ├─ main.ts                    # stdio entry: dotenv → getMcpServer() → StdioServerTransport
-├─ main-http.ts               # Express entry: same server behind HTTP
+├─ main-http.ts               # Express entry: thin bootstrap — reads env, builds the app, listen()
+├─ http-app.ts                # createHttpApp(): the Express app + middleware chain (Host/Origin guard scoped to /mcp). Pure/side-effect-free so it's testable
 ├─ index.ts                   # Public package exports — a curated subset of tools + helpers + types. NOT the full registry.
 ├─ mcp-server.ts              # getMcpServer() factory. **Authoritative tool registry** — imports every tool, calls registerTool() for each, registers productivity-analysis prompt, contains the giant `instructions` string shown to the LLM
 ├─ mcp-helpers.ts             # registerTool(), FEATURE_NAMES, output formatting, retry wrapping
 ├─ usage-tracking.ts          # Shared Todoist request headers + SDK customFetch wrapper for MCP usage attribution
 ├─ todoist-tool.ts            # TodoistTool<Params, Output> contract (the tool interface)
-├─ tool-helpers.ts            # Shared transforms: mapTask, fetchAllPages, resolveInboxProjectId, isInboxProjectId, isPersonalProject, isWorkspaceProject. Re-exports filter-helpers.
+├─ tool-helpers.ts            # Shared transforms: mapTask, fetchAllPages, toWildcardQuery, compileWildcardQuery + matchesWildcardQuery (client-side name match), resolveInboxProjectId, isInboxProjectId, isPersonalProject, isWorkspaceProject. Re-exports filter-helpers.
 ├─ filter-helpers.ts          # appendToQuery, buildResponsibleUserQueryFilter, resolveResponsibleUser
-├─ tool-execution-error.ts    # ToolExecutionError: wraps SDK errors with user/system classification
+├─ tool-execution-error.ts    # formatToolExecutionError (actionable API-error formatting, incl. known error_tag hints like MAX_ITEMS_LIMIT_REACHED) + formatBatchItemError (single-line per-item failure summaries — use in batch tools instead of error.message)
 ├─ prompts/                   # MCP prompts (productivity-analysis)
-├─ middleware/                # require-valid-todoist-token (HTTP auth)
+├─ middleware/                # require-trusted-host (Host/Origin allowlist, DNS-rebinding protection), require-valid-todoist-token (HTTP auth)
 ├─ mcp-apps/                  # React UI widgets (task list). Built separately. Ignore unless task mentions widgets.
-├─ tools/                     # 40+ tool definitions. One file = one tool. See catalog.
-│  └─ __tests__/              # Co-located tests: <tool>.test.ts
+├─ tools/                     # 40+ tool definitions. One file = one tool. Each <tool>.test.ts sits alongside its tool; snapshots in tools/__snapshots__/. See catalog.
 └─ utils/                     # Reusable helpers. See catalog.
 ```
 
@@ -118,14 +118,15 @@ Tool files are flat in `src/tools/` (kebab-case). Don't enumerate — grep. Curr
 - **Productivity/activity** — get-overview, get-productivity-stats, find-activity
 - **Generic** — delete-object, fetch, fetch-object, search, reorder-objects, view-attachment
 
-New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; import + register in `src/mcp-server.ts`; add tool name to `src/utils/tool-names.ts`; add to `src/index.ts` (exports) and `scripts/run-tool.ts` (direct-run registry); add annotation entry to `src/tools/__tests__/tool-annotations.test.ts`; write `<tool-name>.test.ts` alongside it.
+New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; import + register in `src/mcp-server.ts`; add tool name to `src/utils/tool-names.ts`; add to `src/index.ts` (exports) and `scripts/run-tool.ts` (direct-run registry); add annotation entry to `src/tools/tool-annotations.test.ts`; write `<tool-name>.test.ts` alongside it.
 
 ## `src/utils/` catalog — don't reimplement
 
-- `constants.ts` — `ApiLimits` (batch sizes, max string lengths)
+- `constants.ts` — `ApiLimits` (batch sizes, max string lengths), `BatchLimits`, `ConcurrencyLimits`
 - `tool-names.ts` — `ToolNames` enum of every registered tool name
 - `output-schemas.ts` — Reusable Zod schemas: TaskSchema, ProjectSchema, SectionSchema, CommentSchema, etc.
 - `schema-helpers.ts` — Zod builders used across tools
+- `children.ts` — `ChildrenOutputSchema` plus `getTaskChildren`/`getProjectChildren` for returning an object's direct subtasks or sub-projects
 - `priorities.ts` — `"p1"`–`"p4"` ↔ SDK integer conversion (**strings only in tool I/O**)
 - `duration-parser.ts` — `"2h30m"` ↔ ms, plus `formatDuration`
 - `date.ts` — date parsing/formatting (ISO, Todoist strings)
@@ -135,8 +136,10 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; imp
 - `reminder-schemas.ts` — reminder-specific shapes
 - `assignment-validator.ts` — validate collaborator assignments
 - `user-resolver.ts` / `workspace-resolver.ts` — resolve user/workspace refs
-- `response-builders.ts` — `summarizeTaskOperation`, `summarizeBatch`, `previewTasks` (keep output messages consistent)
-- `retry.ts` — `executeWithRetry()` used inside `registerTool`
+- `response-builders.ts` — `summarizeTaskOperation`, `summarizeBatch`, `appendFailureSummary`, `previewTasks` (keep output messages consistent)
+- `retry.ts` — `executeWithRetry()` used inside `registerTool`; exponential backoff with full jitter
+- `concurrency.ts` — `getMoveLimiter`/`getWriteLimiter` bound how many write requests a batch tool has in flight. Limiters are per account (registered by `createTodoistClient`), because the HTTP transport builds a client per request. Task moves get their own single-slot lane: the API locks a task's whole tree for a move, so overlapping moves contend
+- `move-planner.ts` — `planMove`/`isMoveRedundant`/`destinationKey`: decides whether a requested container change is a real move, and groups tasks bound for the same destination so they can share one request
 - `sanitize-data.ts` — HTML sanitization (dompurify) for comment content
 - `validate-todoist-token.ts` — token validation for HTTP middleware
 - `test-helpers.ts` — `createMockTask`, `createMockProject`, `createMockSection`, `TEST_IDS`, `TODAY`
@@ -145,13 +148,14 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; imp
 
 - Client: `new TodoistApi(apiKey, baseUrl?)` — created once per server in `mcp-server.ts`, passed into every `execute()`.
 - Auth: `TODOIST_API_KEY` env var, validated at startup. Both stdio and HTTP use this; the HTTP server passes it through `requireValidTodoistToken({ type: 'static', apiKey })` middleware (`src/middleware/require-valid-todoist-token.ts`). The middleware _also_ supports a per-request bearer-token mode, but `main-http.ts` does not wire that up today.
+- HTTP request guard: `requireTrustedHost` (`src/middleware/require-trusted-host.ts`) is scoped to the `/mcp` routes, running ahead of `express.json()` and `requireValidTodoistToken`, validating the `Host` and `Origin` headers against a trusted-hostname allowlist (loopback defaults + `ALLOWED_HOSTS` + a concrete non-loopback `HOST`). This is DNS-rebinding protection: it blocks malicious websites from reaching the loopback server with the operator's token. `/health` is intentionally unguarded so deployment probes (which use the target's private IP in the Host header) stay reachable. The allowlist is built by `buildAllowedHosts(HOST, ALLOWED_HOSTS)` in the same module; shared host helpers live in `src/utils/host.ts`. The app is assembled by `createHttpApp()` in `src/http-app.ts` (a pure module, no side effects, so the middleware chain is testable); `src/main-http.ts` is a thin bootstrap that reads env and calls `listen()`.
 - Optional `TODOIST_BASE_URL` for staging/dev APIs.
 - Errors: wrap SDK throws in `ToolExecutionError` (classify user vs system) — `registerTool` handles this automatically.
 
 ## Testing
 
 - **Runner:** `vitest` with globals. `npm test` / `npm run test:watch` / `npm run test:coverage`.
-- **Location:** co-located at `src/tools/__tests__/<tool>.test.ts`; utility tests alongside (`src/utils/retry.test.ts`, etc.).
+- **Location:** co-located at `src/tools/<tool>.test.ts`; utility tests alongside (`src/utils/retry.test.ts`, etc.).
 - **Mocks:** `vi.fn()` against `TodoistApi` methods. Use factories from `src/utils/test-helpers.ts` — do NOT hand-build mock entities.
 - **Coverage:** 333+ tests currently. All must pass before commit.
 
@@ -181,7 +185,7 @@ Needs `TODOIST_API_KEY` in `.env`.
 - Priority: **`"p1"`–`"p4"` strings only**, never integers
 - Clearing optional fields: special strings `"remove"` / `"unassign"`, never `null` (Gemini compatibility — see `CLAUDE.md`)
 - Tool parameters: Zod **raw shape** (`{ foo: z.string() }`), not `z.object({...})`
-- Every new tool: register in `src/mcp-server.ts`, add to `src/utils/tool-names.ts`, `src/index.ts`, and `scripts/run-tool.ts`; add annotation entry to `src/tools/__tests__/tool-annotations.test.ts`; write a `<tool>.test.ts` — full checklist in `AGENTS.md`
+- Every new tool: register in `src/mcp-server.ts`, add to `src/utils/tool-names.ts`, `src/index.ts`, and `scripts/run-tool.ts`; add annotation entry to `src/tools/tool-annotations.test.ts`; write a `<tool>.test.ts` — full checklist in `AGENTS.md`
 
 ## Start here if new
 

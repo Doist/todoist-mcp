@@ -1,8 +1,15 @@
 import type { AddTaskArgs, Task, TodoistApi } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import {
+    BatchDueStringParseError,
+    DueStringParseError,
+    formatBatchItemError,
+    formatDueStringParseError,
+} from '../tool-execution-error.js'
 import { isInboxProjectId, mapTask } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
+import { BatchLimits } from '../utils/constants.js'
 import { DurationParseError, parseDuration } from '../utils/duration-parser.js'
 import { FailureSchema, TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import {
@@ -15,7 +22,7 @@ import { optionalString } from '../utils/schema-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 // Maximum tasks per operation to prevent abuse and timeouts
-const MAX_TASKS_PER_OPERATION = 25
+const MAX_TASKS_PER_OPERATION = BatchLimits.TASKS_PER_OPERATION
 
 const TaskSchema = z.object({
     content: z
@@ -28,7 +35,9 @@ const TaskSchema = z.object({
         'Additional details, notes, or context for the task. Use this for longer content rather than putting it in the task name. Supports Markdown.',
     ),
     priority: PrioritySchema.optional().describe(PRIORITY_INPUT_DESCRIPTION),
-    dueString: optionalString('The due date for the task, in natural language.'),
+    dueString: optionalString(
+        'The due date for the task, in natural language. Also use natural language for recurrences; do not prefix it with "recurring".',
+    ),
     deadlineDate: optionalString(
         'The deadline date for the task in ISO 8601 format (YYYY-MM-DD, e.g., "2025-12-31"). Deadlines are immovable constraints shown with a different indicator than due dates.',
     ),
@@ -97,6 +106,9 @@ const addTasks = {
             }
         })
 
+        // Resolve each section's project at most once across the whole batch
+        const sectionProjectCache = new Map<string, string>()
+
         // Process groups in parallel; within each group, process sequentially
         type IndexedResult = { index: number; result: PromiseSettledResult<Task> }
         const groupResults = await Promise.all(
@@ -104,7 +116,7 @@ const addTasks = {
                 const results: IndexedResult[] = []
                 for (const { task, index } of group) {
                     try {
-                        const created = await processTask(task, client)
+                        const created = await processTask(task, client, sectionProjectCache)
                         results.push({ index, result: { status: 'fulfilled', value: created } })
                     } catch (error) {
                         results.push({
@@ -122,17 +134,19 @@ const addTasks = {
 
         const newTasks: Task[] = []
         const failures: Array<{ item: string; error: string }> = []
+        let hasDueStringParseFailure = false
 
         for (const { index, result } of indexed) {
             if (result.status === 'fulfilled') {
                 newTasks.push(result.value)
             } else {
+                hasDueStringParseFailure ||= result.reason instanceof DueStringParseError
                 failures.push({
                     item: tasks[index]?.content ?? `Task ${index + 1}`,
-                    error:
-                        result.reason instanceof Error
-                            ? result.reason.message
-                            : String(result.reason),
+                    // Keep API error signals (status/code/tag) — `error.message`
+                    // alone collapses e.g. a full-project rejection into a bare
+                    // "HTTP 403: Forbidden"
+                    error: formatBatchItemError(result.reason),
                 })
             }
         }
@@ -140,7 +154,11 @@ const addTasks = {
         // If all tasks failed, throw an error
         if (newTasks.length === 0 && failures.length > 0) {
             const details = failures.map((f) => `"${f.item}": ${f.error}`).join('; ')
-            throw new Error(`All ${failures.length} task(s) failed to create: ${details}`)
+            const message = `All ${failures.length} task(s) failed to create: ${details}`
+            if (hasDueStringParseFailure) {
+                throw new BatchDueStringParseError(message)
+            }
+            throw new Error(message)
         }
 
         const mappedTasks = newTasks.map(mapTask)
@@ -173,7 +191,11 @@ function destinationKey(task: z.infer<typeof TaskSchema>): string {
     return `${task.projectId ?? ''}|${task.sectionId ?? ''}|${task.parentId ?? ''}`
 }
 
-async function processTask(task: z.infer<typeof TaskSchema>, client: TodoistApi): Promise<Task> {
+async function processTask(
+    task: z.infer<typeof TaskSchema>,
+    client: TodoistApi,
+    sectionProjectCache: Map<string, string>,
+): Promise<Task> {
     const {
         duration: durationStr,
         projectId,
@@ -252,11 +274,17 @@ async function processTask(task: z.infer<typeof TaskSchema>, client: TodoistApi)
                 throw new Error(`Task "${task.content}": Parent task "${parentId}" not found`)
             }
         } else if (!targetProjectId && sectionId) {
-            // For section tasks, we need to find the project - this is a limitation
-            // For now, we'll require explicit projectId when using assignments with sections
-            throw new Error(
-                `Task "${task.content}": When assigning tasks to sections, please also specify projectId`,
-            )
+            // For section tasks, resolve the project from the section (cached per batch).
+            // Let real API/network errors propagate; only a missing section is "not found".
+            targetProjectId = sectionProjectCache.get(sectionId)
+            if (!targetProjectId) {
+                const section = await client.getSection(sectionId)
+                if (!section) {
+                    throw new Error(`Task "${task.content}": Section "${sectionId}" not found`)
+                }
+                targetProjectId = section.projectId
+                sectionProjectCache.set(sectionId, section.projectId)
+            }
         }
 
         if (!targetProjectId) {
@@ -284,7 +312,19 @@ async function processTask(task: z.infer<typeof TaskSchema>, client: TodoistApi)
         taskArgs.assigneeId = validation.resolvedUser?.userId
     }
 
-    return await client.addTask(taskArgs)
+    try {
+        return await client.addTask(taskArgs)
+    } catch (error) {
+        const recovery = formatDueStringParseError(error, {
+            taskContent: task.content,
+            dueString: task.dueString,
+            deadlineDate: task.deadlineDate,
+        })
+        if (recovery) {
+            throw new DueStringParseError(recovery)
+        }
+        throw error
+    }
 }
 
 function generateTextContent({

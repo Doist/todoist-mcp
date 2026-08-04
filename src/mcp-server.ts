@@ -56,7 +56,7 @@ import { userInfo } from './tools/user-info.js'
 import { viewAttachment } from './tools/view-attachment.js'
 import { TODOIST_MCP_VERSION, createTodoistClient } from './usage-tracking.js'
 
-const instructions = `
+export const instructions = `
 ## Todoist Task and Project Management Tools
 
 You have access to comprehensive Todoist management tools for personal productivity and team collaboration. Use these tools to help users manage tasks, projects, sections, comments, and assignments effectively.
@@ -71,18 +71,19 @@ You have access to comprehensive Todoist management tools for personal productiv
 ### Tool Usage Guidelines:
 
 **Task Management:**
-- **add-tasks**: Create tasks (max 25 per call) with content, description, priority (\`p1\`, \`p2\`, \`p3\`, \`p4\` strings only; \`p1\` highest and \`p4\` lowest/default; integers are not accepted), dueString (natural language like "tomorrow", "next Friday", "2024-12-25"), deadlineDate (ISO 8601 format like "2025-12-31" for immovable constraints), duration (formats like "2h", "90m", "2h30m"), and assignments to project collaborators
-- **update-tasks**: Modify existing tasks - get task IDs from search results first, only include fields that need changes. Supports priority updates using \`p1\`/\`p2\`/\`p3\`/\`p4\` string values (\`p1\` highest, \`p4\` lowest/default; integers are not accepted), due date updates via dueString and due date removal via "dueString: remove", plus deadlineDate (ISO 8601 format like "2025-12-31") updates and removals via "deadlineDate: remove". **IMPORTANT: Do NOT use update-tasks to reschedule/move task dates — use reschedule-tasks instead.** update-tasks replaces the entire due string which destroys recurrence patterns on recurring tasks.
+- **add-tasks**: Create tasks (max 25 per call) with content, description, priority (\`p1\`, \`p2\`, \`p3\`, \`p4\` strings only; \`p1\` highest and \`p4\` lowest/default; integers are not accepted), dueString (natural language like "tomorrow", "next Friday", "2024-12-25"; also use natural language for recurrences and do not prefix them with \`recurring\`), deadlineDate (ISO 8601 format like "2025-12-31" for immovable constraints), duration (formats like "2h", "90m", "2h30m"), and assignments to project collaborators
+- **update-tasks**: Modify existing tasks - get task IDs from search results first, only include fields that need changes. Supports priority updates using \`p1\`/\`p2\`/\`p3\`/\`p4\` string values (\`p1\` highest, \`p4\` lowest/default; integers are not accepted), due date updates via dueString and due date removal via "dueString: remove", plus deadlineDate (ISO 8601 format like "2025-12-31") updates and removals via "deadlineDate: remove". **IMPORTANT: Do NOT use update-tasks to reschedule/move task dates — use reschedule-tasks instead.** update-tasks replaces the entire due string which destroys recurrence patterns on recurring tasks. Never echo back a task's existing projectId/sectionId/parentId — those fields are treated as a move.
 - **reschedule-tasks**: **Always use this tool when moving/rescheduling task due dates to a different date.** This tool preserves recurring schedules and existing time-of-day. Accepts YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS. Works for both recurring and non-recurring tasks. Do NOT use update-tasks for rescheduling.
 - **complete-tasks**: Mark tasks as done using task IDs
 - **uncomplete-tasks**: Reopen completed tasks using task IDs
 - **find-tasks**: Search by text, project/section/parent container, responsible user, labels, a raw Todoist \`filter\` string (e.g. "today", "p1", "##Work", "(today | overdue) & p1"), or a saved filter by ID or name (\`filterIdOrName\`). Requires at least one search parameter. \`filter\`/\`filterIdOrName\` cannot be combined with projectId/sectionId/parentId, and \`filter\` and \`filterIdOrName\` are mutually exclusive.
 - **find-tasks-by-date**: Get tasks by date range (startDate: YYYY-MM-DD or 'today' which includes overdue tasks) or specific day counts
-- **find-completed-tasks**: View completed tasks by completion date or original due date; if since/until are omitted, defaults to the last 7 days (returns all collaborators unless filtered)
+- **find-completed-tasks**: View completed tasks by completion date or original due date; if since/until are omitted, defaults to the last 7 days (returns all collaborators unless filtered). For a history of actual task-completion events, including recurring task occurrences, use find-activity instead.
 
 **Project & Organization:**
-- **add-projects/update-projects/find-projects**: Manage project lifecycle with names, favorites, view styles (list/board/calendar), and workspace assignment for new projects (by name or ID)
+- **add-projects/update-projects/find-projects**: Manage project lifecycle with names, descriptions (Markdown), favorites, view styles (list/board/calendar), and workspace assignment for new projects (by name or ID). find-projects returns active projects by default; pass archivedStatus ('archived' or 'all') to include archived projects. Every returned project includes an isArchived field
 - **project-management**: Archive or unarchive projects by ID
+- To delete a project (active or archived), use **delete-object** with type "project". Note: workspace projects must be archived first; personal projects can be deleted regardless
 - **project-move**: Move projects between personal and workspace contexts
 - **add-sections/update-sections/find-sections**: Organize tasks within projects using sections
 - **get-overview**: Get comprehensive Markdown overview of entire account or specific project with task hierarchies. Project data includes parentId (sub-projects), folderId (workspace folder membership), and childOrder (sibling ordering)
@@ -107,7 +108,7 @@ You have access to comprehensive Todoist management tools for personal productiv
 - **update-filters**: Modify existing filters' name, query, color, or favorite status
 
 **Activity & Audit:**
-- **find-activity**: Retrieve recent activity logs to monitor and audit changes. Shows events from all users by default; use initiatorId to filter by specific user. Filter by object type (task/project/comment), event type (added/updated/deleted/completed/uncompleted/archived/unarchived/shared/left), and specific objects (objectId, projectId, taskId). Useful for tracking who did what and when. Note: Date-based filtering is not supported.
+- **find-activity**: Retrieve activity logs to monitor and audit changes. Shows events from all users by default; use initiatorId to filter by specific user. Filter by object type (task/project/comment), event type (added/updated/deleted/completed/uncompleted/archived/unarchived/shared/left), objects (objectId, projectId, taskId), and an inclusive dateFrom/exclusive dateTo range. For “what did I complete?” or “what got done?” questions, including recurring task occurrences, use objectType="task", eventType="completed", and the requested date range. Activity history retention depends on the user plan.
 - **get-productivity-stats**: Get comprehensive productivity statistics including daily/weekly completion breakdowns, goal streaks (current, last, max), karma score and trends, and historical karma data. No parameters required.
 
 **Project Health & Insights:**
@@ -117,8 +118,8 @@ You have access to comprehensive Todoist management tools for personal productiv
 - **get-workspace-insights**: Get aggregated health and progress insights across all projects in a workspace. Accepts workspace name or ID, with optional project ID filtering.
 
 **General Operations:**
-- **delete-object**: Remove projects, sections, tasks, comments, labels, filters, reminders, or location reminders by type and ID
-- **fetch-object**: Fetch a single task, project, comment, or section by its ID
+- **delete-object**: Remove projects, sections, tasks, comments, labels, filters, reminders, or location reminders by type and ID. Deletes both active and archived projects (workspace projects must be archived first; use find-projects with archivedStatus to locate archived projects)
+- **fetch-object**: Fetch a single task, project, comment, or section by its ID. Pass includeChildren=true to also get its direct children (subtasks for a task, sub-projects for a project) with a childCount - use this to check whether a task hides subtasks rather than a speculative find-tasks call
 - **reorder-objects**: Reorder sibling projects or sections, and optionally move projects to a new parent. For projects: set order to reorder siblings, and/or set parentId to move under a new parent (use "root" for top level). For sections: set order to reorder within a project
 - **user-info**: Get user details including timezone, goals, and plan information
 
@@ -138,7 +139,7 @@ You have access to comprehensive Todoist management tools for personal productiv
 
 7. **Pagination**: Large result sets use cursor-based pagination. Use limit parameter to control result size (default varies by tool).
 
-8. **Error Handling**: All tools provide detailed error messages and next-step suggestions. Pay attention to validation feedback for corrective actions.
+8. **Error Handling**: All tools provide detailed error messages and next-step suggestions. Pay attention to validation feedback for corrective actions. Batch tools (e.g. add-tasks, update-tasks) report per-item \`failures\` alongside successes — a single failed item does not undo the rest of the batch. When an item fails, **do not retry the whole batch**; inspect its failure reason and only re-send the items that are actually fixable.
 
 ### Common Workflows:
 
@@ -147,6 +148,7 @@ You have access to comprehensive Todoist management tools for personal productiv
 - **User Lookup**: find-project-collaborators with just a searchTerm (no projectId) to resolve a name or email to a Todoist user ID across all shared-project collaborators you can access
 - **Task Search**: find-tasks with multiple filters → update-tasks or complete-tasks based on results
 - **Project Organization**: add-projects → add-sections → add-tasks with projectId and sectionId
+- **Completion History**: find-activity with objectType="task", eventType="completed", dateFrom, and dateTo to report what was actually completed in a period, including recurring task occurrences; use initiatorId for one collaborator
 - **Progress Reviews**: find-completed-tasks (defaults to last 7 days; optionally use explicit date ranges) → get-overview for project summaries
 - **Activity Auditing**: find-activity with event/object filters to track changes, monitor team activity, or investigate specific actions
 - **Productivity Analysis**: Use the productivity-analysis prompt for comprehensive analysis combining user-info, get-productivity-stats, and find-completed-tasks data into actionable insights

@@ -1,10 +1,12 @@
 import type { PersonalProject, Section, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import {
+    compileWildcardQuery,
     createMoveTaskArgs,
     fetchAllPages,
     mapProject,
     mapTask,
+    matchesWildcardQuery,
     searchAllProjects,
     searchAllSections,
     toWildcardQuery,
@@ -52,6 +54,7 @@ describe('shared utilities', () => {
                 completedAt: undefined,
                 deadlineDate: undefined,
                 responsibleUid: undefined,
+                addedAt: '2025-08-13T22:09:56.123Z',
             })
         })
 
@@ -148,6 +151,7 @@ End of description.`)
                 inboxProject: false,
                 viewStyle: 'list',
                 childOrder: 1,
+                isArchived: false,
             } as unknown as PersonalProject
 
             expect(mapProject(mockPersonalProject)).toEqual({
@@ -162,6 +166,7 @@ End of description.`)
                 workspaceId: undefined,
                 folderId: undefined,
                 childOrder: 1,
+                isArchived: false,
             })
         })
 
@@ -179,6 +184,7 @@ End of description.`)
             expect(mapProject(mockWorkspaceProject)).toEqual({
                 id: 'proj-2',
                 name: 'Workspace Project',
+                description: '',
                 color: 'red',
                 isFavorite: true,
                 isShared: true,
@@ -188,6 +194,7 @@ End of description.`)
                 workspaceId: TEST_IDS.WORKSPACE_1,
                 folderId: undefined,
                 childOrder: 1,
+                isArchived: false,
             })
         })
 
@@ -207,6 +214,7 @@ End of description.`)
             expect(mapProject(mockWorkspaceProject)).toEqual({
                 id: 'proj-3',
                 name: 'Folder Project',
+                description: '',
                 color: 'green',
                 isFavorite: false,
                 isShared: true,
@@ -216,6 +224,7 @@ End of description.`)
                 workspaceId: TEST_IDS.WORKSPACE_1,
                 folderId: 'folder-42',
                 childOrder: 5,
+                isArchived: false,
             })
         })
     })
@@ -369,6 +378,58 @@ End of description.`)
         })
     })
 
+    describe('compileWildcardQuery / matchesWildcardQuery', () => {
+        it('matches as a substring when the query has no wildcard', () => {
+            expect(matchesWildcardQuery('Old work notes', 'work')).toBe(true)
+            expect(matchesWildcardQuery('Personal Stuff', 'work')).toBe(false)
+        })
+
+        it('is case-insensitive', () => {
+            expect(matchesWildcardQuery('WORK Project', 'work')).toBe(true)
+            expect(matchesWildcardQuery('work project', 'WORK')).toBe(true)
+        })
+
+        it('treats a trailing wildcard as a prefix match', () => {
+            expect(matchesWildcardQuery('Work Archive', 'work*')).toBe(true)
+            expect(matchesWildcardQuery('Old work notes', 'work*')).toBe(false)
+        })
+
+        it('treats a leading wildcard as a suffix match', () => {
+            expect(matchesWildcardQuery('My Work', '*work')).toBe(true)
+            expect(matchesWildcardQuery('Work stuff', '*work')).toBe(false)
+        })
+
+        it('escapes regex special characters in the query', () => {
+            expect(matchesWildcardQuery('a.b', 'a.b')).toBe(true)
+            expect(matchesWildcardQuery('axb', 'a.b')).toBe(false)
+        })
+
+        it('treats an escaped asterisk as a literal asterisk', () => {
+            expect(matchesWildcardQuery('a*b', 'a\\*b')).toBe(true)
+            expect(matchesWildcardQuery('aXb', 'a\\*b')).toBe(false)
+        })
+
+        it('preserves literal backslashes when the query also contains a wildcard', () => {
+            // Regression: the backslash before "slash" must not be dropped as an escape.
+            expect(matchesWildcardQuery('back\\slash notes', 'back\\slash*')).toBe(true)
+        })
+
+        it('treats an escaped backslash followed by a wildcard as literal-backslash + wildcard', () => {
+            // Query `a\\*b`: `\\` is a literal backslash, `*` is a wildcard, matching
+            // `a\` + anything + `b` (same as server-side search), not the literal `a\\*b`.
+            expect(matchesWildcardQuery('a\\Xb', 'a\\\\*b')).toBe(true)
+            expect(matchesWildcardQuery('aXb', 'a\\\\*b')).toBe(false)
+        })
+
+        it('compiles a reusable case-insensitive RegExp', () => {
+            const regex = compileWildcardQuery('work*')
+            expect(regex).toBeInstanceOf(RegExp)
+            expect(regex.flags).toContain('i')
+            expect(regex.test('Work Archive')).toBe(true)
+            expect(regex.test('Old work notes')).toBe(false)
+        })
+    })
+
     describe('searchAllProjects', () => {
         const mockTodoistApi = {
             searchProjects: vi.fn(),
@@ -409,6 +470,7 @@ End of description.`)
         const createMockSection = (overrides: Partial<Section> = {}): Section => ({
             id: 'section-id',
             name: 'Section Name',
+            description: null,
             projectId: 'project-id',
             sectionOrder: 1,
             url: 'https://todoist.com/app/section/section-id',

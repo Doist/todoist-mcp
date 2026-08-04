@@ -101,6 +101,9 @@ const fetch = {
 
             // Build text content
             const textParts = [mappedProject.name]
+            if (mappedProject.description) {
+                textParts.push(`\n\nDescription: ${mappedProject.description}`)
+            }
             if (mappedProject.isShared) {
                 textParts.push('\n\nShared project')
             }

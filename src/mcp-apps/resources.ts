@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { RESOURCE_MIME_TYPE, registerAppResource } from '@modelcontextprotocol/ext-apps/server'
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { ResourceTemplate, type McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const TASK_LIST_HTML_PATHS = [
@@ -36,6 +36,7 @@ function loadTaskListHtml() {
 const taskListHtml = loadTaskListHtml()
 const taskListHash = createHash('sha256').update(taskListHtml).digest('hex').slice(0, 12)
 const taskListResourceUri = `ui://todoist/task-list@${taskListHash}`
+const taskListResourceUriTemplate = 'ui://todoist/task-list@{hash}'
 const taskListResourceDescription = 'Interactive task list widget'
 const taskListWidgetDomain = 'https://ai.todoist.net'
 const taskListResourceMeta = {
@@ -56,6 +57,19 @@ const taskListResourceMeta = {
     'openai/widgetDomain': taskListWidgetDomain,
 }
 
+function createTaskListResourceResult(uri: string) {
+    return {
+        contents: [
+            {
+                uri,
+                mimeType: RESOURCE_MIME_TYPE,
+                text: taskListHtml,
+                _meta: taskListResourceMeta,
+            },
+        ],
+    }
+}
+
 /**
  * Register the task list MCP App resource on the server.
  */
@@ -68,16 +82,18 @@ function registerTaskListApp(server: McpServer) {
             description: taskListResourceDescription,
             _meta: taskListResourceMeta,
         },
-        async () => ({
-            contents: [
-                {
-                    uri: taskListResourceUri,
-                    mimeType: RESOURCE_MIME_TYPE,
-                    text: taskListHtml,
-                    _meta: taskListResourceMeta,
-                },
-            ],
-        }),
+        async () => createTaskListResourceResult(taskListResourceUri),
+    )
+
+    server.registerResource(
+        'todoist-task-list-hash-fallback',
+        new ResourceTemplate(taskListResourceUriTemplate, { list: undefined }),
+        {
+            description: `${taskListResourceDescription} compatibility fallback`,
+            mimeType: RESOURCE_MIME_TYPE,
+            _meta: taskListResourceMeta,
+        },
+        async (uri) => createTaskListResourceResult(uri.toString()),
     )
 }
 

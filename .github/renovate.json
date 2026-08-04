@@ -14,6 +14,11 @@
         {
             "matchPackageNames": ["@types/node"],
             "allowedVersions": "< 23"
+        },
+        {
+            "matchPackageNames": ["oxlint", "oxfmt"],
+            "groupName": "ox toolchain",
+            "description": "Group oxlint and oxfmt updates into a single PR"
         }
     ],
     "vulnerabilityAlerts": {

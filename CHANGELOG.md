@@ -1,3 +1,202 @@
+## [12.4.0](https://github.com/Doist/todoist-mcp/compare/v12.3.2...v12.4.0) (2026-08-03)
+
+### Features
+
+* add date filters for activity completion history ([#553](https://github.com/Doist/todoist-mcp/issues/553)) ([da428b4](https://github.com/Doist/todoist-mcp/commit/da428b40f3a7e383fc8a1720ae9a6b2be72b934e))
+
+## [12.3.2](https://github.com/Doist/todoist-mcp/compare/v12.3.1...v12.3.2) (2026-08-03)
+
+### Bug Fixes
+
+* add due string recovery guidance ([#552](https://github.com/Doist/todoist-mcp/issues/552)) ([2039416](https://github.com/Doist/todoist-mcp/commit/20394162918f30505d839d1c364296abce79da83)), closes [Doist/Issues#20569](https://github.com/Doist/Issues/issues/20569) [#20569](https://github.com/Doist/todoist-mcp/issues/20569)
+
+## [12.3.1](https://github.com/Doist/todoist-mcp/compare/v12.3.0...v12.3.1) (2026-08-03)
+
+### Bug Fixes
+
+* **update-tasks:** skip redundant moves and batch them by destination ([#548](https://github.com/Doist/todoist-mcp/issues/548)) ([bfef29c](https://github.com/Doist/todoist-mcp/commit/bfef29c65932cbf8984cd775e7067ab4cb81d7dd))
+
+## [12.3.0](https://github.com/Doist/todoist-mcp/compare/v12.2.4...v12.3.0) (2026-08-03)
+
+### Features
+
+* **move-planner:** decide when a requested container change is a real move ([#550](https://github.com/Doist/todoist-mcp/issues/550)) ([89481c4](https://github.com/Doist/todoist-mcp/commit/89481c4e0b7971050076c93740de668aac3755e8))
+
+## [12.2.4](https://github.com/Doist/todoist-mcp/compare/v12.2.3...v12.2.4) (2026-08-03)
+
+### Bug Fixes
+
+* **update-tasks:** bound concurrent write requests ([#547](https://github.com/Doist/todoist-mcp/issues/547)) ([f59a02b](https://github.com/Doist/todoist-mcp/commit/f59a02bac40029d1d6d31b24d3a1e28a3835d142))
+
+## [12.2.3](https://github.com/Doist/todoist-mcp/compare/v12.2.2...v12.2.3) (2026-08-03)
+
+### Bug Fixes
+
+* **retry:** add full jitter to backoff delays ([#546](https://github.com/Doist/todoist-mcp/issues/546)) ([f9c8e17](https://github.com/Doist/todoist-mcp/commit/f9c8e17fd4b5ce9769c4e7632a314b04a3bea210))
+
+## [12.2.2](https://github.com/Doist/todoist-mcp/compare/v12.2.1...v12.2.2) (2026-07-31)
+
+### Bug Fixes
+
+* **errors:** Treat 403 as a non-retryable permission decision ([#503](https://github.com/Doist/todoist-mcp/issues/503)) ([032934e](https://github.com/Doist/todoist-mcp/commit/032934e5dd2fcfeb9e5dc8e3373fd940df190fdc))
+
+## [12.2.1](https://github.com/Doist/todoist-mcp/compare/v12.2.0...v12.2.1) (2026-07-31)
+
+### Bug Fixes
+
+* **projects,sections:** Report per-item failures instead of failing the whole batch ([#504](https://github.com/Doist/todoist-mcp/issues/504)) ([e5da65a](https://github.com/Doist/todoist-mcp/commit/e5da65ad5c7cb7f56a55487b7b19f2bb9a5a8de7))
+* **update-tasks:** Report per-task failures instead of failing the whole batch ([#502](https://github.com/Doist/todoist-mcp/issues/502)) ([fd533db](https://github.com/Doist/todoist-mcp/commit/fd533db99243fa6e47a62181f12a6c3497f055a4))
+
+## [12.2.0](https://github.com/Doist/todoist-mcp/compare/v12.1.2...v12.2.0) (2026-07-30)
+
+### Features
+
+* **fetch-object:** add includeChildren for subtasks and sub-projects ([#543](https://github.com/Doist/todoist-mcp/issues/543)) ([b7b5620](https://github.com/Doist/todoist-mcp/commit/b7b56205794971f853fccefc2efdfc6d10bfde48))
+
+## [12.1.2](https://github.com/Doist/todoist-mcp/compare/v12.1.1...v12.1.2) (2026-07-27)
+
+### Bug Fixes
+
+* **deps:** update dependency @doist/todoist-sdk to v12 ([#540](https://github.com/Doist/todoist-mcp/issues/540)) ([4d6f7a9](https://github.com/Doist/todoist-mcp/commit/4d6f7a9bef8b4f53ec609d6531ca3cad9cdb9b76))
+
+## [12.1.1](https://github.com/Doist/todoist-mcp/compare/v12.1.0...v12.1.1) (2026-07-27)
+
+### Bug Fixes
+
+* **deps:** update dependency @doist/todoist-sdk to v10.5.1 ([#539](https://github.com/Doist/todoist-mcp/issues/539)) ([87042f9](https://github.com/Doist/todoist-mcp/commit/87042f92ddf329d7d6279132cb92cf987327752f))
+
+## [12.1.0](https://github.com/Doist/todoist-mcp/compare/v12.0.0...v12.1.0) (2026-07-24)
+
+### Features
+
+* expose section order ([#538](https://github.com/Doist/todoist-mcp/issues/538)) ([99fba85](https://github.com/Doist/todoist-mcp/commit/99fba85c8cbfc2c195099b6f863d922630d97e08))
+
+## [12.0.0](https://github.com/Doist/todoist-mcp/compare/v11.0.0...v12.0.0) (2026-07-16)
+
+### ⚠ BREAKING CHANGES
+
+* require node >=24, test on 24 & 26, support npm >=11 (#537)
+
+### Features
+
+* require node >=24, test on 24 & 26, support npm >=11 ([#537](https://github.com/Doist/todoist-mcp/issues/537)) ([f6d7de8](https://github.com/Doist/todoist-mcp/commit/f6d7de8d53f3318981f860c1a1c0ab3a2808e93a))
+
+## [11.0.0](https://github.com/Doist/todoist-mcp/compare/v10.5.0...v11.0.0) (2026-07-13)
+
+### ⚠ BREAKING CHANGES
+
+* Removal of Goals (BETA)
+
+### Features
+
+* Removal of Goals (BETA) ([74fd8a0](https://github.com/Doist/todoist-mcp/commit/74fd8a095fb189bab379ed3f7d660c99a6861bfb))
+
+## [10.5.0](https://github.com/Doist/todoist-mcp/compare/v10.4.2...v10.5.0) (2026-07-10)
+
+### Features
+
+* expose addedAt field in task objects ([#534](https://github.com/Doist/todoist-mcp/issues/534)) ([f2f34e1](https://github.com/Doist/todoist-mcp/commit/f2f34e17f0ae24d1589221279709488a014d5cc5))
+
+## [10.4.2](https://github.com/Doist/todoist-mcp/compare/v10.4.1...v10.4.2) (2026-07-08)
+
+### Bug Fixes
+
+* preserve item limit details in task batch errors ([#532](https://github.com/Doist/todoist-mcp/issues/532)) ([ef2e5f4](https://github.com/Doist/todoist-mcp/commit/ef2e5f4abb2e3a70f8aaa2b7702d67e9d234bd04))
+
+## [10.4.1](https://github.com/Doist/todoist-mcp/compare/v10.4.0...v10.4.1) (2026-06-26)
+
+### Bug Fixes
+
+* **deps:** update dependency @doist/todoist-sdk to v10.5.0 ([#521](https://github.com/Doist/todoist-mcp/issues/521)) ([d093bb3](https://github.com/Doist/todoist-mcp/commit/d093bb3a75b9e58703c26968793ec64bc99e5f96))
+
+## [10.4.0](https://github.com/Doist/todoist-mcp/compare/v10.3.3...v10.4.0) (2026-06-24)
+
+### Features
+
+* **projects:** support archived projects in find-projects ([#517](https://github.com/Doist/todoist-mcp/issues/517)) ([65b8ae9](https://github.com/Doist/todoist-mcp/commit/65b8ae9b7e2baa2688137bdf12952f97afb0f0a8))
+
+## [10.3.3](https://github.com/Doist/todoist-mcp/compare/v10.3.2...v10.3.3) (2026-06-24)
+
+### Bug Fixes
+
+* validate Host/Origin on HTTP transport to block DNS rebinding ([#516](https://github.com/Doist/todoist-mcp/issues/516)) ([245bf29](https://github.com/Doist/todoist-mcp/commit/245bf29cf5dbd8272e2aa896ad38557f91f8a16a))
+
+## [10.3.2](https://github.com/Doist/todoist-mcp/compare/v10.3.1...v10.3.2) (2026-06-22)
+
+### Bug Fixes
+
+* **deps:** update dependency @doist/todoist-sdk to v10.4.1 ([#514](https://github.com/Doist/todoist-mcp/issues/514)) ([3febb57](https://github.com/Doist/todoist-mcp/commit/3febb57d9528207cee260b7fbd9d7abb9656726d))
+
+## [10.3.1](https://github.com/Doist/todoist-mcp/compare/v10.3.0...v10.3.1) (2026-06-19)
+
+### Bug Fixes
+
+* **release:** send client_payload as a JSON object in the integrations dispatch ([#512](https://github.com/Doist/todoist-mcp/issues/512)) ([9107093](https://github.com/Doist/todoist-mcp/commit/91070935fac70e93b8ddc6bd31c6b1bc5b9148ce))
+
+## [10.3.0](https://github.com/Doist/todoist-mcp/compare/v10.2.0...v10.3.0) (2026-06-19)
+
+### Features
+
+* **sections:** add description to add-sections and update-sections ([#501](https://github.com/Doist/todoist-mcp/issues/501)) ([ccf6f45](https://github.com/Doist/todoist-mcp/commit/ccf6f451e4ea18fe583ea9f3cbbd3c7bf97b15e5)), closes [#500](https://github.com/Doist/todoist-mcp/issues/500)
+
+## [10.2.0](https://github.com/Doist/todoist-mcp/compare/v10.1.6...v10.2.0) (2026-06-19)
+
+### Features
+
+* **projects:** add description to add-projects and update-projects ([#500](https://github.com/Doist/todoist-mcp/issues/500)) ([ff91b99](https://github.com/Doist/todoist-mcp/commit/ff91b99e6ff04f8222b2bab6599312b1d8393dd4))
+
+## [10.1.6](https://github.com/Doist/todoist-mcp/compare/v10.1.5...v10.1.6) (2026-06-18)
+
+### Bug Fixes
+
+* bind standalone HTTP server to localhost by default ([#510](https://github.com/Doist/todoist-mcp/issues/510)) ([0401adc](https://github.com/Doist/todoist-mcp/commit/0401adceca0cc435d61d9290d6598d20394af0a0))
+
+## [10.1.5](https://github.com/Doist/todoist-mcp/compare/v10.1.4...v10.1.5) (2026-06-10)
+
+### Bug Fixes
+
+* **deps:** update @doist/todoist-sdk to v10.3.3 ([#499](https://github.com/Doist/todoist-mcp/issues/499)) ([ecb000c](https://github.com/Doist/todoist-mcp/commit/ecb000cb0570178be24aef788ec13964630970c7))
+
+## [10.1.4](https://github.com/Doist/todoist-mcp/compare/v10.1.3...v10.1.4) (2026-06-08)
+
+### Bug Fixes
+
+* **deps:** update dependency @doist/todoist-sdk to v10.3.0 ([#496](https://github.com/Doist/todoist-mcp/issues/496)) ([44d4e09](https://github.com/Doist/todoist-mcp/commit/44d4e09b1527d871529fa26eac447e5fd04570e7))
+
+## [10.1.3](https://github.com/Doist/todoist-mcp/compare/v10.1.2...v10.1.3) (2026-06-05)
+
+### Bug Fixes
+
+* Always serve the most recent app resource ([#494](https://github.com/Doist/todoist-mcp/issues/494)) ([f650305](https://github.com/Doist/todoist-mcp/commit/f6503059ab4ed4bc915188eb5d0ea5bd52897184))
+
+## [10.1.2](https://github.com/Doist/todoist-mcp/compare/v10.1.1...v10.1.2) (2026-05-31)
+
+### Bug Fixes
+
+* resolve project from section when assigning tasks with sectionId ([#491](https://github.com/Doist/todoist-mcp/issues/491)) ([da7f9e3](https://github.com/Doist/todoist-mcp/commit/da7f9e33ab6339c2c12436419ef1322861841efa))
+
+## [10.1.1](https://github.com/Doist/todoist-mcp/compare/v10.1.0...v10.1.1) (2026-05-25)
+
+### Bug Fixes
+
+* **deps:** pin dependency @doist/todoist-mcp to 9.0.0 ([#486](https://github.com/Doist/todoist-mcp/issues/486)) ([d2e320d](https://github.com/Doist/todoist-mcp/commit/d2e320db571512fb49b3740719273bdf2ae87a4f))
+
+## [10.1.0](https://github.com/Doist/todoist-mcp/compare/v10.0.0...v10.1.0) (2026-05-18)
+
+### Features
+
+* Goal MCP tools ([#433](https://github.com/Doist/todoist-mcp/issues/433)) ([251d0d4](https://github.com/Doist/todoist-mcp/commit/251d0d45166e06a9f4f138cd10dbf092226f0f97))
+
+## [10.0.0](https://github.com/Doist/todoist-mcp/compare/v9.0.0...v10.0.0) (2026-05-18)
+
+### ⚠ BREAKING CHANGES
+
+* reorder MCP tool response content blocks (JSON first, summary last) (#484)
+
+### Features
+
+* reorder MCP tool response content blocks (JSON first, summary last) ([#484](https://github.com/Doist/todoist-mcp/issues/484)) ([1114754](https://github.com/Doist/todoist-mcp/commit/1114754371bb37e1965ffef1779e703622ccefa6))
+
 ## [9.0.0](https://github.com/Doist/todoist-mcp/compare/v8.12.3...v9.0.0) (2026-05-14)
 
 ### ⚠ BREAKING CHANGES

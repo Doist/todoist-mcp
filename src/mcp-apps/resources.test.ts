@@ -16,7 +16,7 @@ describe('registerTaskListApp', () => {
         registerTaskListApp(server)
 
         expect(consoleErrorSpy).not.toHaveBeenCalled()
-        expect(registerResourceSpy).toHaveBeenCalledTimes(1)
+        expect(registerResourceSpy).toHaveBeenCalledTimes(2)
         expect(registerResourceSpy.mock.calls[0]?.[2]).toMatchObject({
             description: 'Interactive task list widget',
             _meta: {
@@ -77,5 +77,47 @@ describe('registerTaskListApp', () => {
         expect(
             (result.contents[0]?._meta as { ui?: Record<string, unknown> } | undefined)?.ui,
         ).not.toHaveProperty('domain')
+
+        const fallbackTemplate = registerResourceSpy.mock.calls[1]?.[1] as
+            | { uriTemplate?: { toString: () => string } }
+            | undefined
+        const fallbackConfig = registerResourceSpy.mock.calls[1]?.[2]
+        const fallbackReadCallback = registerResourceSpy.mock.calls[1]?.[3] as
+            | ((uri: URL) => Promise<{ contents: Array<{ uri: string; text: string }> }>)
+            | undefined
+
+        expect(fallbackTemplate?.uriTemplate?.toString()).toBe('ui://todoist/task-list@{hash}')
+        expect(fallbackConfig).toMatchObject({
+            description: 'Interactive task list widget compatibility fallback',
+            mimeType: 'text/html;profile=mcp-app',
+            _meta: {
+                ui: {
+                    prefersBorder: true,
+                    csp: {
+                        connectDomains: [],
+                        resourceDomains: [],
+                    },
+                },
+                'openai/widgetDescription': 'Interactive task list widget',
+                'openai/widgetPrefersBorder': true,
+                'openai/widgetCSP': {
+                    connect_domains: [],
+                    resource_domains: [],
+                },
+                'openai/widgetDomain': 'https://ai.todoist.net',
+            },
+        })
+
+        expect(fallbackReadCallback).toBeDefined()
+        if (!fallbackReadCallback) {
+            throw new Error('fallback registerResource callback was not captured')
+        }
+
+        const staleUri = 'ui://todoist/task-list@stale1234567'
+        const fallbackResult = await fallbackReadCallback(new URL(staleUri))
+
+        expect(fallbackResult.contents).toHaveLength(1)
+        expect(fallbackResult.contents[0]?.uri).toBe(staleUri)
+        expect(fallbackResult.contents[0]?.text).toContain('<div id="root"></div>')
     })
 })
