@@ -14,6 +14,7 @@ import { addTasks } from './tools/add-tasks.js'
 import { analyzeProjectHealth } from './tools/analyze-project-health.js'
 import { completeTasks } from './tools/complete-tasks.js'
 import { deleteObject } from './tools/delete-object.js'
+import { exportTemplate } from './tools/export-template.js'
 import { fetchObject } from './tools/fetch-object.js'
 import { fetch } from './tools/fetch.js'
 import { findActivity } from './tools/find-activity.js'
@@ -32,6 +33,7 @@ import { getProductivityStats } from './tools/get-productivity-stats.js'
 import { getProjectActivityStats } from './tools/get-project-activity-stats.js'
 import { getProjectHealth } from './tools/get-project-health.js'
 import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
+import { importTemplate } from './tools/import-template.js'
 import { listWorkspaces } from './tools/list-workspaces.js'
 import { manageAssignments } from './tools/manage-assignments.js'
 import { projectManagement } from './tools/project-management.js'
@@ -96,6 +98,8 @@ const allTools: TodoistTool<z.ZodRawShape, z.ZodRawShape>[] = [
     findProjectCollaborators,
     manageAssignments,
     listWorkspaces,
+    exportTemplate,
+    importTemplate,
     search,
     fetch,
 ] as unknown as TodoistTool<z.ZodRawShape, z.ZodRawShape>[]
@@ -157,7 +161,7 @@ function measure(): Row[] {
 // Budget for the combined fixed token cost (tools/list payload + instructions).
 // Bump deliberately when adding tools or expanding descriptions. Override at
 // runtime with MCP_TOKEN_BUDGET=NNNN to experiment without editing the source.
-const DEFAULT_TOKEN_BUDGET = 40_000
+const DEFAULT_TOKEN_BUDGET = 42_000
 const TOKEN_BUDGET = Number(process.env.MCP_TOKEN_BUDGET ?? DEFAULT_TOKEN_BUDGET)
 
 describe('token footprint baseline', () => {
