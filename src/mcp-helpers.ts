@@ -128,6 +128,22 @@ function getErrorOutput(error: string) {
     }
 }
 
+// Argument names whose values carry user content rather than identifiers, and so
+// must not reach server logs when a tool throws.
+const REDACTED_ARG_KEYS = new Set(['file'])
+
+function redactArgs(args: unknown): unknown {
+    if (!args || typeof args !== 'object' || Array.isArray(args)) {
+        return args
+    }
+
+    return Object.fromEntries(
+        Object.entries(args as Record<string, unknown>).map(([key, value]) =>
+            REDACTED_ARG_KEYS.has(key) && value !== undefined ? [key, '[redacted]'] : [key, value],
+        ),
+    )
+}
+
 /**
  * Build MCP ToolAnnotations for a tool.
  *
@@ -255,7 +271,7 @@ function registerTool<Params extends z.ZodRawShape, Output extends z.ZodRawShape
 
             return getToolOutput({ textContent, structuredContent, contentItems })
         } catch (error) {
-            console.error(`Error executing tool ${tool.name}:`, { args, error })
+            console.error(`Error executing tool ${tool.name}:`, { args: redactArgs(args), error })
             return getErrorOutput(formatToolExecutionError(error))
         }
     }

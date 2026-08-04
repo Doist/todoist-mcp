@@ -1,9 +1,8 @@
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { mapComment, mapProject, mapTask } from '../tool-helpers.js'
+import { mapComment, mapTask } from '../tool-helpers.js'
 import {
     CommentSchema,
-    ProjectSchema,
     SectionSchema,
     TaskSchema,
     toSectionSummary,
@@ -11,10 +10,12 @@ import {
 import { ToolNames } from '../utils/tool-names.js'
 
 /**
- * Accepts a bare template ID or any Todoist template URL. Both gallery links
+ * Accepts a bare template ID or a Todoist template URL. Both gallery links
  * (`/templates/product-launch`) and in-app links
  * (`/app/templates/category/my-templates/UT_28Ex.../view`) reduce to the last
- * path segment once a trailing `/view` is dropped.
+ * path segment once a trailing `/view` is dropped. Non-Todoist hosts are
+ * rejected rather than reduced, so a look-alike link cannot quietly resolve to
+ * a real gallery slug.
  */
 function extractTemplateId(input: string): string {
     const trimmed = input.trim()
@@ -23,13 +24,37 @@ function extractTemplateId(input: string): string {
         return trimmed
     }
 
-    const segments = trimmed
-        .replace(/[?#].*$/, '')
-        .split('/')
-        .filter((segment) => segment.length > 0)
-    const last = segments.at(-1)
+    let url: URL
+    try {
+        url = new URL(trimmed)
+    } catch {
+        throw new Error(`Could not read a template ID from "${trimmed}".`)
+    }
 
-    return (last === 'view' ? segments.at(-2) : last) ?? trimmed
+    if (!isTodoistHost(url.hostname)) {
+        throw new Error(
+            `"${url.hostname}" is not a Todoist domain. Pass a todoist.com template URL or the template ID itself.`,
+        )
+    }
+
+    const segments = url.pathname.split('/').filter(Boolean)
+    if (!segments.includes('templates')) {
+        throw new Error(`"${trimmed}" is not a Todoist template URL.`)
+    }
+
+    const last = segments.at(-1)
+    const id = last === 'view' ? segments.at(-2) : last
+
+    if (!id) {
+        throw new Error(`Could not read a template ID from "${trimmed}".`)
+    }
+
+    return id
+}
+
+function isTodoistHost(hostname: string): boolean {
+    const host = hostname.toLowerCase()
+    return host === 'todoist.com' || host.endsWith('.todoist.com')
 }
 
 const ArgsSchema = {
@@ -55,8 +80,10 @@ const ArgsSchema = {
         .describe('Locale for the imported content when using `templateId`. Defaults to "en".'),
 }
 
+// The API also returns a `projects` array, but it stays empty when importing into an
+// existing project — the create-project-from-file endpoint is what populates it. Its
+// count still feeds totalCount so nothing goes unreported.
 const OutputSchema = {
-    projects: z.array(ProjectSchema).describe('Projects created by the import.'),
     sections: z.array(SectionSchema).describe('Sections created by the import.'),
     tasks: z.array(TaskSchema).describe('Tasks created by the import.'),
     comments: z.array(CommentSchema).describe('Comments created by the import.'),
@@ -91,24 +118,23 @@ const importTemplate = {
                   fileName: 'template.csv',
               })
 
-        const projects = result.projects.map(mapProject)
         const sections = result.sections.map(toSectionSummary)
         const tasks = result.tasks.map(mapTask)
         const comments = result.comments.map(mapComment)
-        const totalCount = projects.length + sections.length + tasks.length + comments.length
+        const totalCount = result.projects.length + sections.length + tasks.length + comments.length
 
         return {
             textContent: generateTextContent({
                 projectId,
                 counts: {
-                    projects: projects.length,
+                    projects: result.projects.length,
                     sections: sections.length,
                     tasks: tasks.length,
                     comments: comments.length,
                 },
                 totalCount,
             }),
-            structuredContent: { projects, sections, tasks, comments, totalCount },
+            structuredContent: { sections, tasks, comments, totalCount },
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>

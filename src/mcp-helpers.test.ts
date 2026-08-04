@@ -135,6 +135,36 @@ describe('registerTool config', () => {
 })
 
 describe('registerTool error path', () => {
+    it('keeps raw file content out of error logs', async () => {
+        const { mock, server, client } = captureRegisterToolMock()
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        registerTool({
+            tool: buildToolFixture({
+                outputSchema: {},
+                execute: async () => {
+                    throw new Error('boom')
+                },
+            }),
+            server,
+            client,
+        })
+
+        const callback = mock.mock.calls[0]?.[2] as (
+            args: Record<string, unknown>,
+            context: unknown,
+        ) => Promise<unknown>
+
+        await callback({ projectId: '123', file: 'TYPE,CONTENT\ntask,Private plans' }, {})
+
+        const loggedArgs = consoleError.mock.calls[0]?.[1] as { args: Record<string, unknown> }
+        expect(loggedArgs.args.file).toBe('[redacted]')
+        expect(loggedArgs.args.projectId).toBe('123')
+        expect(JSON.stringify(loggedArgs)).not.toContain('Private plans')
+
+        consoleError.mockRestore()
+    })
+
     it('applies centralized API formatting in MCP callback errors', async () => {
         const { mock, server, client } = captureRegisterToolMock()
 

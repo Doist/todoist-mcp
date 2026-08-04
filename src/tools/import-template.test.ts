@@ -73,6 +73,26 @@ describe(`${IMPORT_TEMPLATE} tool`, () => {
         ])('should resolve $name', ({ input, expected }) => {
             expect(extractTemplateId(input)).toBe(expected)
         })
+
+        it.each([
+            {
+                name: 'a look-alike host',
+                input: 'https://example.com/templates/product-launch',
+                error: 'not a Todoist domain',
+            },
+            {
+                name: 'a host that merely ends in the brand name',
+                input: 'https://nottodoist.com/templates/product-launch',
+                error: 'not a Todoist domain',
+            },
+            {
+                name: 'a Todoist URL that is not a template link',
+                input: 'https://app.todoist.com/app/project/123',
+                error: 'not a Todoist template URL',
+            },
+        ])('should reject $name', ({ input, error }) => {
+            expect(() => extractTemplateId(input)).toThrow(error)
+        })
     })
 
     describe('importing by template ID', () => {
@@ -99,6 +119,33 @@ describe(`${IMPORT_TEMPLATE} tool`, () => {
             })
             expect(result.structuredContent?.totalCount).toBe(3)
             expect(result.textContent).toContain('1 section, 2 tasks')
+            expect(result.structuredContent?.sections).toEqual([
+                expect.objectContaining({ id: TEST_IDS.SECTION_1, name: 'Websites' }),
+            ])
+            expect(result.structuredContent?.tasks).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({ id: TEST_IDS.TASK_1, content: 'Home page' }),
+                    expect.objectContaining({ id: TEST_IDS.TASK_2, content: 'Product page' }),
+                ]),
+            )
+        })
+
+        it('should count imported projects toward totalCount even though they are not returned', async () => {
+            mockTodoistApi.importTemplateFromId.mockResolvedValue(
+                createImportResponse({
+                    projects: [{ id: 'imported-project' }],
+                    tasks: [createMockTask({ id: TEST_IDS.TASK_1, content: 'Home page' })],
+                }),
+            )
+
+            const result = await importTemplate.execute(
+                { projectId: TEST_IDS.PROJECT_TEST, templateId: 'product-launch' },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent?.totalCount).toBe(2)
+            expect(result.structuredContent).not.toHaveProperty('projects')
+            expect(result.textContent).toContain('1 project')
         })
 
         it('should reduce a template URL to its ID before calling the API', async () => {
@@ -171,6 +218,9 @@ describe(`${IMPORT_TEMPLATE} tool`, () => {
             })
             expect(mockTodoistApi.importTemplateFromId).not.toHaveBeenCalled()
             expect(result.textContent).toContain('1 task')
+            expect(result.structuredContent?.tasks).toEqual([
+                expect.objectContaining({ id: TEST_IDS.TASK_1, content: 'Buy milk' }),
+            ])
         })
     })
 

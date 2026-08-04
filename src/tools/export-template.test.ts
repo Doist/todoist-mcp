@@ -57,6 +57,21 @@ describe(`${EXPORT_TEMPLATE} tool`, () => {
             expect(result.textContent).toContain('8 more rows')
         })
 
+        it('should default to the file format when none is given', async () => {
+            mockTodoistApi.exportTemplateAsFile.mockResolvedValue(`${CSV_HEADER}\ntask,Buy milk,,4`)
+
+            // scripts/run-tool.ts calls execute() without applying schema defaults.
+            const result = await exportTemplate.execute(
+                { projectId: TEST_IDS.PROJECT_TEST } as Parameters<
+                    typeof exportTemplate.execute
+                >[0],
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.exportTemplateAsFile).toHaveBeenCalled()
+            expect(result.structuredContent?.format).toBe('file')
+        })
+
         it('should ignore blank lines when counting rows', async () => {
             mockTodoistApi.exportTemplateAsFile.mockResolvedValue(
                 `${CSV_HEADER}\n\ntask,Buy milk,,4\n\n`,

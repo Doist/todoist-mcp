@@ -47,7 +47,9 @@ const exportTemplate = {
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
-    async execute({ projectId, format, useRelativeDates }, client) {
+    // `format` is defaulted here as well as in the schema: scripts/run-tool.ts calls
+    // execute() with raw JSON, so schema defaults are not applied on that path.
+    async execute({ projectId, format = 'file', useRelativeDates }, client) {
         if (format === 'url') {
             const { fileName, fileUrl } = await client.exportTemplateAsUrl({
                 projectId,
