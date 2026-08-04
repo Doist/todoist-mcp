@@ -1,3 +1,9 @@
+## [12.4.1](https://github.com/Doist/todoist-mcp/compare/v12.4.0...v12.4.1) (2026-08-04)
+
+### Bug Fixes
+
+* scope collaborator caches to authenticated accounts (Doist/Issues[#20711](https://github.com/Doist/todoist-mcp/issues/20711)) ([#544](https://github.com/Doist/todoist-mcp/issues/544)) ([a50d22f](https://github.com/Doist/todoist-mcp/commit/a50d22f0b6f67559fa515851739c88b915e298d5))
+
 ## [12.4.0](https://github.com/Doist/todoist-mcp/compare/v12.3.2...v12.4.0) (2026-08-03)
 
 ### Features
