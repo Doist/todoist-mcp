@@ -48,7 +48,7 @@ export const ArgsSchema = {
         .min(1)
         .max(ApiLimits.TASKS_MAX)
         .default(ApiLimits.TASKS_DEFAULT)
-        .describe('The maximum number of tasks to return.'),
+        .describe('The maximum number of tasks to return. Default is 10.'),
     cursor: z
         .string()
         .optional()
