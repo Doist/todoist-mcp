@@ -34,6 +34,18 @@ describe('loadRemainingPages', () => {
         expect(fetchPage).not.toHaveBeenCalled()
     })
 
+    it('stops when the page handler cancels pagination', async () => {
+        const fetchPage = vi.fn().mockResolvedValue({ nextCursor: 'third-page' })
+
+        await loadRemainingPages({
+            initialCursor: 'second-page',
+            fetchPage,
+            onPage: () => false,
+        })
+
+        expect(fetchPage).toHaveBeenCalledTimes(1)
+    })
+
     it('stops a malformed pagination loop', async () => {
         const fetchPage = vi.fn().mockResolvedValue({ nextCursor: 'same-cursor' })
 

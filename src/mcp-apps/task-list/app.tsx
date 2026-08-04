@@ -168,10 +168,11 @@ export function App() {
                 fetchPage: (cursor) => fetchTaskPage(app, paginationRequest.args, cursor),
                 onPage: (page) => {
                     if (cancelled || paginationRequest.requestId !== requestId.current) {
-                        return
+                        return false
                     }
 
                     setTasks((previous) => [...(previous ?? []), ...page.tasks])
+                    return true
                 },
             }).catch((error: unknown) => {
                 if (!cancelled && paginationRequest.requestId === requestId.current) {
@@ -192,7 +193,11 @@ export function App() {
         async (taskId: string) => {
             if (!app || !tasks) return
 
-            const previousTasks = tasks
+            const completedTaskIndex = tasks.findIndex((task) => task.id === taskId)
+            const completedTask = tasks[completedTaskIndex]
+            if (!completedTask) return
+
+            const completionRequestId = requestId.current
 
             setTasks((previous) => previous?.filter((task) => task.id !== taskId) ?? [])
             setToolError(null)
@@ -209,7 +214,22 @@ export function App() {
                     )
                 }
             } catch (error) {
-                setTasks(previousTasks)
+                if (completionRequestId !== requestId.current) {
+                    return
+                }
+
+                setTasks((previous) => {
+                    if (!previous || previous.some((task) => task.id === taskId)) {
+                        return previous
+                    }
+
+                    const insertionIndex = Math.min(completedTaskIndex, previous.length)
+                    return [
+                        ...previous.slice(0, insertionIndex),
+                        completedTask,
+                        ...previous.slice(insertionIndex),
+                    ]
+                })
                 setToolError(error instanceof Error ? error.message : 'Failed to complete task.')
             }
         },

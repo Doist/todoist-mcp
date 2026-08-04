@@ -16,7 +16,7 @@ async function loadRemainingPages<PageResult extends Page>({
 }: {
     initialCursor: string | undefined
     fetchPage: (cursor: string) => Promise<PageResult>
-    onPage: (page: PageResult) => void
+    onPage: (page: PageResult) => boolean | void
 }): Promise<void> {
     let cursor = initialCursor
     const seenCursors = new Set<string>()
@@ -28,7 +28,9 @@ async function loadRemainingPages<PageResult extends Page>({
 
         seenCursors.add(cursor)
         const page = await fetchPage(cursor)
-        onPage(page)
+        if (onPage(page) === false) {
+            return
+        }
         cursor = page.nextCursor
     }
 }
