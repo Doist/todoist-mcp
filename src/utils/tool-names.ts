@@ -72,6 +72,10 @@ export const ToolNames = {
     ADD_FILTERS: 'add-filters',
     UPDATE_FILTERS: 'update-filters',
 
+    // Template tools
+    EXPORT_PROJECT_TEMPLATE: 'export-project-template',
+    IMPORT_PROJECT_TEMPLATE: 'import-project-template',
+
     // Workspace tools
     LIST_WORKSPACES: 'list-workspaces',
 

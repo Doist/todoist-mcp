@@ -281,6 +281,9 @@ const TODOIST_ERROR_TAG_HINTS: Record<string, string> = {
         'This project has reached the maximum number of active tasks per project (subtasks count toward it; completed tasks do not). ' +
         'The cap is the same on every Todoist plan — upgrading will not raise it — and it is not an authentication or permission problem. ' +
         'Complete, delete, or move existing tasks out of the project, or add the task to a different project, then retry.',
+    USER_CANNOT_VIEW_TEMPLATE:
+        'This template exists but belongs to another account. Personal templates are private to whoever saved them, and a link to one cannot be used by anyone else. ' +
+        'Use a public gallery template instead, or ask the owner to export it with export-project-template and share the CSV.',
 }
 
 function findKnownTagHintInText(...texts: Array<string | undefined>): string | undefined {

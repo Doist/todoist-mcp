@@ -20,6 +20,7 @@ import { analyzeProjectHealth } from './tools/analyze-project-health.js'
 import { completeTasks } from './tools/complete-tasks.js'
 // General tools
 import { deleteObject } from './tools/delete-object.js'
+import { exportProjectTemplate } from './tools/export-project-template.js'
 import { fetch } from './tools/fetch.js'
 // Activity and audit tools
 import { findActivity } from './tools/find-activity.js'
@@ -38,6 +39,7 @@ import { getProductivityStats } from './tools/get-productivity-stats.js'
 import { getProjectActivityStats } from './tools/get-project-activity-stats.js'
 import { getProjectHealth } from './tools/get-project-health.js'
 import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
+import { importProjectTemplate } from './tools/import-project-template.js'
 import { listWorkspaces } from './tools/list-workspaces.js'
 import { manageAssignments } from './tools/manage-assignments.js'
 import { reorderObjects } from './tools/reorder-objects.js'
@@ -103,6 +105,9 @@ const tools = {
     // Assignment and collaboration tools
     findProjectCollaborators,
     manageAssignments,
+    // Template tools
+    exportProjectTemplate,
+    importProjectTemplate,
     // Workspace tools
     listWorkspaces,
     // OpenAI MCP tools
@@ -145,6 +150,9 @@ export {
     // Assignment and collaboration tools
     findProjectCollaborators,
     manageAssignments,
+    // Template tools
+    exportProjectTemplate,
+    importProjectTemplate,
     // Workspace tools
     listWorkspaces,
     // Attachment tools

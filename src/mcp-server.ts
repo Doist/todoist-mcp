@@ -19,6 +19,7 @@ import { addTasks } from './tools/add-tasks.js'
 import { analyzeProjectHealth } from './tools/analyze-project-health.js'
 import { completeTasks } from './tools/complete-tasks.js'
 import { deleteObject } from './tools/delete-object.js'
+import { exportProjectTemplate } from './tools/export-project-template.js'
 import { fetchObject } from './tools/fetch-object.js'
 import { fetch } from './tools/fetch.js'
 import { findActivity } from './tools/find-activity.js'
@@ -37,6 +38,7 @@ import { getProductivityStats } from './tools/get-productivity-stats.js'
 import { getProjectActivityStats } from './tools/get-project-activity-stats.js'
 import { getProjectHealth } from './tools/get-project-health.js'
 import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
+import { importProjectTemplate } from './tools/import-project-template.js'
 import { listWorkspaces } from './tools/list-workspaces.js'
 import { manageAssignments } from './tools/manage-assignments.js'
 import { projectManagement } from './tools/project-management.js'
@@ -106,6 +108,10 @@ You have access to comprehensive Todoist management tools for personal productiv
 - **find-filters**: List all personal filters or search by name; filters are saved task views using query syntax
 - **add-filters**: Create personal filters with name, query (e.g. "today & p1"), color, and favorite flag
 - **update-filters**: Modify existing filters' name, query, color, or favorite status
+
+**Templates:**
+- **export-project-template**: Export a project as a Todoist template — CSV content (format "file") or a shareable link (format "url"). Prefer "url" for large projects. To read a project's contents rather than export it, use find-tasks.
+- **import-project-template**: Add a template's tasks, sections and comments to an existing project. Source it with templateId (a gallery slug like "product-launch", a personal template ID like "UT_28Ex...", or a full Todoist template URL) or with csvFileContent (CSV from export-project-template). Templates cannot be listed through this server, so only use the ID or URL the user gave you. Gallery templates work for any account; personal templates only for the account that saved them. For "start a new project from this template", call add-projects first and import into the new project. Imports write immediately and cannot be undone.
 
 **Activity & Audit:**
 - **find-activity**: Retrieve activity logs to monitor and audit changes. Shows events from all users by default; use initiatorId to filter by specific user. Filter by object type (task/project/comment), event type (added/updated/deleted/completed/uncompleted/archived/unarchived/shared/left), objects (objectId, projectId, taskId), and an inclusive dateFrom/exclusive dateTo range. For “what did I complete?” or “what got done?” questions, including recurring task occurrences, use objectType="task", eventType="completed", and the requested date range. Activity history retention depends on the user plan.
@@ -270,6 +276,10 @@ function getMcpServer({
     // Assignment and collaboration tools
     registerTool({ tool: findProjectCollaborators, ...toolArgs })
     registerTool({ tool: manageAssignments, ...toolArgs })
+
+    // Template tools
+    registerTool({ tool: exportProjectTemplate, ...toolArgs })
+    registerTool({ tool: importProjectTemplate, ...toolArgs })
 
     // Workspace tools
     registerTool({ tool: listWorkspaces, ...toolArgs })
