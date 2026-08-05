@@ -1,3 +1,9 @@
+## [12.4.2](https://github.com/Doist/todoist-mcp/compare/v12.4.1...v12.4.2) (2026-08-05)
+
+### Bug Fixes
+
+* load all task list pages in MCP app ([#557](https://github.com/Doist/todoist-mcp/issues/557)) ([8f971aa](https://github.com/Doist/todoist-mcp/commit/8f971aad6f79e815286c394e03ddb97c30031f46)), closes [#554](https://github.com/Doist/todoist-mcp/issues/554)
+
 ## [12.4.1](https://github.com/Doist/todoist-mcp/compare/v12.4.0...v12.4.1) (2026-08-04)
 
 ### Bug Fixes
