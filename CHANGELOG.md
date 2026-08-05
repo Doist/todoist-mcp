@@ -1,3 +1,9 @@
+## [12.5.0](https://github.com/Doist/todoist-mcp/compare/v12.4.2...v12.5.0) (2026-08-05)
+
+### Features
+
+* Add template tools for importing and exporting projects ([#555](https://github.com/Doist/todoist-mcp/issues/555)) ([4542dcc](https://github.com/Doist/todoist-mcp/commit/4542dcc945a5e466fb47783da3f81f1292948a76))
+
 ## [12.4.2](https://github.com/Doist/todoist-mcp/compare/v12.4.1...v12.4.2) (2026-08-05)
 
 ### Bug Fixes
