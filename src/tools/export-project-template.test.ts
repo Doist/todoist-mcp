@@ -2,18 +2,18 @@ import type { TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { TEST_IDS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
-import { exportTemplate } from './export-template.js'
+import { exportProjectTemplate } from './export-project-template.js'
 
 const mockTodoistApi = {
     exportTemplateAsFile: vi.fn(),
     exportTemplateAsUrl: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
-const { EXPORT_TEMPLATE } = ToolNames
+const { EXPORT_PROJECT_TEMPLATE } = ToolNames
 
 const CSV_HEADER = 'TYPE,CONTENT,DESCRIPTION,PRIORITY'
 
-describe(`${EXPORT_TEMPLATE} tool`, () => {
+describe(`${EXPORT_PROJECT_TEMPLATE} tool`, () => {
     beforeEach(() => {
         vi.clearAllMocks()
     })
@@ -23,7 +23,7 @@ describe(`${EXPORT_TEMPLATE} tool`, () => {
             const csv = `${CSV_HEADER}\ntask,Buy milk,,4`
             mockTodoistApi.exportTemplateAsFile.mockResolvedValue(csv)
 
-            const result = await exportTemplate.execute(
+            const result = await exportProjectTemplate.execute(
                 { projectId: TEST_IDS.PROJECT_TEST, format: 'file' },
                 mockTodoistApi,
             )
@@ -45,7 +45,7 @@ describe(`${EXPORT_TEMPLATE} tool`, () => {
             const rows = Array.from({ length: 12 }, (_, index) => `task,Task ${index + 1},,4`)
             mockTodoistApi.exportTemplateAsFile.mockResolvedValue([CSV_HEADER, ...rows].join('\n'))
 
-            const result = await exportTemplate.execute(
+            const result = await exportProjectTemplate.execute(
                 { projectId: TEST_IDS.PROJECT_TEST, format: 'file' },
                 mockTodoistApi,
             )
@@ -61,9 +61,9 @@ describe(`${EXPORT_TEMPLATE} tool`, () => {
             mockTodoistApi.exportTemplateAsFile.mockResolvedValue(`${CSV_HEADER}\ntask,Buy milk,,4`)
 
             // scripts/run-tool.ts calls execute() without applying schema defaults.
-            const result = await exportTemplate.execute(
+            const result = await exportProjectTemplate.execute(
                 { projectId: TEST_IDS.PROJECT_TEST } as Parameters<
-                    typeof exportTemplate.execute
+                    typeof exportProjectTemplate.execute
                 >[0],
                 mockTodoistApi,
             )
@@ -77,7 +77,7 @@ describe(`${EXPORT_TEMPLATE} tool`, () => {
                 `${CSV_HEADER}\n\ntask,Buy milk,,4\n\n`,
             )
 
-            const result = await exportTemplate.execute(
+            const result = await exportProjectTemplate.execute(
                 { projectId: TEST_IDS.PROJECT_TEST, format: 'file' },
                 mockTodoistApi,
             )
@@ -93,7 +93,7 @@ describe(`${EXPORT_TEMPLATE} tool`, () => {
                 fileUrl: 'https://todoist.com/templates/export/abc123.csv',
             })
 
-            const result = await exportTemplate.execute(
+            const result = await exportProjectTemplate.execute(
                 { projectId: TEST_IDS.PROJECT_TEST, format: 'url', useRelativeDates: true },
                 mockTodoistApi,
             )
@@ -118,7 +118,10 @@ describe(`${EXPORT_TEMPLATE} tool`, () => {
         )
 
         await expect(
-            exportTemplate.execute({ projectId: 'non-existent', format: 'file' }, mockTodoistApi),
+            exportProjectTemplate.execute(
+                { projectId: 'non-existent', format: 'file' },
+                mockTodoistApi,
+            ),
         ).rejects.toThrow('API Error: Project not found')
     })
 })

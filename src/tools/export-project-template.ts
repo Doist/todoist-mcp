@@ -4,13 +4,15 @@ import { ToolNames } from '../utils/tool-names.js'
 
 const PREVIEW_LINE_COUNT = 5
 
+const TEMPLATE_FORMATS = ['file', 'url'] as const
+
 const ArgsSchema = {
     projectId: z.string().min(1).describe('The ID of the project to export as a template.'),
     format: z
-        .enum(['file', 'url'])
+        .enum(TEMPLATE_FORMATS)
         .default('file')
         .describe(
-            'How to return the template. "file" returns the CSV content, which can be passed straight back to import-template. "url" returns a shareable download link instead, and is the better choice for large projects because it does not return the whole file.',
+            'How to return the template. "file" returns the CSV content, which can be passed straight back to import-project-template. "url" returns a shareable download link instead, and is the better choice for large projects because it does not return the whole file.',
         ),
     useRelativeDates: z
         .boolean()
@@ -21,7 +23,7 @@ const ArgsSchema = {
 }
 
 const OutputSchema = {
-    format: z.enum(['file', 'url']).describe('The format the template was exported in.'),
+    format: z.enum(TEMPLATE_FORMATS).describe('The format the template was exported in.'),
     content: z
         .string()
         .optional()
@@ -40,10 +42,10 @@ const OutputSchema = {
         .describe('The shareable download URL. Only present when format is "url".'),
 }
 
-const exportTemplate = {
-    name: ToolNames.EXPORT_TEMPLATE,
+const exportProjectTemplate = {
+    name: ToolNames.EXPORT_PROJECT_TEMPLATE,
     description:
-        'Export an existing project as a Todoist template, either as CSV content or as a shareable URL. Use it to duplicate a project, share its structure, or hand the CSV to import-template. To read a project rather than export it, use find-tasks instead — it returns structured tasks rather than raw CSV. Nothing is modified.',
+        'Export an existing project as a Todoist template, either as CSV content or as a shareable URL. Use it to duplicate a project, share its structure, or hand the CSV to import-project-template. To read a project rather than export it, use find-tasks instead — it returns structured tasks rather than raw CSV. Nothing is modified.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
@@ -86,4 +88,4 @@ function generateTextContent({ projectId, lines }: { projectId: string; lines: s
     return `${summary}\n\n${preview}`
 }
 
-export { exportTemplate }
+export { exportProjectTemplate }

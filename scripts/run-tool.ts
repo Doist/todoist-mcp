@@ -26,7 +26,7 @@ import { addTasks } from '../src/tools/add-tasks.js'
 import { analyzeProjectHealth } from '../src/tools/analyze-project-health.js'
 import { completeTasks } from '../src/tools/complete-tasks.js'
 import { deleteObject } from '../src/tools/delete-object.js'
-import { exportTemplate } from '../src/tools/export-template.js'
+import { exportProjectTemplate } from '../src/tools/export-project-template.js'
 import { fetchObject } from '../src/tools/fetch-object.js'
 import { fetch } from '../src/tools/fetch.js'
 import { findActivity } from '../src/tools/find-activity.js'
@@ -43,7 +43,7 @@ import { getOverview } from '../src/tools/get-overview.js'
 import { getProjectActivityStats } from '../src/tools/get-project-activity-stats.js'
 import { getProjectHealth } from '../src/tools/get-project-health.js'
 import { getWorkspaceInsights } from '../src/tools/get-workspace-insights.js'
-import { importTemplate } from '../src/tools/import-template.js'
+import { importProjectTemplate } from '../src/tools/import-project-template.js'
 import { listWorkspaces } from '../src/tools/list-workspaces.js'
 import { manageAssignments } from '../src/tools/manage-assignments.js'
 import { projectManagement } from '../src/tools/project-management.js'
@@ -102,8 +102,8 @@ const tools: Record<string, ExecutableTool> = {
     'get-project-activity-stats': getProjectActivityStats,
     'analyze-project-health': analyzeProjectHealth,
     'get-workspace-insights': getWorkspaceInsights,
-    'export-template': exportTemplate,
-    'import-template': importTemplate,
+    'export-project-template': exportProjectTemplate,
+    'import-project-template': importProjectTemplate,
     'list-workspaces': listWorkspaces,
     'manage-assignments': manageAssignments,
     'project-management': projectManagement,

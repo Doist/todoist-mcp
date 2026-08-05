@@ -66,13 +66,13 @@ const ArgsSchema = {
         .string()
         .optional()
         .describe(
-            'The template to import — either a gallery slug ("product-launch"), a personal template ID ("UT_28Ex..."), or a full Todoist template URL, which is reduced to the ID automatically. Gallery templates work for anyone; personal templates only for the account that owns them. There is no way to list templates through this server, so only use an ID or URL the user supplied. Provide either this or `file`, not both.',
+            'The template to import — either a gallery slug ("product-launch"), a personal template ID ("UT_28Ex..."), or a full Todoist template URL, which is reduced to the ID automatically. Gallery templates work for anyone; personal templates only for the account that owns them. There is no way to list templates through this server, so only use the ID or URL the user supplied. Provide either this or `csvFileContent`, not both.',
         ),
-    file: z
+    csvFileContent: z
         .string()
         .optional()
         .describe(
-            'Raw CSV template content, as produced by export-template. Provide either this or `templateId`, not both.',
+            'Raw CSV template content, as produced by export-project-template. Provide either this or `templateId`, not both.',
         ),
     locale: z
         .string()
@@ -90,19 +90,17 @@ const OutputSchema = {
     totalCount: z.number().describe('The total number of objects created by the import.'),
 }
 
-const importTemplate = {
-    name: ToolNames.IMPORT_TEMPLATE,
-    // Additive rather than destructive, but there is no dry run and no undo: a wrong ID
-    // silently fills a real project. Require an explicit projectId; never infer one.
+const importProjectTemplate = {
+    name: ToolNames.IMPORT_PROJECT_TEMPLATE,
     description:
-        'Import a template into an existing project, adding its tasks, sections and comments to whatever is already there. Source it by template ID/URL or by passing CSV content from export-template. To start a new project from a template, create the project with add-projects first, then import into it. This writes immediately and cannot be undone, so only run it against a project the user named.',
+        'Import a template into an existing project, adding its tasks, sections and comments to whatever is already there. Source it by template ID/URL or by passing CSV content from export-project-template. To start a new project from a template, create the project with add-projects first, then import into it. This writes immediately and cannot be undone, so only run it against a project the user named.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-    async execute({ projectId, templateId, file, locale }, client) {
-        if (Boolean(templateId) === Boolean(file)) {
+    async execute({ projectId, templateId, csvFileContent, locale }, client) {
+        if (Boolean(templateId) === Boolean(csvFileContent)) {
             throw new Error(
-                'Provide exactly one template source: either `templateId` or `file`. Templates cannot be listed through this server — ask the user for an ID or template URL.',
+                'Provide exactly one template source: either `templateId` or `csvFileContent`. Templates cannot be listed through this server — ask the user for an ID or template URL.',
             )
         }
 
@@ -114,7 +112,7 @@ const importTemplate = {
               })
             : await client.importTemplateIntoProject({
                   projectId,
-                  file: file ?? '',
+                  file: csvFileContent ?? '',
                   fileName: 'template.csv',
               })
 
@@ -159,4 +157,4 @@ function generateTextContent({
     return `Imported template into project (id=${projectId}): ${parts.join(', ')}.`
 }
 
-export { extractTemplateId, importTemplate }
+export { extractTemplateId, importProjectTemplate }

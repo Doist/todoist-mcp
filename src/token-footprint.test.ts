@@ -14,7 +14,7 @@ import { addTasks } from './tools/add-tasks.js'
 import { analyzeProjectHealth } from './tools/analyze-project-health.js'
 import { completeTasks } from './tools/complete-tasks.js'
 import { deleteObject } from './tools/delete-object.js'
-import { exportTemplate } from './tools/export-template.js'
+import { exportProjectTemplate } from './tools/export-project-template.js'
 import { fetchObject } from './tools/fetch-object.js'
 import { fetch } from './tools/fetch.js'
 import { findActivity } from './tools/find-activity.js'
@@ -33,7 +33,7 @@ import { getProductivityStats } from './tools/get-productivity-stats.js'
 import { getProjectActivityStats } from './tools/get-project-activity-stats.js'
 import { getProjectHealth } from './tools/get-project-health.js'
 import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
-import { importTemplate } from './tools/import-template.js'
+import { importProjectTemplate } from './tools/import-project-template.js'
 import { listWorkspaces } from './tools/list-workspaces.js'
 import { manageAssignments } from './tools/manage-assignments.js'
 import { projectManagement } from './tools/project-management.js'
@@ -98,8 +98,8 @@ const allTools: TodoistTool<z.ZodRawShape, z.ZodRawShape>[] = [
     findProjectCollaborators,
     manageAssignments,
     listWorkspaces,
-    exportTemplate,
-    importTemplate,
+    exportProjectTemplate,
+    importProjectTemplate,
     search,
     fetch,
 ] as unknown as TodoistTool<z.ZodRawShape, z.ZodRawShape>[]

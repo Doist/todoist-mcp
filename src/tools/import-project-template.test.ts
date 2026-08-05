@@ -2,14 +2,14 @@ import type { TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { createMockSection, createMockTask, TEST_IDS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
-import { extractTemplateId, importTemplate } from './import-template.js'
+import { extractTemplateId, importProjectTemplate } from './import-project-template.js'
 
 const mockTodoistApi = {
     importTemplateFromId: vi.fn(),
     importTemplateIntoProject: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
-const { IMPORT_TEMPLATE } = ToolNames
+const { IMPORT_PROJECT_TEMPLATE } = ToolNames
 
 function createImportResponse(overrides: Record<string, unknown> = {}) {
     return {
@@ -23,7 +23,7 @@ function createImportResponse(overrides: Record<string, unknown> = {}) {
     }
 }
 
-describe(`${IMPORT_TEMPLATE} tool`, () => {
+describe(`${IMPORT_PROJECT_TEMPLATE} tool`, () => {
     beforeEach(() => {
         vi.clearAllMocks()
     })
@@ -107,7 +107,7 @@ describe(`${IMPORT_TEMPLATE} tool`, () => {
                 }),
             )
 
-            const result = await importTemplate.execute(
+            const result = await importProjectTemplate.execute(
                 { projectId: TEST_IDS.PROJECT_TEST, templateId: 'product-launch' },
                 mockTodoistApi,
             )
@@ -138,7 +138,7 @@ describe(`${IMPORT_TEMPLATE} tool`, () => {
                 }),
             )
 
-            const result = await importTemplate.execute(
+            const result = await importProjectTemplate.execute(
                 { projectId: TEST_IDS.PROJECT_TEST, templateId: 'product-launch' },
                 mockTodoistApi,
             )
@@ -151,7 +151,7 @@ describe(`${IMPORT_TEMPLATE} tool`, () => {
         it('should reduce a template URL to its ID before calling the API', async () => {
             mockTodoistApi.importTemplateFromId.mockResolvedValue(createImportResponse())
 
-            await importTemplate.execute(
+            await importProjectTemplate.execute(
                 {
                     projectId: TEST_IDS.PROJECT_TEST,
                     templateId:
@@ -168,7 +168,7 @@ describe(`${IMPORT_TEMPLATE} tool`, () => {
         it('should pass locale through', async () => {
             mockTodoistApi.importTemplateFromId.mockResolvedValue(createImportResponse())
 
-            await importTemplate.execute(
+            await importProjectTemplate.execute(
                 {
                     projectId: TEST_IDS.PROJECT_TEST,
                     templateId: 'product-launch',
@@ -185,7 +185,7 @@ describe(`${IMPORT_TEMPLATE} tool`, () => {
         it('should report an import that created nothing', async () => {
             mockTodoistApi.importTemplateFromId.mockResolvedValue(createImportResponse())
 
-            const result = await importTemplate.execute(
+            const result = await importProjectTemplate.execute(
                 { projectId: TEST_IDS.PROJECT_TEST, templateId: 'product-launch' },
                 mockTodoistApi,
             )
@@ -203,10 +203,10 @@ describe(`${IMPORT_TEMPLATE} tool`, () => {
                 }),
             )
 
-            const result = await importTemplate.execute(
+            const result = await importProjectTemplate.execute(
                 {
                     projectId: TEST_IDS.PROJECT_TEST,
-                    file: 'TYPE,CONTENT\ntask,Buy milk',
+                    csvFileContent: 'TYPE,CONTENT\ntask,Buy milk',
                 },
                 mockTodoistApi,
             )
@@ -225,13 +225,13 @@ describe(`${IMPORT_TEMPLATE} tool`, () => {
     })
 
     describe('source validation', () => {
-        it('should reject a call with both templateId and file', async () => {
+        it('should reject a call with both templateId and csvFileContent', async () => {
             await expect(
-                importTemplate.execute(
+                importProjectTemplate.execute(
                     {
                         projectId: TEST_IDS.PROJECT_TEST,
                         templateId: 'product-launch',
-                        file: 'TYPE,CONTENT',
+                        csvFileContent: 'TYPE,CONTENT',
                     },
                     mockTodoistApi,
                 ),
@@ -241,9 +241,9 @@ describe(`${IMPORT_TEMPLATE} tool`, () => {
             expect(mockTodoistApi.importTemplateIntoProject).not.toHaveBeenCalled()
         })
 
-        it('should reject a call with neither templateId nor file', async () => {
+        it('should reject a call with neither templateId nor csvFileContent', async () => {
             await expect(
-                importTemplate.execute({ projectId: TEST_IDS.PROJECT_TEST }, mockTodoistApi),
+                importProjectTemplate.execute({ projectId: TEST_IDS.PROJECT_TEST }, mockTodoistApi),
             ).rejects.toThrow('exactly one template source')
         })
     })
@@ -254,7 +254,7 @@ describe(`${IMPORT_TEMPLATE} tool`, () => {
         )
 
         await expect(
-            importTemplate.execute(
+            importProjectTemplate.execute(
                 { projectId: TEST_IDS.PROJECT_TEST, templateId: 'UT_someoneElses' },
                 mockTodoistApi,
             ),

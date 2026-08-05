@@ -283,7 +283,7 @@ const TODOIST_ERROR_TAG_HINTS: Record<string, string> = {
         'Complete, delete, or move existing tasks out of the project, or add the task to a different project, then retry.',
     USER_CANNOT_VIEW_TEMPLATE:
         'This template exists but belongs to another account. Personal templates are private to whoever saved them, and a link to one cannot be used by anyone else. ' +
-        'Use a public gallery template instead, or ask the owner to export it with export-template and share the CSV.',
+        'Use a public gallery template instead, or ask the owner to export it with export-project-template and share the CSV.',
 }
 
 function findKnownTagHintInText(...texts: Array<string | undefined>): string | undefined {
