@@ -80,3 +80,8 @@
     padding: 24px;
     background-color: #ffffff;
 }
+
+.paginationError {
+    font-size: 14px;
+    color: #b42318;
+}

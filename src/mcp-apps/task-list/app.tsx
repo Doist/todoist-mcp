@@ -1,10 +1,11 @@
-import { useApp, useHostStyles } from '@modelcontextprotocol/ext-apps/react'
-import { useCallback, useMemo, useState } from 'react'
+import { type App as McpApp, useApp, useHostStyles } from '@modelcontextprotocol/ext-apps/react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { z } from 'zod'
 import { ArgsSchema } from '../../tools/find-tasks-by-date.js'
 import { ToolNames } from '../../utils/tool-names.js'
 import { Empty } from './empty'
 import { Loading } from './loading'
+import { loadRemainingPages } from './pagination'
 import { TaskList } from './task-list'
 import type { Task } from './types'
 import styles from './task-list.module.css'
@@ -13,6 +14,7 @@ type FindTasksByDateArgs = z.input<z.ZodObject<typeof ArgsSchema>>
 
 type ToolOutput = {
     tasks: Task[]
+    nextCursor?: string
     appliedFilters?: FindTasksByDateArgs
 }
 
@@ -20,6 +22,12 @@ type ToolResult = {
     isError?: boolean
     structuredContent?: unknown
     content?: Array<{ type?: string; text?: string }>
+}
+
+type PaginationRequest = {
+    args: Omit<FindTasksByDateArgs, 'cursor'>
+    cursor: string
+    requestId: number
 }
 
 const TODOIST_APP_URL = 'https://app.todoist.com/app'
@@ -36,6 +44,27 @@ function getInvocationArgs(args: FindTasksByDateArgs | null | undefined) {
 function getToolResultMessage(result: ToolResult, fallback: string) {
     const message = result.content?.find((item) => item.type === 'text' && item.text)?.text?.trim()
     return message && message.length > 0 ? message : fallback
+}
+
+async function fetchTaskPage(
+    app: McpApp,
+    args: Omit<FindTasksByDateArgs, 'cursor'>,
+    cursor: string,
+): Promise<ToolOutput> {
+    const result = await app.callServerTool({
+        name: ToolNames.FIND_TASKS_BY_DATE,
+        arguments: { ...args, cursor },
+    })
+
+    if (result.isError) {
+        throw new Error(getToolResultMessage(result as ToolResult, 'Failed to load more tasks.'))
+    }
+
+    if (!result.structuredContent) {
+        throw new Error('Task page data was missing from the tool result.')
+    }
+
+    return result.structuredContent as ToolOutput
 }
 
 function OpenInTodoistIcon() {
@@ -72,11 +101,22 @@ export function App() {
     const [loading, setLoading] = useState(true)
     const [lastArgs, setLastArgs] = useState<Omit<FindTasksByDateArgs, 'cursor'> | null>(null)
     const [toolError, setToolError] = useState<string | null>(null)
+    const [paginationError, setPaginationError] = useState<string | null>(null)
+    const [paginationRequest, setPaginationRequest] = useState<PaginationRequest | null>(null)
+    const requestId = useRef(0)
 
     const handleToolOutput = useCallback((output: ToolOutput) => {
+        const args = getInvocationArgs(output.appliedFilters)
+
         setTasks(output.tasks)
-        setLastArgs(getInvocationArgs(output.appliedFilters))
+        setLastArgs(args)
         setToolError(null)
+        setPaginationError(null)
+        setPaginationRequest(
+            output.nextCursor && args
+                ? { args, cursor: output.nextCursor, requestId: requestId.current }
+                : null,
+        )
         setLoading(false)
     }, [])
 
@@ -85,9 +125,12 @@ export function App() {
         capabilities: {},
         onAppCreated: (app) => {
             app.ontoolinput = (params) => {
+                requestId.current += 1
                 setLoading(true)
                 setToolError(null)
+                setPaginationError(null)
                 setTasks(null)
+                setPaginationRequest(null)
                 setLastArgs(getInvocationArgs((params.arguments ?? {}) as FindTasksByDateArgs))
             }
 
@@ -112,11 +155,49 @@ export function App() {
 
     useHostStyles(app, app?.getHostContext())
 
+    useEffect(
+        function loadTaskPages() {
+            if (!app || !paginationRequest) {
+                return
+            }
+
+            let cancelled = false
+
+            void loadRemainingPages({
+                initialCursor: paginationRequest.cursor,
+                fetchPage: (cursor) => fetchTaskPage(app, paginationRequest.args, cursor),
+                onPage: (page) => {
+                    if (cancelled || paginationRequest.requestId !== requestId.current) {
+                        return false
+                    }
+
+                    setTasks((previous) => [...(previous ?? []), ...page.tasks])
+                    return true
+                },
+            }).catch((error: unknown) => {
+                if (!cancelled && paginationRequest.requestId === requestId.current) {
+                    setPaginationError(
+                        error instanceof Error ? error.message : 'Failed to load more tasks.',
+                    )
+                }
+            })
+
+            return () => {
+                cancelled = true
+            }
+        },
+        [app, paginationRequest],
+    )
+
     const handleComplete = useCallback(
         async (taskId: string) => {
             if (!app || !tasks) return
 
-            const previousTasks = tasks
+            const completedTaskIndex = tasks.findIndex((task) => task.id === taskId)
+            const completedTask = tasks[completedTaskIndex]
+            if (!completedTask) return
+
+            const completionRequestId = requestId.current
 
             setTasks((previous) => previous?.filter((task) => task.id !== taskId) ?? [])
             setToolError(null)
@@ -133,7 +214,22 @@ export function App() {
                     )
                 }
             } catch (error) {
-                setTasks(previousTasks)
+                if (completionRequestId !== requestId.current) {
+                    return
+                }
+
+                setTasks((previous) => {
+                    if (!previous || previous.some((task) => task.id === taskId)) {
+                        return previous
+                    }
+
+                    const insertionIndex = Math.min(completedTaskIndex, previous.length)
+                    return [
+                        ...previous.slice(0, insertionIndex),
+                        completedTask,
+                        ...previous.slice(insertionIndex),
+                    ]
+                })
                 setToolError(error instanceof Error ? error.message : 'Failed to complete task.')
             }
         },
@@ -177,6 +273,9 @@ export function App() {
         <div className={styles.widgetContainer}>
             <div className={styles.contentColumn}>
                 <h1 className={styles.widgetTitle}>{title}</h1>
+                {paginationError ? (
+                    <div className={styles.paginationError}>{paginationError}</div>
+                ) : null}
                 <TaskList tasks={tasks} onCompleteTask={handleComplete} />
             </div>
             <OpenInTodoistButton onClick={handleOpenTodoist} />
