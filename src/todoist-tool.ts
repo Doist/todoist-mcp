@@ -71,4 +71,20 @@ type TodoistTool<
     execute: (args: z.infer<z.ZodObject<Params>>, client: TodoistApi) => ExecuteResult<Output>
 }
 
-export type { RequiredToolAnnotations, TodoistTool }
+/**
+ * A tool of any parameter and output shape.
+ *
+ * `TodoistTool` is generic over its schemas, and `execute` is contravariant in
+ * its argument, so no single instantiation of it accepts every tool. Declaring
+ * the argument as `never` does: `never` is assignable to any parameter type, so
+ * a tool taking concrete args satisfies this while a caller cannot invoke
+ * `execute` without narrowing back to the real tool type first.
+ *
+ * Use this for collections that hold tools of mixed shapes. Individual tools
+ * keep their precise types through their own `satisfies TodoistTool<...>`.
+ */
+type AnyTodoistTool = Omit<TodoistTool<z.ZodRawShape, z.ZodRawShape>, 'execute'> & {
+    execute: (args: never, client: TodoistApi) => ExecuteResult<z.ZodRawShape>
+}
+
+export type { AnyTodoistTool, ExecuteResult, RequiredToolAnnotations, TodoistTool }

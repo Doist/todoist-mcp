@@ -34,16 +34,19 @@ When you need to support clearing an optional field:
 
 ## Adding a New Tool
 
-When adding a new tool, it must be registered in **all** of these locations:
+`src/tool-registry.ts` is the single source of truth for the tool surface. `src/mcp-server.ts`, the `tools` export in `src/index.ts`, `scripts/run-tool.ts`, `scripts/validate-schemas.ts` and `src/token-footprint.test.ts` all derive from it, so adding a tool there wires it up everywhere.
 
-1. `src/utils/tool-names.ts` — add tool name constant
-2. `src/tools/<tool-name>.ts` — create tool definition
-3. `src/mcp-server.ts` — import, register with `registerTool()`, and add to LLM `instructions` string
-4. `src/index.ts` — import and add to both the `tools` object and the named exports
-5. `scripts/run-tool.ts` — import and add to the `tools` record
-6. `src/tools/tool-annotations.test.ts` — add annotation expectation entry
-7. `src/tools/<tool-name>.test.ts` — create test file
-8. `src/token-footprint.test.ts` — import the tool and append it to the `allTools` array so the token baseline keeps measuring the full surface. If the new tool's schema/description is large enough to push the combined fixed cost over `TOKEN_BUDGET`, raise the budget in the same PR and call it out in the description.
+1. `src/utils/tool-names.ts` — add the tool name constant
+2. `src/tools/<tool-name>.ts` — create the tool definition
+3. `src/tool-registry.ts` — add it to `registeredTools`, in the section it belongs to
+4. `src/index.ts` — add it to the `tools` object and the named exports (public API)
+5. `src/tools/<tool-name>.test.ts` — create the test file
+6. `src/tools/tool-annotations.test.ts` — add the annotation expectation entry
+7. `src/mcp-server.ts` — add to the `instructions` string **only** if the tool needs cross-tool routing guidance; per-tool detail belongs in the tool's own description
+
+`src/tool-registry.test.ts` enforces that steps 1, 3 and 4 agree with what the server actually registers, so a partial registration fails CI instead of silently degrading `lint:schemas` coverage or leaving the tool unreachable from `run-tool.ts`.
+
+If a new tool pushes the combined fixed cost over `TOKEN_BUDGET` in `src/token-footprint.test.ts`, raise the budget in the same PR and call it out in the description.
 
 ## Testing Requirements
 

@@ -3,106 +3,15 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
 import { instructions } from './mcp-server.js'
-import type { TodoistTool } from './todoist-tool.js'
-import { addComments } from './tools/add-comments.js'
-import { addFilters } from './tools/add-filters.js'
-import { addLabels } from './tools/add-labels.js'
-import { addProjects } from './tools/add-projects.js'
-import { addReminders } from './tools/add-reminders.js'
-import { addSections } from './tools/add-sections.js'
-import { addTasks } from './tools/add-tasks.js'
-import { analyzeProjectHealth } from './tools/analyze-project-health.js'
-import { completeTasks } from './tools/complete-tasks.js'
-import { deleteObject } from './tools/delete-object.js'
-import { exportProjectTemplate } from './tools/export-project-template.js'
-import { fetchObject } from './tools/fetch-object.js'
-import { fetch } from './tools/fetch.js'
-import { findActivity } from './tools/find-activity.js'
-import { findComments } from './tools/find-comments.js'
-import { findCompletedTasks } from './tools/find-completed-tasks.js'
-import { findFilters } from './tools/find-filters.js'
-import { findLabels } from './tools/find-labels.js'
-import { findProjectCollaborators } from './tools/find-project-collaborators.js'
-import { findProjects } from './tools/find-projects.js'
-import { findReminders } from './tools/find-reminders.js'
-import { findSections } from './tools/find-sections.js'
-import { findTasksByDate } from './tools/find-tasks-by-date.js'
-import { findTasks } from './tools/find-tasks.js'
-import { getOverview } from './tools/get-overview.js'
-import { getProductivityStats } from './tools/get-productivity-stats.js'
-import { getProjectActivityStats } from './tools/get-project-activity-stats.js'
-import { getProjectHealth } from './tools/get-project-health.js'
-import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
-import { importProjectTemplate } from './tools/import-project-template.js'
-import { listWorkspaces } from './tools/list-workspaces.js'
-import { manageAssignments } from './tools/manage-assignments.js'
-import { projectManagement } from './tools/project-management.js'
-import { projectMove } from './tools/project-move.js'
-import { reorderObjects } from './tools/reorder-objects.js'
-import { rescheduleTasks } from './tools/reschedule-tasks.js'
-import { search } from './tools/search.js'
-import { uncompleteTasks } from './tools/uncomplete-tasks.js'
-import { updateComments } from './tools/update-comments.js'
-import { updateFilters } from './tools/update-filters.js'
-import { updateLabels } from './tools/update-labels.js'
-import { updateProjects } from './tools/update-projects.js'
-import { updateReminders } from './tools/update-reminders.js'
-import { updateSections } from './tools/update-sections.js'
-import { updateTasks } from './tools/update-tasks.js'
-import { userInfo } from './tools/user-info.js'
-import { viewAttachment } from './tools/view-attachment.js'
+import type { AnyTodoistTool } from './todoist-tool.js'
+import { registeredTools } from './tool-registry.js'
 
-// Mirror of getMcpServer()'s registration order, minus the runtime client.
-// Keep in sync when tools are added/removed.
-const allTools: TodoistTool<z.ZodRawShape, z.ZodRawShape>[] = [
-    addTasks,
-    completeTasks,
-    uncompleteTasks,
-    updateTasks,
-    rescheduleTasks,
-    findTasks,
-    findTasksByDate,
-    findCompletedTasks,
-    addProjects,
-    updateProjects,
-    findProjects,
-    projectManagement,
-    projectMove,
-    addSections,
-    updateSections,
-    findSections,
-    addComments,
-    findComments,
-    updateComments,
-    addReminders,
-    findReminders,
-    updateReminders,
-    viewAttachment,
-    addLabels,
-    updateLabels,
-    findLabels,
-    findFilters,
-    addFilters,
-    updateFilters,
-    findActivity,
-    getProductivityStats,
-    getProjectHealth,
-    getProjectActivityStats,
-    analyzeProjectHealth,
-    getWorkspaceInsights,
-    getOverview,
-    deleteObject,
-    fetchObject,
-    reorderObjects,
-    userInfo,
-    findProjectCollaborators,
-    manageAssignments,
-    listWorkspaces,
-    exportProjectTemplate,
-    importProjectTemplate,
-    search,
-    fetch,
-] as unknown as TodoistTool<z.ZodRawShape, z.ZodRawShape>[]
+// The SDK serializes tool schemas with these options; see `toJsonSchemaCompat`
+// in @modelcontextprotocol/sdk's server/mcp.js. Zod defaults `io` to 'output',
+// which measures a schema the wire never carries — for tools using `.pipe()`
+// that can be several times the real cost. Keep these in step with the SDK.
+const INPUT_SCHEMA_OPTIONS = { unrepresentable: 'any', io: 'input', target: 'draft-7' } as const
+const OUTPUT_SCHEMA_OPTIONS = { unrepresentable: 'any', io: 'output', target: 'draft-7' } as const
 
 function tokens(text: string): number {
     return encode(text).length
@@ -116,12 +25,12 @@ function formatToolTitle(name: string): string {
         .join(' ')
 }
 
-function buildToolListEntry(tool: TodoistTool<z.ZodRawShape, z.ZodRawShape>) {
+function buildToolListEntry(tool: AnyTodoistTool) {
     const entry: Record<string, unknown> = {
         name: tool.name,
         title: `Todoist: ${formatToolTitle(tool.name)}`,
         description: tool.description,
-        inputSchema: z.toJSONSchema(z.object(tool.parameters), { unrepresentable: 'any' }),
+        inputSchema: z.toJSONSchema(z.object(tool.parameters), INPUT_SCHEMA_OPTIONS),
         annotations: {
             title: `Todoist: ${formatToolTitle(tool.name)}`,
             openWorldHint: false,
@@ -129,7 +38,7 @@ function buildToolListEntry(tool: TodoistTool<z.ZodRawShape, z.ZodRawShape>) {
         },
     }
     if (tool.outputSchema) {
-        entry.outputSchema = z.toJSONSchema(z.object(tool.outputSchema), { unrepresentable: 'any' })
+        entry.outputSchema = z.toJSONSchema(z.object(tool.outputSchema), OUTPUT_SCHEMA_OPTIONS)
     }
     return entry
 }
@@ -143,7 +52,7 @@ type Row = {
 }
 
 function measure(): Row[] {
-    return allTools.map((tool) => {
+    return registeredTools.map((tool) => {
         const entry = buildToolListEntry(tool)
         const inputSchemaJson = JSON.stringify(entry.inputSchema)
         const outputSchemaJson = entry.outputSchema ? JSON.stringify(entry.outputSchema) : ''
@@ -175,7 +84,7 @@ describe('token footprint baseline', () => {
         const lines: string[] = []
         lines.push('')
         lines.push('=== MCP token footprint baseline ===')
-        lines.push(`tools registered:    ${allTools.length}`)
+        lines.push(`tools registered:    ${registeredTools.length}`)
         lines.push(`instructions string: ${instructionsTokens} tokens`)
         lines.push(`tools/list payload:  ${toolsListTotal} tokens`)
         lines.push(`combined fixed cost: ${combinedFixed} tokens`)

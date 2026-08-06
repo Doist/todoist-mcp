@@ -158,14 +158,17 @@ function validateToolSchema(tool: {
  */
 async function validateAllSchemas(verbose: boolean = false): Promise<ValidationResult> {
     try {
-        const { tools } = await import(`${process.cwd()}/dist/index.js`)
+        const { registeredTools, tools } = await import(`${process.cwd()}/dist/index.js`)
+
+        // `registeredTools` is the full MCP surface; `tools` is the older keyed
+        // export, kept as a fallback so a stale build still validates something.
+        const allTools = registeredTools ?? Object.values(tools)
 
         const allIssues: ValidationIssue[] = []
         let totalParameters = 0
-        const toolNames = Object.keys(tools)
 
-        for (const toolName of toolNames) {
-            const tool = tools[toolName]
+        for (const tool of allTools) {
+            const toolName = tool.name
             const toolIssues = validateToolSchema(tool)
             allIssues.push(...toolIssues)
 
@@ -199,7 +202,7 @@ async function validateAllSchemas(verbose: boolean = false): Promise<ValidationR
         return {
             success: allIssues.length === 0,
             issues: allIssues,
-            toolsChecked: toolNames.length,
+            toolsChecked: allTools.length,
             parametersChecked: totalParameters,
         }
     } catch (error) {
