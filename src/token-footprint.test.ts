@@ -25,6 +25,23 @@ function formatToolTitle(name: string): string {
         .join(' ')
 }
 
+/**
+ * Mirror of the `_meta` normalisation `registerAppTool` applies, which fills in
+ * whichever of the two widget resource-URI spellings the tool did not declare.
+ */
+function normalizeAppUiMeta(meta: Record<string, unknown>): Record<string, unknown> {
+    const ui = meta.ui as { resourceUri?: string } | undefined
+    const legacyUri = meta['ui/resourceUri']
+
+    if (ui?.resourceUri && !legacyUri) {
+        return { ...meta, 'ui/resourceUri': ui.resourceUri }
+    }
+    if (typeof legacyUri === 'string' && !ui?.resourceUri) {
+        return { ...meta, ui: { ...ui, resourceUri: legacyUri } }
+    }
+    return meta
+}
+
 function buildToolListEntry(tool: AnyTodoistTool) {
     const entry: Record<string, unknown> = {
         name: tool.name,
@@ -39,6 +56,13 @@ function buildToolListEntry(tool: AnyTodoistTool) {
     }
     if (tool.outputSchema) {
         entry.outputSchema = z.toJSONSchema(z.object(tool.outputSchema), OUTPUT_SCHEMA_OPTIONS)
+    }
+    if (tool._meta) {
+        // The SDK forwards `_meta` on every tools/list entry, so it is part of
+        // the fixed cost. Registration normalises the widget resource URI into
+        // both the `ui.resourceUri` and `ui/resourceUri` spellings; mirror that
+        // or the measurement undercounts the tools that carry one.
+        entry._meta = normalizeAppUiMeta(tool._meta)
     }
     return entry
 }

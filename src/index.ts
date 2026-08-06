@@ -4,7 +4,7 @@ import {
     requireValidTodoistToken,
     type RequireValidTodoistTokenOptions,
 } from './middleware/require-valid-todoist-token.js'
-import { registeredTools } from './tool-registry.js'
+import { registeredTools, toolRegistry } from './tool-registry.js'
 // Comment management tools
 import { addComments } from './tools/add-comments.js'
 // Filter management tools
@@ -64,71 +64,12 @@ import { userInfo } from './tools/user-info.js'
 import { viewAttachment } from './tools/view-attachment.js'
 import { validateTodoistToken } from './utils/validate-todoist-token.js'
 
-const tools = {
-    // Task management tools
-    addTasks,
-    completeTasks,
-    uncompleteTasks,
-    updateTasks,
-    findTasks,
-    findTasksByDate,
-    findCompletedTasks,
-    rescheduleTasks,
-    // Project management tools
-    addProjects,
-    updateProjects,
-    findProjects,
-    projectManagement,
-    projectMove,
-    // Section management tools
-    addSections,
-    updateSections,
-    findSections,
-    // Comment management tools
-    addComments,
-    updateComments,
-    findComments,
-    // Reminder management tools
-    addReminders,
-    findReminders,
-    updateReminders,
-    // Attachment tools
-    viewAttachment,
-    // Label management tools
-    addLabels,
-    updateLabels,
-    findLabels,
-    // Filter management tools
-    findFilters,
-    addFilters,
-    updateFilters,
-
-    // Activity and audit tools
-    findActivity,
-    getProductivityStats,
-    // Health and insights tools
-    getProjectHealth,
-    getProjectActivityStats,
-    analyzeProjectHealth,
-    getWorkspaceInsights,
-    // General tools
-    getOverview,
-    deleteObject,
-    fetchObject,
-    reorderObjects,
-    userInfo,
-    // Assignment and collaboration tools
-    findProjectCollaborators,
-    manageAssignments,
-    // Template tools
-    exportProjectTemplate,
-    importProjectTemplate,
-    // Workspace tools
-    listWorkspaces,
-    // OpenAI MCP tools
-    search,
-    fetch,
-}
+/**
+ * Every tool, keyed by its export name.
+ *
+ * Derived from the registry so it cannot drift from what the server registers.
+ */
+const tools = toolRegistry
 
 export {
     // Task management tools

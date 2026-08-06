@@ -64,18 +64,17 @@ const findTasksByDateWithUi = {
 }
 
 /**
- * Every tool the MCP server exposes, in registration order.
+ * Every tool the MCP server exposes, keyed by its public export name and held
+ * in registration order.
  *
  * This is the single source of truth for the tool surface. The MCP server, the
  * package's public `tools` export, the schema validator and the token-footprint
- * baseline all derive from this array, so a tool added here is picked up
- * everywhere. `tool-registry.test.ts` fails the build if those views ever
- * disagree.
+ * baseline all derive from it, so a tool added here is picked up everywhere.
  *
  * Note this holds the *registered* objects, which is not always the bare tool
  * definition — `find-tasks-by-date` is wrapped to carry its widget metadata.
  */
-const registeredTools: readonly AnyTodoistTool[] = [
+const toolRegistry = {
     // Task management tools
     addTasks,
     completeTasks,
@@ -83,7 +82,7 @@ const registeredTools: readonly AnyTodoistTool[] = [
     updateTasks,
     rescheduleTasks,
     findTasks,
-    findTasksByDateWithUi,
+    findTasksByDate: findTasksByDateWithUi,
     findCompletedTasks,
 
     // Project management tools
@@ -152,6 +151,14 @@ const registeredTools: readonly AnyTodoistTool[] = [
     // OpenAI MCP tools
     search,
     fetch,
-]
+}
 
-export { findTasksByDateWithUi, registeredTools }
+/**
+ * The registered tools in registration order.
+ *
+ * `tools/list` preserves this ordering, which is insertion order on
+ * {@link toolRegistry}.
+ */
+const registeredTools: readonly AnyTodoistTool[] = Object.values(toolRegistry)
+
+export { registeredTools, toolRegistry }

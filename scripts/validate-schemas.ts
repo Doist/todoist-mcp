@@ -158,11 +158,9 @@ function validateToolSchema(tool: {
  */
 async function validateAllSchemas(verbose: boolean = false): Promise<ValidationResult> {
     try {
-        const { registeredTools, tools } = await import(`${process.cwd()}/dist/index.js`)
+        const { registeredTools } = await import(`${process.cwd()}/dist/index.js`)
 
-        // `registeredTools` is the full MCP surface; `tools` is the older keyed
-        // export, kept as a fallback so a stale build still validates something.
-        const allTools = registeredTools ?? Object.values(tools)
+        const allTools = registeredTools
 
         const allIssues: ValidationIssue[] = []
         let totalParameters = 0
