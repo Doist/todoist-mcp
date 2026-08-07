@@ -1,3 +1,9 @@
+## [12.5.2](https://github.com/Doist/todoist-mcp/compare/v12.5.1...v12.5.2) (2026-08-07)
+
+### Performance Improvements
+
+* trim redundant output schema descriptions ([#561](https://github.com/Doist/todoist-mcp/issues/561)) ([0de6945](https://github.com/Doist/todoist-mcp/commit/0de6945c106ee9c4c3a193190bfc7bb4a27498cb))
+
 ## [12.5.1](https://github.com/Doist/todoist-mcp/compare/v12.5.0...v12.5.1) (2026-08-07)
 
 ### Bug Fixes
