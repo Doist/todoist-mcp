@@ -349,6 +349,7 @@ function registerTool({
 }
 
 export {
+    assertStructuredContentMatchesSchema,
     FEATURE_NAMES,
     type Feature,
     type FeatureName,

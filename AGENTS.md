@@ -38,7 +38,17 @@ Keep declaring `outputSchema` on every tool that returns `structuredContent` —
 
 It is **not** sent to clients. Output schemas were over half the fixed cost of `tools/list`, and a client only needs one to validate structured output or render a widget from it, so `registerTool` advertises it only for tools carrying widget metadata (`_meta.ui`). Tools return `structuredContent` either way.
 
-The consequence for tool authors: the model never sees your output schema, so anything it needs to know about the result belongs in the tool's `description`. Because the SDK's own output validation only runs for advertised schemas, `registerTool` re-checks output against the declared schema when `NODE_ENV === 'test'` — a schema that drifts from what the tool returns fails CI instead of reaching a client.
+The consequence for tool authors: the model never sees your output schema, so anything it needs to know about the result belongs in the tool's `description`.
+
+Because the SDK's own output validation only runs for advertised schemas, `registerTool` re-checks output against the declared schema when `NODE_ENV === 'test'`. That only covers calls made through the MCP callback, and tool suites normally call `tool.execute()` directly — so where a tool's output can diverge from its schema at runtime rather than at compile time (an API returning a value outside a declared enum, say), assert it in the tool's own test:
+
+```typescript
+expect(() =>
+    assertStructuredContentMatchesSchema(findProjects, result.structuredContent),
+).not.toThrow()
+```
+
+Note that with the schema unadvertised, such a divergence no longer fails a client's tool call — it just means the declared shape is out of date.
 
 ## Adding a New Tool
 

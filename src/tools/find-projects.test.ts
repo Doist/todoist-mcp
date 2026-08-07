@@ -1,5 +1,6 @@
 import type { ColorKey, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
+import { assertStructuredContentMatchesSchema } from '../mcp-helpers.js'
 import { ColorOutputSchema } from '../utils/colors.js'
 import { ProjectSchema } from '../utils/output-schemas.js'
 import {
@@ -316,6 +317,13 @@ describe(`${FIND_PROJECTS} tool`, () => {
             // Should return all projects
             expect(result.structuredContent.projects).toHaveLength(2)
             expect(result.structuredContent.totalCount).toBe(2)
+
+            // Clients are no longer sent this tool's outputSchema, so nothing
+            // validates the result for them. Check it here instead: an
+            // unrecognised colour must still produce schema-valid output.
+            expect(() =>
+                assertStructuredContentMatchesSchema(findProjects, result.structuredContent),
+            ).not.toThrow()
         })
 
         it('should return matching projects when the matching project has an unrecognised color', async () => {
