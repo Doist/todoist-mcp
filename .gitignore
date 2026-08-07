@@ -7,3 +7,6 @@ dist
 *.tgz
 .claude/settings.local.json
 .tmp/
+
+# Eval harness output (scripts/eval-instructions.ts)
+tmp/eval/
