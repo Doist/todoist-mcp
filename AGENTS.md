@@ -114,6 +114,11 @@ Each run prints a pass rate per scenario per model and writes `tmp/eval/<label>.
 
 Only the first tool call of a turn is inspected and nothing is executed, so it touches no Todoist data and needs no `TODOIST_API_KEY`. It does call real models, so it is deliberately **not** part of `npm test` — it costs money and is non-deterministic.
 
+Two things this has already caught that review and reading did not:
+
+- Trimming the instructions block turned out to **fix** a destructive bug, not merely be safe: asked to delete a workspace project, Haiku 4.5 called `delete-object` directly under the longer instructions and archived first under the shorter ones (0/10 vs 10/10).
+- A wording change made while addressing review feedback appeared to regress a scenario by 30 points. It was an artefact of the scenario prompt, not the change — but nothing else would have surfaced the question.
+
 ### Authenticating
 
 The harness uses the Anthropic SDK's standard credential chain, so either of these works:
@@ -131,11 +136,6 @@ The harness uses the Anthropic SDK's standard credential chain, so either of the
     On a machine with no browser, `ant auth login --no-browser` prints a URL and takes the code back in the terminal.
 
 Note the two do not compose: a set `ANTHROPIC_API_KEY` **silently overrides** any OAuth profile, so requests go to whichever org that key belongs to. `ant auth status` shows which credential source won.
-
-Two things this has already caught that review and reading did not:
-
-- Trimming the instructions block turned out to **fix** a destructive bug, not merely be safe: asked to delete a workspace project, Haiku 4.5 called `delete-object` directly under the longer instructions and archived first under the shorter ones (0/10 vs 10/10).
-- A wording change made while addressing review feedback appeared to regress a scenario by 30 points. It was an artefact of the scenario prompt, not the change — but nothing else would have surfaced the question.
 
 ### Adding a scenario
 
