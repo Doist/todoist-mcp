@@ -1,6 +1,7 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
 import type { ContentBlock } from '@modelcontextprotocol/sdk/types.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import { registerTool, stripEmailsFromObject, stripEmailsFromText } from './mcp-helpers.js'
 import { addTasks } from './tools/add-tasks.js'
 
@@ -16,15 +17,17 @@ function buildToolFixture(overrides: {
     name?: string
     description?: string
     outputSchema?: Record<string, unknown>
+    meta?: Record<string, unknown>
     execute: ToolFixture['execute']
 }): ToolFixture {
-    const { name = 'test-tool', description = 'Test tool', outputSchema, execute } = overrides
+    const { name = 'test-tool', description = 'Test tool', outputSchema, meta, execute } = overrides
 
     return {
         name,
         description,
         parameters: {},
         ...(outputSchema ? { outputSchema } : {}),
+        ...(meta ? { _meta: meta } : {}),
         annotations: {
             readOnlyHint: true,
             destructiveHint: false,
@@ -114,15 +117,61 @@ describe('registerTool config', () => {
         expect(Object.hasOwn(config, 'outputSchema')).toBe(false)
     })
 
-    it('includes outputSchema when the tool declares one', () => {
+    it('omits outputSchema for a tool with no UI contract, even when it declares one', () => {
         const { mock, server, client } = captureRegisterToolMock()
-        const outputSchema = {}
 
         registerTool({
             tool: buildToolFixture({
                 name: 'schema-tool',
                 description: 'Tool with output schema',
+                outputSchema: {},
+                execute: async () => ({ textContent: 'ok' }),
+            }),
+            server,
+            client,
+        })
+
+        const config = mock.mock.calls[0]?.[1] as Record<string, unknown>
+        expect(Object.hasOwn(config, 'outputSchema')).toBe(false)
+    })
+
+    it('still checks output against a declared schema that is no longer advertised', async () => {
+        // Most tools no longer advertise outputSchema, so the SDK's own output
+        // validation does not run for them. This check replaces it in CI, and
+        // is what stops a schema drifting away from what a tool returns.
+        const { mock, server, client } = captureRegisterToolMock()
+
+        registerTool({
+            tool: buildToolFixture({
+                name: 'mismatching-tool',
+                description: 'Tool whose output does not match its schema',
+                outputSchema: { count: z.number() },
+                execute: async () => ({ structuredContent: { count: 'not-a-number' } }),
+            }),
+            server,
+            client,
+        })
+
+        const cb = mock.mock.calls[0]?.[2] as (
+            args: unknown,
+            extra: unknown,
+        ) => Promise<{ isError?: boolean; content?: Array<{ text?: string }> }>
+        const result = await cb({}, {})
+
+        expect(result.isError).toBe(true)
+        expect(result.content?.[0]?.text).toContain('does not match its outputSchema')
+    })
+
+    it('includes outputSchema for a widget-backed tool', () => {
+        const { mock, server, client } = captureRegisterToolMock()
+        const outputSchema = {}
+
+        registerTool({
+            tool: buildToolFixture({
+                name: 'widget-tool',
+                description: 'Tool rendered by a widget',
                 outputSchema,
+                meta: { ui: { resourceUri: 'ui://todoist/task-list@abc123' } },
                 execute: async () => ({ textContent: 'ok' }),
             }),
             server,

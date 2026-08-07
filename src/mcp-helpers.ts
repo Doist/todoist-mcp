@@ -2,7 +2,7 @@ import type { TodoistApi } from '@doist/todoist-sdk'
 import { registerAppTool } from '@modelcontextprotocol/ext-apps/server'
 import type { McpServer, ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { ContentBlock, ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
-import type { z } from 'zod'
+import { z } from 'zod'
 import type { AnyTodoistTool, ExecuteResult } from './todoist-tool.js'
 import { formatToolExecutionError } from './tool-execution-error.js'
 import { runWithUsageTrackingContext } from './usage-tracking.js'
@@ -232,6 +232,34 @@ function stripEmailsFromText(text: string): string {
 }
 
 /**
+ * Check a tool's output against its declared schema, in tests only.
+ *
+ * The SDK validates `structuredContent` against a tool's `outputSchema`, but
+ * only for tools that advertise one — and most no longer do, to keep them out
+ * of the `tools/list` payload. Tool definitions still carry their schema, so
+ * this keeps that check where mismatches are worth catching: a schema that has
+ * drifted from what the tool actually returns fails CI rather than reaching a
+ * client. Production pays nothing.
+ *
+ * @throws if the output does not match the tool's declared `outputSchema`.
+ */
+function assertStructuredContentMatchesSchema(
+    tool: AnyTodoistTool,
+    structuredContent: Record<string, unknown> | undefined,
+) {
+    if (process.env.NODE_ENV !== 'test' || !tool.outputSchema || !structuredContent) {
+        return
+    }
+
+    const result = z.object(tool.outputSchema).safeParse(structuredContent)
+    if (!result.success) {
+        throw new Error(
+            `Tool ${tool.name} returned structuredContent that does not match its outputSchema: ${result.error.message}`,
+        )
+    }
+}
+
+/**
  * Register a Todoist tool in an MCP server.
  */
 function registerTool({
@@ -270,6 +298,8 @@ function registerTool({
                     executeWithRetry(() => execute(args, client)),
                 )
 
+            assertStructuredContentMatchesSchema(tool, structuredContent)
+
             // Strip emails from outputs for ChatGPT clients on collaborator-related tools
             if (shouldStripEmails) {
                 if (textContent) {
@@ -287,21 +317,28 @@ function registerTool({
         }
     }
 
+    // Output schemas are more than half the fixed cost of `tools/list`, and a
+    // client only needs one to validate `structuredContent` or to render a
+    // widget from it. Tools still return `structuredContent` either way, so
+    // advertising the schema is only worth its tokens for tools with a UI
+    // contract to honour.
+    const appUiMeta = hasAppUiMeta(tool._meta) ? tool._meta : undefined
+
     const toolConfig = {
         description: tool.description,
         inputSchema: tool.parameters,
-        ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+        ...(appUiMeta && tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
         annotations: getMcpAnnotations(tool),
         ...(tool._meta ? { _meta: tool._meta } : {}),
     }
 
-    if (hasAppUiMeta(tool._meta)) {
+    if (appUiMeta) {
         registerAppTool(
             server,
             tool.name,
             {
                 ...toolConfig,
-                _meta: tool._meta,
+                _meta: appUiMeta,
             },
             cb,
         )
@@ -316,6 +353,7 @@ export {
     type Feature,
     type FeatureName,
     type Features,
+    hasAppUiMeta,
     registerTool,
     stripEmailsFromObject,
     stripEmailsFromText,

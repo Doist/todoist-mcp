@@ -5,6 +5,7 @@ import { ToolNames } from '../utils/tool-names.js'
 
 type RegisteredToolSpec = {
     annotations?: unknown
+    outputSchema?: unknown
     _meta?: Record<string, unknown>
 }
 
@@ -370,6 +371,17 @@ describe('Tool annotations', () => {
 
     it('should cover all tools', () => {
         expect(Object.values(ToolNames).sort()).toEqual(TOOL_EXPECTATIONS.map((t) => t.name).sort())
+    })
+
+    it('should advertise outputSchema only for widget-backed tools', () => {
+        // Every tool still returns structuredContent and still declares an
+        // outputSchema in its definition; only tools rendering a widget pay to
+        // advertise it, because output schemas dominated the tools/list payload.
+        const advertising = [...registered.entries()]
+            .filter(([, spec]) => Object.hasOwn(spec, 'outputSchema'))
+            .map(([name]) => name)
+
+        expect(advertising).toEqual([ToolNames.FIND_TASKS_BY_DATE])
     })
 
     describe.each(TOOL_EXPECTATIONS)('$name', (toolExpectation) => {

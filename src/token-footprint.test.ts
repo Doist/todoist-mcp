@@ -2,9 +2,11 @@ import { encode } from 'gpt-tokenizer'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
+import { hasAppUiMeta } from './mcp-helpers.js'
 import { instructions } from './mcp-server.js'
 import type { AnyTodoistTool } from './todoist-tool.js'
 import { registeredTools } from './tool-registry.js'
+import { ToolNames } from './utils/tool-names.js'
 
 // The SDK serializes tool schemas with these options; see `toJsonSchemaCompat`
 // in @modelcontextprotocol/sdk's server/mcp.js. Zod defaults `io` to 'output',
@@ -54,7 +56,9 @@ function buildToolListEntry(tool: AnyTodoistTool) {
             ...tool.annotations,
         },
     }
-    if (tool.outputSchema) {
+    // Gate on the same predicate registration uses, so this cannot drift from
+    // what the server actually advertises.
+    if (hasAppUiMeta(tool._meta) && tool.outputSchema) {
         entry.outputSchema = z.toJSONSchema(z.object(tool.outputSchema), OUTPUT_SCHEMA_OPTIONS)
     }
     if (tool._meta) {
@@ -92,10 +96,16 @@ function measure(): Row[] {
 }
 
 // Budget for the combined fixed token cost (tools/list payload + instructions).
-// Bump deliberately when adding tools or expanding descriptions. Override at
-// runtime with MCP_TOKEN_BUDGET=NNNN to experiment without editing the source.
-const DEFAULT_TOKEN_BUDGET = 41_000
+// Treat this as a ratchet rather than headroom: it should only ever move down,
+// and a rise needs justifying in the PR that causes it. Override at runtime
+// with MCP_TOKEN_BUDGET=NNNN to experiment without editing the source.
+const DEFAULT_TOKEN_BUDGET = 19_000
 const TOKEN_BUDGET = Number(process.env.MCP_TOKEN_BUDGET ?? DEFAULT_TOKEN_BUDGET)
+
+// No single tool should dominate the surface. The cap sits above the current
+// worst (find-tasks-by-date, which keeps its output schema for the widget) with
+// enough room that ordinary edits do not trip it.
+const PER_TOOL_TOKEN_CAP = 1_300
 
 describe('token footprint baseline', () => {
     it('reports per-tool and total token cost', () => {
@@ -129,5 +139,26 @@ describe('token footprint baseline', () => {
         // Soft budget cap: fails only on catastrophic growth, not normal drift.
         // Per-tool numbers above are the informative signal for reviewers.
         expect(combinedFixed).toBeLessThan(TOKEN_BUDGET)
+    })
+
+    it('advertises an output schema only for widget-backed tools', () => {
+        // Output schemas were over half the fixed cost. Only tools with a UI
+        // contract still pay for one; re-enabling them broadly would roughly
+        // double the surface, so fail loudly rather than drift back.
+        const withOutputSchema = measure()
+            .filter((row) => row.outputSchemaTokens > 0)
+            .map((row) => row.name)
+
+        expect(withOutputSchema).toEqual([ToolNames.FIND_TASKS_BY_DATE])
+    })
+
+    it('has no single tool dominating the payload', () => {
+        const worst = measure().sort((a, b) => b.totalTokens - a.totalTokens)[0]
+
+        expect(worst, 'expected at least one registered tool').toBeDefined()
+        expect(
+            worst?.totalTokens,
+            `${worst?.name} is ${worst?.totalTokens} tokens, over the ${PER_TOOL_TOKEN_CAP} per-tool cap`,
+        ).toBeLessThan(PER_TOOL_TOKEN_CAP)
     })
 })

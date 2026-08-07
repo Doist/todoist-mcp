@@ -32,6 +32,14 @@ When you need to support clearing an optional field:
 - Maintains backward compatibility through dual handling
 - Creates self-documenting APIs with explicit action strings
 
+### Output schemas are declared but not advertised
+
+Keep declaring `outputSchema` on every tool that returns `structuredContent` — it types the return, documents the shape, and is checked in tests.
+
+It is **not** sent to clients. Output schemas were over half the fixed cost of `tools/list`, and a client only needs one to validate structured output or render a widget from it, so `registerTool` advertises it only for tools carrying widget metadata (`_meta.ui`). Tools return `structuredContent` either way.
+
+The consequence for tool authors: the model never sees your output schema, so anything it needs to know about the result belongs in the tool's `description`. Because the SDK's own output validation only runs for advertised schemas, `registerTool` re-checks output against the declared schema when `NODE_ENV === 'test'` — a schema that drifts from what the tool returns fails CI instead of reaching a client.
+
 ## Adding a New Tool
 
 `src/tool-registry.ts` is the single source of truth for the tool surface. `src/mcp-server.ts`, the `tools` export in `src/index.ts`, `scripts/run-tool.ts`, `scripts/validate-schemas.ts` and `src/token-footprint.test.ts` all derive from it, so adding a tool there wires it up everywhere.
