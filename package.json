@@ -54,6 +54,7 @@
         "setup": "cp .env.example .env && npm install && npm run build",
         "tool": "tsx scripts/run-tool.ts",
         "tool:list": "tsx scripts/run-tool.ts --list",
+        "eval": "tsx scripts/eval-instructions.ts",
         "test:executable": "npm run build && node scripts/test-executable.cjs",
         "type-check": "npx tsc --noEmit",
         "format:check": "oxlint src scripts && oxfmt --check",
