@@ -151,7 +151,7 @@ const SCENARIOS: Scenario[] = [
     },
     {
         id: 'today-includes-overdue',
-        prompt: 'What should I focus on today?',
+        prompt: 'Show me the tasks due today.',
         expect: [ToolNames.FIND_TASKS_BY_DATE, ToolNames.GET_OVERVIEW],
         check: (input) => {
             // get-overview takes no date argument; only assert on the dated tool.
