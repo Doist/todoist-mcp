@@ -69,12 +69,10 @@ const ArgsSchema = {
 
 const OutputSchema = {
     events: z.array(ActivityEventSchema).describe('The activity events.'),
-    nextCursor: z.string().optional().describe('Cursor for the next page of results.'),
+    nextCursor: z.string().optional(),
     totalCount: z.number().describe('The total number of events in this page.'),
-    hasMore: z.boolean().describe('Whether there are more results available.'),
-    appliedFilters: z
-        .record(z.string(), z.unknown())
-        .describe('The filters that were applied to the search.'),
+    hasMore: z.boolean(),
+    appliedFilters: z.record(z.string(), z.unknown()),
 }
 
 const findActivity = {
