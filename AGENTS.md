@@ -112,7 +112,25 @@ npm run eval -- --label after
 
 Each run prints a pass rate per scenario per model and writes `tmp/eval/<label>.json`; diff the two. Narrow while iterating with `--scenario <id>`, `--repeats N`, `--models a,b`.
 
-Only the first tool call of a turn is inspected and nothing is executed, so it touches no Todoist data and needs no `TODOIST_API_KEY`. It does call real models, so it is deliberately **not** part of `npm test` — it costs money and is non-deterministic. Auth comes from the standard Anthropic credential chain, so `ant auth login` is enough; no `ANTHROPIC_API_KEY` required.
+Only the first tool call of a turn is inspected and nothing is executed, so it touches no Todoist data and needs no `TODOIST_API_KEY`. It does call real models, so it is deliberately **not** part of `npm test` — it costs money and is non-deterministic.
+
+### Authenticating
+
+The harness uses the Anthropic SDK's standard credential chain, so either of these works:
+
+- **`ANTHROPIC_API_KEY`** in your environment — a key from the [Anthropic Console](https://platform.claude.com). Create it in a workspace you can put a spend limit on.
+- **An OAuth profile**, which avoids managing a key at all. `ant` is Anthropic's CLI ([anthropics/anthropic-cli](https://github.com/anthropics/anthropic-cli)); `ant auth login` opens a browser and stores a profile under `~/.config/anthropic/` that the SDK picks up automatically.
+
+    ```bash
+    brew install anthropics/tap/ant                        # macOS
+    go install github.com/anthropics/anthropic-cli/cmd/ant@latest   # or from source (Go 1.22+)
+    # Linux/WSL: grab the tarball for your arch from the releases page above
+    ant auth login
+    ```
+
+    On a machine with no browser, `ant auth login --no-browser` prints a URL and takes the code back in the terminal.
+
+Note the two do not compose: a set `ANTHROPIC_API_KEY` **silently overrides** any OAuth profile, so requests go to whichever org that key belongs to. `ant auth status` shows which credential source won.
 
 Two things this has already caught that review and reading did not:
 
