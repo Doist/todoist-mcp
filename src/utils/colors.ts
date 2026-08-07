@@ -24,7 +24,7 @@ export const ColorSchema = z
     .describe(colorDescription)
 
 // For OUTPUT: strict enum. Kept for reference — output schemas use ColorOutputSchema.
-export const ColorKeySchema = z.enum(colorKeys).describe('The color key of the entity.')
+export const ColorKeySchema = z.enum(colorKeys)
 
 // For OUTPUT (tolerant): accepts valid color keys and silently coerces unrecognised values
 // to undefined instead of raising a validation error.  Fixes both failure modes described in issue #343:
@@ -32,8 +32,4 @@ export const ColorKeySchema = z.enum(colorKeys).describe('The color key of the e
 //   2. Name search — silent empty result set due to swallowed validation error
 // This is the output-side counterpart to ColorSchema, which uses .preprocess()/.catch() for
 // input normalisation (added in PR #328).
-export const ColorOutputSchema = z
-    .enum(colorKeys)
-    .optional()
-    .catch(undefined)
-    .describe('The color key of the entity.')
+export const ColorOutputSchema = z.enum(colorKeys).optional().catch(undefined)

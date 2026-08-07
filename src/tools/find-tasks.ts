@@ -75,12 +75,10 @@ const ArgsSchema = {
 
 const OutputSchema = {
     tasks: z.array(TaskOutputSchema).describe('The found tasks.'),
-    nextCursor: z.string().optional().describe('Cursor for the next page of results.'),
+    nextCursor: z.string().optional(),
     totalCount: z.number().describe('The total number of tasks in this page.'),
-    hasMore: z.boolean().describe('Whether there are more results available.'),
-    appliedFilters: z
-        .record(z.string(), z.unknown())
-        .describe('The filters that were applied to the search.'),
+    hasMore: z.boolean(),
+    appliedFilters: z.record(z.string(), z.unknown()),
 }
 
 const findTasks = {

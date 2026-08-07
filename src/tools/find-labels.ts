@@ -31,17 +31,15 @@ const ArgsSchema = {
 
 const OutputSchema = {
     labels: z.array(LabelOutputSchema).describe('The found personal labels.'),
-    nextCursor: z.string().optional().describe('Cursor for the next page of results.'),
+    nextCursor: z.string().optional(),
     totalCount: z.number().describe('The total number of labels in this page.'),
-    hasMore: z.boolean().describe('Whether there are more results available.'),
+    hasMore: z.boolean(),
     sharedLabels: z
         .array(z.string())
         .describe(
             'Names of all shared labels visible to you. These have no IDs or metadata — use their names directly when filtering tasks.',
         ),
-    appliedFilters: z
-        .record(z.string(), z.unknown())
-        .describe('The filters that were applied to the search.'),
+    appliedFilters: z.record(z.string(), z.unknown()),
 }
 
 const findLabels = {

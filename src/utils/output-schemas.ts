@@ -7,77 +7,55 @@ import { PrioritySchema } from './priorities.js'
  * Schema for a mapped task object returned by tools
  */
 const TaskSchema = z.object({
-    id: z.string().describe('The unique ID of the task.'),
-    content: z.string().describe('The task title/content.'),
-    description: z.string().describe('The task description.'),
-    dueDate: z.string().optional().describe('The due date of the task (ISO 8601 format).'),
+    id: z.string(),
+    content: z.string().describe('Task title.'),
+    description: z.string(),
+    dueDate: z.string().optional().describe('ISO 8601.'),
     recurring: z
         .union([z.boolean(), z.string()])
-        .describe('Whether the task is recurring, or the recurrence string.'),
-    deadlineDate: z
-        .string()
-        .optional()
-        .describe('The deadline date of the task (ISO 8601 format).'),
-    priority: PrioritySchema.describe(
-        'The priority level: p1 (highest), p2 (high), p3 (medium), p4 (lowest).',
-    ),
-    projectId: z.string().describe('The ID of the project this task belongs to.'),
-    sectionId: z.string().optional().describe('The ID of the section this task belongs to.'),
-    parentId: z.string().optional().describe('The ID of the parent task (for subtasks).'),
-    labels: z.array(z.string()).optional().describe('The labels attached to this task.'),
-    duration: z.string().optional().describe('The duration of the task (e.g., "2h30m").'),
-    responsibleUid: z
-        .string()
-        .optional()
-        .describe('The UID of the user responsible for this task.'),
-    isUncompletable: z
-        .boolean()
-        .optional()
-        .describe('Whether the task is uncompletable (organizational header).'),
-    assignedByUid: z.string().optional().describe('The UID of the user who assigned this task.'),
-    checked: z.boolean().describe('Whether the task is checked/completed.'),
-    completedAt: z.string().optional().describe('When the task was completed (ISO 8601 format).'),
-    addedAt: z.string().optional().describe('When the task was created (ISO 8601 format).'),
+        .describe('False when not recurring, otherwise the recurrence string.'),
+    deadlineDate: z.string().optional().describe('ISO 8601.'),
+    priority: PrioritySchema.describe('p1 is highest, p4 lowest.'),
+    projectId: z.string(),
+    sectionId: z.string().optional(),
+    parentId: z.string().optional(),
+    labels: z.array(z.string()).optional(),
+    duration: z.string().optional().describe('e.g. "2h30m".'),
+    responsibleUid: z.string().optional(),
+    isUncompletable: z.boolean().optional().describe('An organizational header, not a real task.'),
+    assignedByUid: z.string().optional(),
+    checked: z.boolean().describe('Whether the task is completed.'),
+    completedAt: z.string().optional().describe('ISO 8601.'),
+    addedAt: z.string().optional().describe('ISO 8601.'),
 })
 
 /**
  * Schema for a mapped project object returned by tools
  */
 const ProjectSchema = z.object({
-    id: z.string().describe('The unique ID of the project.'),
-    name: z.string().describe('The name of the project.'),
-    description: z.string().describe('The description of the project (empty string if none).'),
+    id: z.string(),
+    name: z.string(),
+    description: z.string().describe('Empty string when none.'),
     color: ColorOutputSchema,
-    isFavorite: z.boolean().describe('Whether the project is marked as favorite.'),
-    isShared: z.boolean().describe('Whether the project is shared.'),
-    parentId: z.string().optional().describe('The ID of the parent project (for sub-projects).'),
-    inboxProject: z.boolean().describe('Whether this is the inbox project.'),
-    viewStyle: z.string().describe('The view style of the project (list, board, calendar).'),
-    workspaceId: z
-        .string()
-        .optional()
-        .describe(
-            'The ID of the workspace this project belongs to (undefined for personal projects).',
-        ),
-    folderId: z
-        .string()
-        .optional()
-        .describe('The ID of the folder this project belongs to (workspace projects only).'),
-    childOrder: z.number().describe('The ordering index of the project among its siblings.'),
-    isArchived: z.boolean().describe('Whether the project is archived.'),
+    isFavorite: z.boolean(),
+    isShared: z.boolean(),
+    parentId: z.string().optional(),
+    inboxProject: z.boolean(),
+    viewStyle: z.string().describe('list, board or calendar.'),
+    workspaceId: z.string().optional().describe('Undefined for personal projects.'),
+    folderId: z.string().optional().describe('Workspace projects only.'),
+    childOrder: z.number().describe('Ordering index among siblings.'),
+    isArchived: z.boolean(),
 })
 
 /**
  * Schema for a section object returned by tools
  */
 const SectionSchema = z.object({
-    id: z.string().describe('The unique ID of the section.'),
-    name: z.string().describe('The name of the section.'),
-    sectionOrder: z.number().describe('The ordering index of the section within its project.'),
-    description: z
-        .string()
-        .optional()
-        .describe('The description of the section. Supports Markdown.'),
+    id: z.string(),
+    name: z.string(),
+    sectionOrder: z.number().describe('Ordering index within the project.'),
+    description: z.string().optional().describe('Supports Markdown.'),
 })
 
 type SectionSummary = z.infer<typeof SectionSchema>
@@ -96,122 +74,103 @@ function toSectionSummary({ id, name, sectionOrder, description }: Section): Sec
  * Schema for a file attachment in a comment
  */
 const AttachmentSchema = z.object({
-    resourceType: z.string().describe('The type of resource (file, url, image, etc).'),
-    fileName: z.string().optional().describe('The name of the file.'),
-    fileSize: z.number().optional().describe('The size of the file in bytes.'),
-    fileType: z.string().optional().describe('The MIME type of the file.'),
-    fileUrl: z.string().optional().describe('The URL to access the file.'),
-    fileDuration: z
-        .number()
-        .optional()
-        .describe('The duration in milliseconds (for audio/video files).'),
-    uploadState: z
-        .enum(['pending', 'completed'])
-        .optional()
-        .describe('The upload state of the file.'),
-    url: z.string().optional().describe('The URL for link/url resource types.'),
-    title: z.string().optional().describe('The title for link/url resource types.'),
-    image: z.string().optional().describe('The image URL for image resource types.'),
-    imageWidth: z.number().optional().describe('The width of the image in pixels.'),
-    imageHeight: z.number().optional().describe('The height of the image in pixels.'),
+    resourceType: z.string().describe('file, url, image, etc.'),
+    fileName: z.string().optional(),
+    fileSize: z.number().optional().describe('Bytes.'),
+    fileType: z.string().optional().describe('MIME type.'),
+    fileUrl: z.string().optional(),
+    fileDuration: z.number().optional().describe('Milliseconds, for audio/video.'),
+    uploadState: z.enum(['pending', 'completed']).optional(),
+    url: z.string().optional().describe('For link/url resource types.'),
+    title: z.string().optional().describe('For link/url resource types.'),
+    image: z.string().optional().describe('For image resource types.'),
+    imageWidth: z.number().optional().describe('Pixels.'),
+    imageHeight: z.number().optional().describe('Pixels.'),
 })
 
 /**
  * Schema for a comment object returned by tools
  */
 const CommentSchema = z.object({
-    id: z.string().describe('The unique ID of the comment.'),
-    taskId: z.string().optional().describe('The ID of the task this comment belongs to.'),
-    projectId: z.string().optional().describe('The ID of the project this comment belongs to.'),
-    content: z.string().describe('The content of the comment.'),
-    postedAt: z.string().describe('When the comment was posted (ISO 8601 format).'),
-    postedUid: z.string().optional().describe('The UID of the user who posted this comment.'),
-    fileAttachment: AttachmentSchema.optional().describe('File attachment information, if any.'),
+    id: z.string(),
+    taskId: z.string().optional(),
+    projectId: z.string().optional(),
+    content: z.string(),
+    postedAt: z.string().describe('ISO 8601.'),
+    postedUid: z.string().optional(),
+    fileAttachment: AttachmentSchema.optional(),
 })
 
 /**
  * Schema for an activity event object returned by tools
  */
 const ActivityEventSchema = z.object({
-    id: z.string().optional().describe('The unique ID of the activity event.'),
-    objectType: z
-        .string()
-        .describe('The type of object this event relates to (task, project, etc).'),
-    objectId: z.string().describe('The ID of the object this event relates to.'),
-    eventType: z.string().describe('The type of event (added, updated, deleted, completed, etc).'),
-    eventDate: z.string().describe('When the event occurred (ISO 8601 format).'),
-    parentProjectId: z.string().optional().describe('The ID of the parent project.'),
-    parentItemId: z.string().optional().describe('The ID of the parent item.'),
-    initiatorId: z.string().optional().describe('The ID of the user who initiated this event.'),
-    extraData: z.record(z.string(), z.unknown()).optional().describe('Additional event data.'),
+    id: z.string().optional(),
+    objectType: z.string().describe('task, project, etc.'),
+    objectId: z.string(),
+    eventType: z.string().describe('added, updated, deleted, completed, etc.'),
+    eventDate: z.string().describe('ISO 8601.'),
+    parentProjectId: z.string().optional(),
+    parentItemId: z.string().optional(),
+    initiatorId: z.string().optional().describe('User who initiated the event.'),
+    extraData: z.record(z.string(), z.unknown()).optional(),
 })
 
 /**
  * Schema for a user/collaborator object returned by tools
  */
 const CollaboratorSchema = z.object({
-    id: z.string().describe('The unique ID of the user.'),
-    name: z.string().describe('The full name of the user.'),
-    email: z.string().describe('The email address of the user.'),
+    id: z.string(),
+    name: z.string(),
+    email: z.string(),
 })
 
 /**
  * Schema for a label object returned by tools
  */
 const LabelSchema = z.object({
-    id: z.string().describe('The unique ID of the label.'),
-    name: z.string().describe('The name of the label.'),
+    id: z.string(),
+    name: z.string(),
     color: ColorOutputSchema,
-    order: z.number().optional().catch(undefined).describe('The display order of the label.'),
-    isFavorite: z.boolean().describe('Whether the label is marked as favorite.'),
+    order: z.number().optional().catch(undefined).describe('Display order.'),
+    isFavorite: z.boolean(),
 })
 
 /**
  * Schema for a reminder due date
  */
 const ReminderDueSchema = z.object({
-    isRecurring: z.boolean().describe('Whether this is a recurring reminder.'),
+    isRecurring: z.boolean(),
     string: z.string().describe('Human-readable due string.'),
-    date: z.string().describe('Due date in ISO format.'),
-    datetime: z.string().optional().describe('Due datetime in ISO format.'),
-    timezone: z.string().optional().describe('Timezone of the reminder.'),
+    date: z.string().describe('ISO 8601.'),
+    datetime: z.string().optional().describe('ISO 8601.'),
+    timezone: z.string().optional(),
 })
 
 /**
  * Schema for a mapped reminder object returned by tools
  */
 const ReminderSchema = z.object({
-    id: z.string().describe('The unique ID of the reminder.'),
-    taskId: z.string().describe('The task ID this reminder belongs to.'),
-    type: z.enum(REMINDER_TYPES).describe('The type of reminder: relative, absolute, or location.'),
-    minuteOffset: z
-        .number()
-        .optional()
-        .describe('Minutes before due time to trigger (relative reminders only).'),
-    due: ReminderDueSchema.optional().describe(
-        'Due date info (absolute and sometimes relative reminders).',
-    ),
-    name: z.string().optional().describe('Location name (location reminders only).'),
-    locLat: z.string().optional().describe('Latitude (location reminders only).'),
-    locLong: z.string().optional().describe('Longitude (location reminders only).'),
-    locTrigger: z
-        .enum(LOCATION_TRIGGERS)
-        .optional()
-        .describe('Trigger type: on_enter or on_leave (location reminders only).'),
-    radius: z.number().optional().describe('Geofence radius in meters (location reminders only).'),
-    isUrgent: z
-        .boolean()
-        .optional()
-        .describe('Whether this is an urgent reminder (relative and absolute reminders only).'),
+    id: z.string(),
+    taskId: z.string(),
+    type: z.enum(REMINDER_TYPES),
+    minuteOffset: z.number().optional().describe('Minutes before due. Relative reminders only.'),
+    due: ReminderDueSchema.optional().describe('Absolute, and sometimes relative, reminders.'),
+    name: z.string().optional().describe('Location name. Location reminders only.'),
+    locLat: z.string().optional().describe('Location reminders only.'),
+    locLong: z.string().optional().describe('Location reminders only.'),
+    locTrigger: z.enum(LOCATION_TRIGGERS).optional().describe('Location reminders only.'),
+    radius: z.number().optional().describe('Geofence radius in metres. Location reminders only.'),
+    isUrgent: z.boolean().optional().describe('Relative and absolute reminders only.'),
 })
 
 /**
  * Schema for batch operation failure
  */
 const FailureSchema = z.object({
-    item: z.string().describe('The item that failed (usually an ID or identifier).'),
-    error: z.string().describe('The error message.'),
-    code: z.string().optional().describe('The error code, if available.'),
+    item: z.string().describe('Usually the ID of the item that failed.'),
+    error: z.string(),
+    code: z.string().optional(),
 })
 
 export {

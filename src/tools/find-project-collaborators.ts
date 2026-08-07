@@ -40,9 +40,7 @@ const OutputSchema = {
         .number()
         .optional()
         .describe('The total number of available users before the search filter was applied.'),
-    appliedFilters: z
-        .record(z.string(), z.unknown())
-        .describe('The filters that were applied to the search.'),
+    appliedFilters: z.record(z.string(), z.unknown()),
 }
 
 const findProjectCollaborators = {

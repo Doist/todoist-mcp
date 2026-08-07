@@ -32,6 +32,20 @@ When you need to support clearing an optional field:
 - Maintains backward compatibility through dual handling
 - Creates self-documenting APIs with explicit action strings
 
+### Describing output schema fields
+
+Every tool's `outputSchema` is sent to clients on every `tools/list`, and the shared schemas in `src/utils/output-schemas.ts` are inlined once per tool that uses them — so a description on `TaskSchema.id` is paid eight times over.
+
+Describe an output field only where the schema cannot express the thing itself:
+
+- units or formats — `'ISO 8601.'`, `'Bytes.'`, `'e.g. "2h30m".'`
+- conventions that are not derivable — `priority: 'p1 is highest, p4 lowest.'`
+- unions — `recurring: 'False when not recurring, otherwise the recurrence string.'`
+- conditional presence — `workspaceId: 'Undefined for personal projects.'`
+- non-obvious meaning — `isUncompletable: 'An organizational header, not a real task.'`
+
+Leave it off when the description would restate the field name (`id`, `projectId`, `name`), or list values an `enum` already carries. Note this is the _output_ side only: input field descriptions are how a model learns to call the tool correctly and should stay as full as they need to be.
+
 ## Adding a New Tool
 
 `src/tool-registry.ts` is the single source of truth for the tool surface. `src/mcp-server.ts`, the `tools` export in `src/index.ts`, `scripts/run-tool.ts`, `scripts/validate-schemas.ts` and `src/token-footprint.test.ts` all derive from it, so adding a tool there wires it up everywhere.
