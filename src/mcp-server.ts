@@ -37,7 +37,8 @@ What each tool does and how to fill its parameters is in the tool's own descript
 **Finding things**
 
 - For "what did I complete?", use **find-activity** with objectType="task" and eventType="completed". It reports completion events, including each occurrence of a recurring task. **find-completed-tasks** lists completed tasks, which is not the same question.
-- To resolve a person's name or email to a user ID, or to answer "who is X?", use **find-project-collaborators** with just a searchTerm. It covers every shared project you can access plus yourself, so an empty result means they collaborate on none of them — not that they do not exist. Check a collaborator exists before assigning work to them.
+- To resolve a person's name or email to a user ID, or to answer "who is X?", use **find-project-collaborators** with just a searchTerm. It covers every shared project you can access plus yourself, so an empty result means they collaborate on none of them — not that they do not exist.
+- Before assigning work to someone, call **find-project-collaborators** again with the target projectId. Resolving an ID only proves they collaborate on *some* project you can see; assignment fails unless they collaborate on that one.
 - To find out whether a task hides subtasks, use **fetch-object** with includeChildren rather than a speculative **find-tasks** call.
 - Filter tasks by label **name**. Label IDs are only for **delete-object** and **update-labels**. Shared labels can be renamed but not recoloured, reordered or favourited.
 
@@ -57,7 +58,7 @@ What each tool does and how to fill its parameters is in the tool's own descript
 **Batches**
 
 - Prefer a batch tool over one call per item.
-- Batch tools report per-item \`failures\` alongside successes, and one failure does not undo the rest. Never retry a whole batch: re-send only the items whose failure reason is fixable.
+- Where a batch tool returns per-item \`failures\` alongside successes, one failure does not undo the rest: never retry the whole batch, re-send only the items whose failure reason is fixable. **reschedule-tasks** is the exception — it has no per-item failures and throws if any task fails, so retry it as a whole.
 
 Use the **productivity-analysis** prompt for a combined productivity review — it pulls together user-info, get-productivity-stats and find-completed-tasks.
 
