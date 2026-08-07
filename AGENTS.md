@@ -36,7 +36,9 @@ When you need to support clearing an optional field:
 
 Keep declaring `outputSchema` on every tool that returns `structuredContent` — it types the return, documents the shape, and is checked in tests.
 
-It is **not** sent to clients. Output schemas were over half the fixed cost of `tools/list`, and a client only needs one to validate structured output or render a widget from it, so `registerTool` advertises it only for tools carrying widget metadata (`_meta.ui`). Tools return `structuredContent` either way.
+It is **not** sent to clients by default. Output schemas were over half the fixed cost of `tools/list`, and a client only needs one to render a widget or to read a result's shape without calling the tool, so `registerTool` advertises it only for tools carrying widget metadata (`_meta.ui`). Tools return `structuredContent` either way.
+
+A consumer that does read schemas — code generation, where something has to know a result's field names in order to reference them — opts back in with the `output_schemas` feature: `getMcpServer({ ..., features: [{ name: FEATURE_NAMES.OUTPUT_SCHEMAS }] })`.
 
 The consequence for tool authors: the model never sees your output schema, so anything it needs to know about the result belongs in the tool's `description`.
 

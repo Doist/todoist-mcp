@@ -17,6 +17,8 @@ import { ToolNames } from './utils/tool-names.js'
  * - `'strip_emails'`: Strips email addresses from collaborator tool outputs
  *   (affects: find-project-collaborators, find-completed-tasks). Useful for
  *   clients like ChatGPT that should not have access to user emails.
+ * - `'output_schemas'`: Advertises every tool's output schema, rather than only
+ *   those needed to render a widget.
  */
 const FEATURE_NAMES = {
     /**
@@ -24,6 +26,20 @@ const FEATURE_NAMES = {
      * Affects: find-project-collaborators, find-completed-tasks
      */
     STRIP_EMAILS: 'strip_emails',
+
+    /**
+     * Advertises `outputSchema` on every tool that declares one.
+     *
+     * Output schemas are more than half the fixed cost of `tools/list`, so by
+     * default only widget-backed tools advertise one — a client needs the schema
+     * to render a widget, but not to read a result. Tools return
+     * `structuredContent` either way.
+     *
+     * Enable this for a consumer that reads the schema itself rather than just
+     * calling tools: code generation, for instance, where something has to know
+     * a result's field names in order to reference them.
+     */
+    OUTPUT_SCHEMAS: 'output_schemas',
 } as const
 
 /**
@@ -317,17 +333,20 @@ function registerTool({
         }
     }
 
-    // Output schemas are more than half the fixed cost of `tools/list`, and a
-    // client only needs one to validate `structuredContent` or to render a
-    // widget from it. Tools still return `structuredContent` either way, so
-    // advertising the schema is only worth its tokens for tools with a UI
-    // contract to honour.
     const appUiMeta = hasAppUiMeta(tool._meta) ? tool._meta : undefined
+
+    // Output schemas are more than half the fixed cost of `tools/list`, and a
+    // client only needs one to render a widget or to read the result shape
+    // without calling the tool. Tools return `structuredContent` either way, so
+    // by default only widget-backed tools pay for one; consumers that read
+    // schemas ask for them with the `output_schemas` feature.
+    const advertiseOutputSchema =
+        Boolean(appUiMeta) || features.some((f) => f.name === FEATURE_NAMES.OUTPUT_SCHEMAS)
 
     const toolConfig = {
         description: tool.description,
         inputSchema: tool.parameters,
-        ...(appUiMeta && tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+        ...(advertiseOutputSchema && tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
         annotations: getMcpAnnotations(tool),
         ...(tool._meta ? { _meta: tool._meta } : {}),
     }

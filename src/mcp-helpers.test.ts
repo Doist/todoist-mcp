@@ -2,7 +2,12 @@ import type { TodoistApi } from '@doist/todoist-sdk'
 import type { ContentBlock } from '@modelcontextprotocol/sdk/types.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { registerTool, stripEmailsFromObject, stripEmailsFromText } from './mcp-helpers.js'
+import {
+    FEATURE_NAMES,
+    registerTool,
+    stripEmailsFromObject,
+    stripEmailsFromText,
+} from './mcp-helpers.js'
 import { addTasks } from './tools/add-tasks.js'
 
 type RegisterToolArgs = Parameters<typeof registerTool>[0]
@@ -160,6 +165,26 @@ describe('registerTool config', () => {
 
         expect(result.isError).toBe(true)
         expect(result.content?.[0]?.text).toContain('does not match its outputSchema')
+    })
+
+    it('includes outputSchema for any tool when the output_schemas feature is on', () => {
+        const { mock, server, client } = captureRegisterToolMock()
+        const outputSchema = {}
+
+        registerTool({
+            tool: buildToolFixture({
+                name: 'schema-tool',
+                description: 'Tool with output schema',
+                outputSchema,
+                execute: async () => ({ textContent: 'ok' }),
+            }),
+            server,
+            client,
+            features: [{ name: FEATURE_NAMES.OUTPUT_SCHEMAS }],
+        })
+
+        const config = mock.mock.calls[0]?.[1] as Record<string, unknown>
+        expect(config.outputSchema).toBe(outputSchema)
     })
 
     it('includes outputSchema for a widget-backed tool', () => {
