@@ -99,3 +99,49 @@ npx tsx scripts/run-tool.ts get-overview '{}'
 ```
 
 Requires `TODOIST_API_KEY` in `.env` (and optionally `TODOIST_BASE_URL`).
+
+## Measuring a change to the tool surface
+
+`src/token-footprint.test.ts` tells you what the surface costs. It cannot tell you whether a model can still use it. When you change **tool descriptions, input field descriptions, or the `instructions` block**, measure the behaviour rather than reasoning about it:
+
+```bash
+npm run eval -- --label before
+# apply your change
+npm run eval -- --label after
+```
+
+Each run prints a pass rate per scenario per model and writes `tmp/eval/<label>.json`; diff the two. Narrow while iterating with `--scenario <id>`, `--repeats N`, `--models a,b`.
+
+Only the first tool call of a turn is inspected and nothing is executed, so it touches no Todoist data and needs no `TODOIST_API_KEY`. It does call real models, so it is deliberately **not** part of `npm test` — it costs money and is non-deterministic.
+
+Two things this has already caught that review and reading did not:
+
+- Trimming the instructions block turned out to **fix** a destructive bug, not merely be safe: asked to delete a workspace project, Haiku 4.5 called `delete-object` directly under the longer instructions and archived first under the shorter ones (0/10 vs 10/10).
+- A wording change made while addressing review feedback appeared to regress a scenario by 30 points. It was an artefact of the scenario prompt, not the change — but nothing else would have surfaced the question.
+
+### Authenticating
+
+The harness uses the Anthropic SDK's standard credential chain, so either of these works:
+
+- **`ANTHROPIC_API_KEY`** in your environment — a key from the [Anthropic Console](https://platform.claude.com). Create it in a workspace you can put a spend limit on.
+- **An OAuth profile**, which avoids managing a key at all. `ant` is Anthropic's CLI ([anthropics/anthropic-cli](https://github.com/anthropics/anthropic-cli)); `ant auth login` opens a browser and stores a profile under `~/.config/anthropic/` that the SDK picks up automatically.
+
+    ```bash
+    brew install anthropics/tap/ant                        # macOS
+    go install github.com/anthropics/anthropic-cli/cmd/ant@latest   # or from source (Go 1.22+)
+    # Linux/WSL: grab the tarball for your arch from the releases page above
+    ant auth login
+    ```
+
+    On a machine with no browser, `ant auth login --no-browser` prints a URL and takes the code back in the terminal.
+
+Note the two do not compose: a set `ANTHROPIC_API_KEY` **silently overrides** any OAuth profile, so requests go to whichever org that key belongs to. `ant auth status` shows which credential source won.
+
+### Adding a scenario
+
+Scenarios live at the top of `scripts/eval-instructions.ts`. Two shapes, and picking the wrong one produces noise that looks like signal:
+
+- **`expect`** — an allowlist, for a rule that names the tool to reach for.
+- **`forbid`** — for a rule of the form "don't do X". Prefer this whenever the rule is prohibitive. An allowlist then has to enumerate every legitimate opener, and it will miss some: a model looking a project up with `fetch-object` before deleting it is behaving correctly, and an allowlist that forgot `fetch-object` scores it as a failure.
+
+Make sure a scenario can actually fail. One early scenario listed the destructive tool in its own `expect` and checked an argument condition that was true by construction — it scored 100% while measuring nothing.

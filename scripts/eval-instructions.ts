@@ -18,8 +18,12 @@
  * inspected — so this touches no Todoist data and needs no Todoist token. It
  * does spend money on model calls; see --repeats and --models.
  *
- * Auth comes from the standard Anthropic credential chain, so `ant auth login`
- * is enough (no ANTHROPIC_API_KEY needed).
+ * Auth uses the Anthropic SDK's standard credential chain: either
+ * ANTHROPIC_API_KEY (a key from the Anthropic Console at platform.claude.com),
+ * or an OAuth profile created with `ant auth login` — `ant` being Anthropic's
+ * CLI, from https://github.com/anthropics/anthropic-cli. A set
+ * ANTHROPIC_API_KEY silently overrides a profile; `ant auth status` shows which
+ * one is in use. See AGENTS.md for install steps.
  *
  * Usage:
  *   npx tsx scripts/eval-instructions.ts [--label NAME] [--repeats N]
