@@ -26,7 +26,9 @@ export const ArgsSchema = {
         .string()
         .regex(/^(\d{4}-\d{2}-\d{2}|today)$/)
         .optional()
-        .describe("The start date to get the tasks for. Format: YYYY-MM-DD or 'today'."),
+        .describe(
+            "The start date to get the tasks for. Format: YYYY-MM-DD, or 'today', which also includes overdue tasks.",
+        ),
     overdueOption: z
         .enum(['overdue-only', 'include-overdue', 'exclude-overdue'])
         .optional()
