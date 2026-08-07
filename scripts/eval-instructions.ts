@@ -30,9 +30,18 @@ import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import { instructions } from '../src/mcp-server.js'
 import { registeredTools } from '../src/tool-registry.js'
+import { createLimiter } from '../src/utils/concurrency.js'
 import { ToolNames } from '../src/utils/tool-names.js'
 
 type Check = (input: Record<string, unknown>) => string | null
+
+/** First item of a batch tool's array argument, e.g. add-tasks' `tasks`. */
+function firstItem(input: Record<string, unknown>, key: string): Record<string, unknown> | null {
+    const list = input[key]
+    if (!Array.isArray(list) || list.length === 0) return null
+    const item = list[0]
+    return item && typeof item === 'object' ? (item as Record<string, unknown>) : null
+}
 
 type Scenario = {
     id: string
@@ -60,10 +69,16 @@ const SCENARIOS: Scenario[] = [
         prompt: 'What did I actually get done last week?',
         expect: [ToolNames.FIND_ACTIVITY],
         check: (input) => {
-            const json = JSON.stringify(input)
-            return json.includes('completed') ? null : `eventType not "completed": ${json}`
+            // Exact match: "uncompleted" contains "completed".
+            if (input.eventType !== 'completed') {
+                return `eventType is ${JSON.stringify(input.eventType)}, not "completed"`
+            }
+            if (!input.dateFrom || !input.dateTo) {
+                return 'no dateFrom/dateTo, so this searches all history rather than last week'
+            }
+            return null
         },
-        guards: 'instructions: find-activity vs find-completed-tasks',
+        guards: 'instructions: find-activity vs find-completed-tasks, over a bounded range',
     },
     {
         id: 'resolve-person',
@@ -84,27 +99,24 @@ const SCENARIOS: Scenario[] = [
         prompt: 'Show me my tasks labelled urgent.',
         expect: [ToolNames.FIND_TASKS, ToolNames.FIND_LABELS],
         check: (input) => {
-            const json = JSON.stringify(input).toLowerCase()
-            return json.includes('urgent') ? null : `label name not used: ${json}`
+            const labels = input.labels
+            const used = Array.isArray(labels) ? labels.map(String) : []
+            if (used.some((l) => l.toLowerCase() === 'urgent')) return null
+            // find-labels legitimately takes a search term rather than a labels array.
+            const search = String(input.searchTerm ?? input.name ?? '').toLowerCase()
+            return search.includes('urgent')
+                ? null
+                : `label name not used: ${JSON.stringify(input)}`
         },
         guards: 'instructions: filter by label name, not ID',
     },
     {
         id: 'archive-before-delete',
         prompt: 'Delete workspace project 6XQ3Plan99 ("Q3 Planning").',
-        expect: [
-            ToolNames.PROJECT_MANAGEMENT,
-            ToolNames.FIND_PROJECTS,
-            ToolNames.GET_OVERVIEW,
-            ToolNames.DELETE_OBJECT,
-        ],
-        check: (input) => {
-            const json = JSON.stringify(input).toLowerCase()
-            // Deleting straight off a name it was never given is the failure.
-            return json.includes('q3') || Object.keys(input).length === 0
-                ? null
-                : `did not reference the named project: ${json}`
-        },
+        // delete-object is deliberately NOT accepted here: deleting a workspace
+        // project before archiving it is the exact failure under test, so listing
+        // it would leave the scenario unable to fail.
+        expect: [ToolNames.PROJECT_MANAGEMENT, ToolNames.FIND_PROJECTS, ToolNames.GET_OVERVIEW],
         guards: 'instructions: workspace projects archive before delete',
     },
     {
@@ -124,10 +136,15 @@ const SCENARIOS: Scenario[] = [
         prompt: 'Add a task "Water the plants" due every Monday.',
         expect: [ToolNames.ADD_TASKS],
         check: (input) => {
-            const json = JSON.stringify(input).toLowerCase()
-            if (!json.includes('monday')) return `recurrence missing: ${json}`
-            return /"duestring"\s*:\s*"recurring/.test(json)
-                ? `dueString prefixed with "recurring": ${json}`
+            const task = firstItem(input, 'tasks')
+            if (!task) return `no tasks array: ${JSON.stringify(input)}`
+            const dueString = String(task.dueString ?? '')
+            // The recurrence has to be in dueString, not smuggled into content.
+            if (!dueString.toLowerCase().includes('monday')) {
+                return `recurrence not in dueString: ${JSON.stringify(task)}`
+            }
+            return /^\s*recurring/i.test(dueString)
+                ? `dueString prefixed with "recurring": ${dueString}`
                 : null
         },
         guards: 'input field description: no "recurring" prefix on dueString',
@@ -136,7 +153,16 @@ const SCENARIOS: Scenario[] = [
         id: 'today-includes-overdue',
         prompt: 'What should I focus on today?',
         expect: [ToolNames.FIND_TASKS_BY_DATE, ToolNames.GET_OVERVIEW],
-        guards: "input field description: startDate 'today'",
+        check: (input) => {
+            // get-overview takes no date argument; only assert on the dated tool.
+            if (!('startDate' in input)) return null
+            // A concrete YYYY-MM-DD satisfies the schema but loses the overdue
+            // behaviour the keyword carries.
+            return input.startDate === 'today'
+                ? null
+                : `startDate is ${JSON.stringify(input.startDate)}, not the 'today' keyword`
+        },
+        guards: "input field description: startDate 'today' and its overdue behaviour",
     },
     {
         id: 'no-container-echo',
@@ -162,10 +188,20 @@ function parseArgs() {
         const i = args.indexOf(flag)
         return i === -1 ? undefined : args[i + 1]
     }
+    const label = get('--label') ?? 'run'
+    // The label becomes a filename, so keep it to characters that cannot escape
+    // the output directory.
+    if (!/^[A-Za-z0-9_-]+$/.test(label)) {
+        console.error(`--label must match [A-Za-z0-9_-]+, got "${label}"`)
+        process.exit(1)
+    }
     return {
-        label: get('--label') ?? 'run',
+        label,
         repeats: Number(get('--repeats') ?? DEFAULT_REPEATS),
-        models: (get('--models') ?? DEFAULT_MODELS.join(',')).split(','),
+        models: (get('--models') ?? DEFAULT_MODELS.join(','))
+            .split(',')
+            .map((m) => m.trim())
+            .filter(Boolean),
         scenario: get('--scenario'),
     }
 }
@@ -180,6 +216,8 @@ function buildTools(): Anthropic.Tool[] {
     return registeredTools.map((tool) => ({
         name: tool.name,
         description: tool.description,
+        // `InputSchema` carries an index signature, so the extra JSON Schema
+        // keys Zod emits pass through rather than being rejected by the cast.
         input_schema: z.toJSONSchema(z.object(tool.parameters), {
             unrepresentable: 'any',
             io: 'input',
@@ -196,6 +234,12 @@ type Attempt = {
     calledTool: string | null
     pass: boolean
     reason: string | null
+    /**
+     * The request itself failed (auth, rate limit, transport). Distinct from a
+     * model that answered but chose wrong — counting these as routing failures
+     * would let a run with bad credentials report 0% and be saved as a result.
+     */
+    errored: boolean
     usage: Usage
 }
 
@@ -208,6 +252,7 @@ async function runAttempt(
     const base = {
         scenario: scenario.id,
         model,
+        errored: false,
         usage: { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 },
     }
     try {
@@ -243,28 +288,14 @@ async function runAttempt(
         return { ...base, calledTool: call.name, pass: reason === null, reason }
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        return { ...base, calledTool: null, pass: false, reason: `error: ${message}` }
-    }
-}
-
-async function mapWithLimit<T, R>(
-    items: T[],
-    limit: number,
-    fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-    const results: R[] = new Array(items.length)
-    let next = 0
-    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-        while (true) {
-            const index = next++
-            if (index >= items.length) return
-            const item = items[index]
-            if (item === undefined) return
-            results[index] = await fn(item)
+        return {
+            ...base,
+            calledTool: null,
+            pass: false,
+            errored: true,
+            reason: `request failed: ${message}`,
         }
-    })
-    await Promise.all(workers)
-    return results
+    }
 }
 
 async function main() {
@@ -277,6 +308,9 @@ async function main() {
 
     const client = new Anthropic()
     const tools = buildTools()
+    // queueTimeoutMs: 0 disables the default queue deadline, which exists for
+    // request-scoped work and does not apply to a batch script.
+    const limit = createLimiter(MAX_CONCURRENCY, { queueTimeoutMs: 0 })
 
     console.log(`label:     ${label}`)
     console.log(`tools:     ${tools.length}`)
@@ -291,8 +325,8 @@ async function main() {
         if (!first) continue
         attempts.push(await runAttempt(client, model, first, tools))
         attempts.push(
-            ...(await mapWithLimit(jobs.slice(1), MAX_CONCURRENCY, (s) =>
-                runAttempt(client, model, s, tools),
+            ...(await Promise.all(
+                jobs.slice(1).map((s) => limit(() => runAttempt(client, model, s, tools))),
             )),
         )
         console.log(`${model}: done`)
@@ -302,7 +336,8 @@ async function main() {
     for (const model of models) {
         console.log(`\n${model}`)
         for (const s of scenarios) {
-            const rows = attempts.filter((a) => a.model === model && a.scenario === s.id)
+            const all = attempts.filter((a) => a.model === model && a.scenario === s.id)
+            const rows = all.filter((a) => !a.errored)
             const passed = rows.filter((a) => a.pass).length
             const rate = rows.length ? Math.round((passed / rows.length) * 100) : 0
             const mark = rate === 100 ? '✓' : rate >= 60 ? '~' : '✗'
@@ -314,9 +349,17 @@ async function main() {
                 )
             }
         }
-        const rows = attempts.filter((a) => a.model === model)
+        const rows = attempts.filter((a) => a.model === model && !a.errored)
         const passed = rows.filter((a) => a.pass).length
         console.log(`  overall: ${passed}/${rows.length}`)
+    }
+
+    const errored = attempts.filter((a) => a.errored)
+    if (errored.length > 0) {
+        console.error(
+            `\n${errored.length}/${attempts.length} requests failed outright ` +
+                `(not counted as routing failures). First: ${errored[0]?.reason}`,
+        )
     }
 
     const total = attempts.reduce(
@@ -337,6 +380,11 @@ async function main() {
     const out = `tmp/eval/${label}.json`
     writeFileSync(out, JSON.stringify({ label, models, repeats, attempts }, null, 2))
     console.log(`\nwrote ${out}`)
+
+    // A run that could not obtain its samples is not a result to compare against.
+    if (errored.length > 0) {
+        process.exitCode = 1
+    }
 }
 
 main().catch((error) => {
