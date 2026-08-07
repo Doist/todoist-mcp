@@ -1,3 +1,9 @@
+## [12.5.1](https://github.com/Doist/todoist-mcp/compare/v12.5.0...v12.5.1) (2026-08-07)
+
+### Bug Fixes
+
+* derive the tool surface from a single registry ([#559](https://github.com/Doist/todoist-mcp/issues/559)) ([67477e0](https://github.com/Doist/todoist-mcp/commit/67477e0153f394c15c1b97a7a08afd7a3c9dc23a))
+
 ## [12.5.0](https://github.com/Doist/todoist-mcp/compare/v12.4.2...v12.5.0) (2026-08-05)
 
 ### Features
