@@ -17,49 +17,7 @@
 import { readFileSync } from 'node:fs'
 import { TodoistApi } from '@doist/todoist-sdk'
 import { config } from 'dotenv'
-import { addComments } from '../src/tools/add-comments.js'
-import { addFilters } from '../src/tools/add-filters.js'
-import { addLabels } from '../src/tools/add-labels.js'
-import { addProjects } from '../src/tools/add-projects.js'
-import { addSections } from '../src/tools/add-sections.js'
-import { addTasks } from '../src/tools/add-tasks.js'
-import { analyzeProjectHealth } from '../src/tools/analyze-project-health.js'
-import { completeTasks } from '../src/tools/complete-tasks.js'
-import { deleteObject } from '../src/tools/delete-object.js'
-import { exportProjectTemplate } from '../src/tools/export-project-template.js'
-import { fetchObject } from '../src/tools/fetch-object.js'
-import { fetch } from '../src/tools/fetch.js'
-import { findActivity } from '../src/tools/find-activity.js'
-import { findComments } from '../src/tools/find-comments.js'
-import { findCompletedTasks } from '../src/tools/find-completed-tasks.js'
-import { findFilters } from '../src/tools/find-filters.js'
-import { findLabels } from '../src/tools/find-labels.js'
-import { findProjectCollaborators } from '../src/tools/find-project-collaborators.js'
-import { findProjects } from '../src/tools/find-projects.js'
-import { findSections } from '../src/tools/find-sections.js'
-import { findTasksByDate } from '../src/tools/find-tasks-by-date.js'
-import { findTasks } from '../src/tools/find-tasks.js'
-import { getOverview } from '../src/tools/get-overview.js'
-import { getProjectActivityStats } from '../src/tools/get-project-activity-stats.js'
-import { getProjectHealth } from '../src/tools/get-project-health.js'
-import { getWorkspaceInsights } from '../src/tools/get-workspace-insights.js'
-import { importProjectTemplate } from '../src/tools/import-project-template.js'
-import { listWorkspaces } from '../src/tools/list-workspaces.js'
-import { manageAssignments } from '../src/tools/manage-assignments.js'
-import { projectManagement } from '../src/tools/project-management.js'
-import { projectMove } from '../src/tools/project-move.js'
-import { reorderObjects } from '../src/tools/reorder-objects.js'
-import { rescheduleTasks } from '../src/tools/reschedule-tasks.js'
-import { search } from '../src/tools/search.js'
-import { uncompleteTasks } from '../src/tools/uncomplete-tasks.js'
-import { updateComments } from '../src/tools/update-comments.js'
-import { updateFilters } from '../src/tools/update-filters.js'
-import { updateLabels } from '../src/tools/update-labels.js'
-import { updateProjects } from '../src/tools/update-projects.js'
-import { updateSections } from '../src/tools/update-sections.js'
-import { updateTasks } from '../src/tools/update-tasks.js'
-import { userInfo } from '../src/tools/user-info.js'
-import { viewAttachment } from '../src/tools/view-attachment.js'
+import { registeredTools } from '../src/tool-registry.js'
 import { createTodoistClient, runWithUsageTrackingContext } from '../src/usage-tracking.js'
 
 config()
@@ -75,51 +33,9 @@ type ExecutableTool = {
     ) => Promise<{ textContent?: string; structuredContent?: unknown; contentItems?: unknown[] }>
 }
 
-const tools: Record<string, ExecutableTool> = {
-    'add-tasks': addTasks,
-    'add-projects': addProjects,
-    'add-filters': addFilters,
-    'add-sections': addSections,
-    'add-comments': addComments,
-    'add-labels': addLabels,
-    'complete-tasks': completeTasks,
-    'uncomplete-tasks': uncompleteTasks,
-    'delete-object': deleteObject,
-    fetch: fetch,
-    'fetch-object': fetchObject,
-    'find-activity': findActivity,
-    'find-comments': findComments,
-    'find-filters': findFilters,
-    'find-completed-tasks': findCompletedTasks,
-    'find-labels': findLabels,
-    'find-project-collaborators': findProjectCollaborators,
-    'find-projects': findProjects,
-    'find-sections': findSections,
-    'find-tasks': findTasks,
-    'find-tasks-by-date': findTasksByDate,
-    'get-overview': getOverview,
-    'get-project-health': getProjectHealth,
-    'get-project-activity-stats': getProjectActivityStats,
-    'analyze-project-health': analyzeProjectHealth,
-    'get-workspace-insights': getWorkspaceInsights,
-    'export-project-template': exportProjectTemplate,
-    'import-project-template': importProjectTemplate,
-    'list-workspaces': listWorkspaces,
-    'manage-assignments': manageAssignments,
-    'project-management': projectManagement,
-    'project-move': projectMove,
-    'reorder-objects': reorderObjects,
-    'reschedule-tasks': rescheduleTasks,
-    search: search,
-    'update-comments': updateComments,
-    'update-filters': updateFilters,
-    'update-labels': updateLabels,
-    'update-projects': updateProjects,
-    'update-sections': updateSections,
-    'update-tasks': updateTasks,
-    'user-info': userInfo,
-    'view-attachment': viewAttachment,
-}
+const tools: Record<string, ExecutableTool> = Object.fromEntries(
+    registeredTools.map((tool) => [tool.name, tool as ExecutableTool]),
+)
 
 function printUsage() {
     console.log(`

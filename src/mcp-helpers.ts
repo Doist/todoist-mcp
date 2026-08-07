@@ -3,7 +3,7 @@ import { registerAppTool } from '@modelcontextprotocol/ext-apps/server'
 import type { McpServer, ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { ContentBlock, ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
 import type { z } from 'zod'
-import type { TodoistTool } from './todoist-tool.js'
+import type { AnyTodoistTool, ExecuteResult } from './todoist-tool.js'
 import { formatToolExecutionError } from './tool-execution-error.js'
 import { runWithUsageTrackingContext } from './usage-tracking.js'
 import { executeWithRetry } from './utils/retry.js'
@@ -234,13 +234,13 @@ function stripEmailsFromText(text: string): string {
 /**
  * Register a Todoist tool in an MCP server.
  */
-function registerTool<Params extends z.ZodRawShape, Output extends z.ZodRawShape = z.ZodRawShape>({
+function registerTool({
     tool,
     server,
     client,
     features = [],
 }: {
-    tool: TodoistTool<Params, Output>
+    tool: AnyTodoistTool
     server: McpServer
     client: TodoistApi
     features?: Features
@@ -249,14 +249,25 @@ function registerTool<Params extends z.ZodRawShape, Output extends z.ZodRawShape
         features.some((f) => f.name === 'strip_emails') &&
         TOOLS_WITH_USER_EMAILS.includes(tool.name as (typeof TOOLS_WITH_USER_EMAILS)[number])
 
-    // @ts-expect-error I give up
-    const cb: ToolCallback<Params> = async (args: z.infer<z.ZodObject<Params>>, _context) => {
+    // `AnyTodoistTool` declares `args` as `never` so that tools of every
+    // parameter shape can be held in one collection. Widening it back is safe
+    // here and only here: the SDK has already validated `args` against this
+    // tool's own `inputSchema` before invoking the callback.
+    const execute = tool.execute as (
+        args: Record<string, unknown>,
+        client: TodoistApi,
+    ) => ExecuteResult<z.ZodRawShape>
+
+    // `getToolOutput` assembles its result incrementally and so is typed as a
+    // plain record, which does not structurally match `CallToolResult` (that
+    // requires `content`). The values it produces are valid results; only the
+    // static shape is looser.
+    // @ts-expect-error see above
+    const cb: ToolCallback<z.ZodRawShape> = async (args, _context) => {
         try {
             let { textContent, structuredContent, contentItems } =
                 await runWithUsageTrackingContext(tool.name, () =>
-                    executeWithRetry(() =>
-                        tool.execute(args as z.infer<z.ZodObject<Params>>, client),
-                    ),
+                    executeWithRetry(() => execute(args, client)),
                 )
 
             // Strip emails from outputs for ChatGPT clients on collaborator-related tools
@@ -279,7 +290,7 @@ function registerTool<Params extends z.ZodRawShape, Output extends z.ZodRawShape
     const toolConfig = {
         description: tool.description,
         inputSchema: tool.parameters,
-        ...(tool.outputSchema ? { outputSchema: tool.outputSchema as Output } : {}),
+        ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
         annotations: getMcpAnnotations(tool),
         ...(tool._meta ? { _meta: tool._meta } : {}),
     }

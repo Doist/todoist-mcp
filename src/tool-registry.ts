@@ -1,38 +1,23 @@
-import { FEATURE_NAMES, type Feature, type FeatureName, type Features } from './mcp-helpers.js'
-import { getMcpServer } from './mcp-server.js'
-import {
-    requireValidTodoistToken,
-    type RequireValidTodoistTokenOptions,
-} from './middleware/require-valid-todoist-token.js'
-import { registeredTools, toolRegistry } from './tool-registry.js'
-// Comment management tools
+import { taskListResourceUri } from './mcp-apps/resources.js'
+import type { AnyTodoistTool } from './todoist-tool.js'
 import { addComments } from './tools/add-comments.js'
-// Filter management tools
 import { addFilters } from './tools/add-filters.js'
-// Label management tools
 import { addLabels } from './tools/add-labels.js'
-// Project management tools
 import { addProjects } from './tools/add-projects.js'
-// Reminder management tools
 import { addReminders } from './tools/add-reminders.js'
-// Section management tools
 import { addSections } from './tools/add-sections.js'
-// Task management tools
 import { addTasks } from './tools/add-tasks.js'
 import { analyzeProjectHealth } from './tools/analyze-project-health.js'
 import { completeTasks } from './tools/complete-tasks.js'
-// General tools
 import { deleteObject } from './tools/delete-object.js'
 import { exportProjectTemplate } from './tools/export-project-template.js'
 import { fetchObject } from './tools/fetch-object.js'
 import { fetch } from './tools/fetch.js'
-// Activity and audit tools
 import { findActivity } from './tools/find-activity.js'
 import { findComments } from './tools/find-comments.js'
 import { findCompletedTasks } from './tools/find-completed-tasks.js'
 import { findFilters } from './tools/find-filters.js'
 import { findLabels } from './tools/find-labels.js'
-// Assignment and collaboration tools
 import { findProjectCollaborators } from './tools/find-project-collaborators.js'
 import { findProjects } from './tools/find-projects.js'
 import { findReminders } from './tools/find-reminders.js'
@@ -62,89 +47,118 @@ import { updateSections } from './tools/update-sections.js'
 import { updateTasks } from './tools/update-tasks.js'
 import { userInfo } from './tools/user-info.js'
 import { viewAttachment } from './tools/view-attachment.js'
-import { validateTodoistToken } from './utils/validate-todoist-token.js'
 
 /**
- * Every tool, keyed by its export name.
+ * `find-tasks-by-date` backed by the interactive task-list widget.
  *
- * Derived from the registry so it cannot drift from what the server registers.
+ * The `_meta.ui` marker is what routes a tool through the MCP Apps registration
+ * path and tells a host which resource to render its results with.
  */
-const tools = toolRegistry
+const findTasksByDateWithUi = {
+    ...findTasksByDate,
+    _meta: {
+        ui: {
+            resourceUri: taskListResourceUri,
+        },
+    },
+}
 
-export {
+/**
+ * Every tool the MCP server exposes, keyed by its public export name and held
+ * in registration order.
+ *
+ * This is the single source of truth for the tool surface. The MCP server, the
+ * package's public `tools` export, the schema validator and the token-footprint
+ * baseline all derive from it, so a tool added here is picked up everywhere.
+ *
+ * Note this holds the *registered* objects, which is not always the bare tool
+ * definition — `find-tasks-by-date` is wrapped to carry its widget metadata.
+ */
+const toolRegistry = {
     // Task management tools
     addTasks,
     completeTasks,
-    findTasks,
-    findTasksByDate,
-    findCompletedTasks,
+    uncompleteTasks,
+    updateTasks,
     rescheduleTasks,
+    findTasks,
+    findTasksByDate: findTasksByDateWithUi,
+    findCompletedTasks,
+
     // Project management tools
     addProjects,
+    updateProjects,
     findProjects,
-    analyzeProjectHealth,
     projectManagement,
     projectMove,
+
     // Section management tools
     addSections,
+    updateSections,
     findSections,
+
     // Comment management tools
     addComments,
     findComments,
+    updateComments,
+
     // Reminder management tools
     addReminders,
     findReminders,
     updateReminders,
+
+    // Attachment tools
+    viewAttachment,
+
     // Label management tools
     addLabels,
-    findLabels,
     updateLabels,
+    findLabels,
+
     // Filter management tools
-    addFilters,
     findFilters,
+    addFilters,
+    updateFilters,
+
     // Activity and audit tools
     findActivity,
     getProductivityStats,
+
     // Health and insights tools
     getProjectHealth,
     getProjectActivityStats,
+    analyzeProjectHealth,
     getWorkspaceInsights,
+
+    // General tools
+    getOverview,
+    deleteObject,
+    fetchObject,
+    reorderObjects,
+    userInfo,
+
     // Assignment and collaboration tools
     findProjectCollaborators,
     manageAssignments,
+
     // Template tools
     exportProjectTemplate,
     importProjectTemplate,
+
     // Workspace tools
     listWorkspaces,
-    // Attachment tools
-    viewAttachment,
-    // General tools
-    deleteObject,
-    fetchObject,
-    getOverview,
-    reorderObjects,
-    userInfo,
-    uncompleteTasks,
-    updateComments,
-    updateFilters,
-    updateProjects,
-    updateSections,
-    updateTasks,
+
     // OpenAI MCP tools
     search,
     fetch,
-    // Server and types
-    getMcpServer,
-    tools,
-    registeredTools,
-    FEATURE_NAMES,
-    type Feature,
-    type FeatureName,
-    type Features,
-    // Token validation middleware
-    requireValidTodoistToken,
-    type RequireValidTodoistTokenOptions,
-    // Token validation utility
-    validateTodoistToken,
 }
+
+/**
+ * The registered tools in registration order.
+ *
+ * `tools/list` preserves this ordering, which is insertion order on
+ * {@link toolRegistry}.
+ */
+const registeredTools: readonly AnyTodoistTool[] = Object.values(toolRegistry)
+
+export { registeredTools, toolRegistry }

@@ -39,10 +39,11 @@ src/
 ├─ main-http.ts               # Express entry: thin bootstrap — reads env, builds the app, listen()
 ├─ http-app.ts                # createHttpApp(): the Express app + middleware chain (Host/Origin guard scoped to /mcp). Pure/side-effect-free so it's testable
 ├─ index.ts                   # Public package exports — a curated subset of tools + helpers + types. NOT the full registry.
-├─ mcp-server.ts              # getMcpServer() factory. **Authoritative tool registry** — imports every tool, calls registerTool() for each, registers productivity-analysis prompt, contains the giant `instructions` string shown to the LLM
+├─ mcp-server.ts              # getMcpServer() factory. Iterates `registeredTools`, registers the productivity-analysis prompt, contains the giant `instructions` string shown to the LLM
+├─ tool-registry.ts           # **Authoritative tool registry** — the ordered list of every registered tool. mcp-server, index.ts, run-tool.ts, validate-schemas.ts and the token-footprint test all derive from it
 ├─ mcp-helpers.ts             # registerTool(), FEATURE_NAMES, output formatting, retry wrapping
 ├─ usage-tracking.ts          # Shared Todoist request headers + SDK customFetch wrapper for MCP usage attribution
-├─ todoist-tool.ts            # TodoistTool<Params, Output> contract (the tool interface)
+├─ todoist-tool.ts            # TodoistTool<Params, Output> contract (the tool interface) + AnyTodoistTool for mixed-shape collections
 ├─ tool-helpers.ts            # Shared transforms: mapTask, fetchAllPages, toWildcardQuery, compileWildcardQuery + matchesWildcardQuery (client-side name match), resolveInboxProjectId, isInboxProjectId, isPersonalProject, isWorkspaceProject. Re-exports filter-helpers.
 ├─ filter-helpers.ts          # appendToQuery, buildResponsibleUserQueryFilter, resolveResponsibleUser
 ├─ tool-execution-error.ts    # formatToolExecutionError (actionable API-error formatting, incl. known error_tag hints like MAX_ITEMS_LIMIT_REACHED) + formatBatchItemError (single-line per-item failure summaries — use in batch tools instead of error.message)
@@ -58,8 +59,8 @@ src/
 1. `main.ts` reads `TODOIST_API_KEY` (and optional `TODOIST_BASE_URL`) from env.
 2. Calls `getMcpServer()` in `mcp-server.ts`, which:
     - instantiates a shared tracked `TodoistApi` client via `usage-tracking.ts`,
-    - iterates every imported tool object and calls
-      `registerTool(server, tool, client, features)` from `mcp-helpers.ts`,
+    - iterates `registeredTools` from `tool-registry.ts` and calls
+      `registerTool({ tool, server, client, features })` from `mcp-helpers.ts`,
     - registers the `productivity-analysis` prompt,
     - returns the configured `McpServer`.
 3. `registerTool()` unwraps the `TodoistTool` contract, wires MCP's
@@ -118,7 +119,7 @@ Tool files are flat in `src/tools/` (kebab-case). Don't enumerate — grep. Curr
 - **Productivity/activity** — get-overview, get-productivity-stats, find-activity
 - **Generic** — delete-object, fetch, fetch-object, search, reorder-objects, view-attachment
 
-New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; import + register in `src/mcp-server.ts`; add tool name to `src/utils/tool-names.ts`; add to `src/index.ts` (exports) and `scripts/run-tool.ts` (direct-run registry); add annotation entry to `src/tools/tool-annotations.test.ts`; write `<tool-name>.test.ts` alongside it.
+New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; add the name to `src/utils/tool-names.ts`; add the tool to `src/tool-registry.ts` (everything else derives from it) and to `src/index.ts` (public exports); add an annotation entry to `src/tools/tool-annotations.test.ts`; write `<tool-name>.test.ts` alongside it. `src/tool-registry.test.ts` fails the build if those views disagree.
 
 ## `src/utils/` catalog — don't reimplement
 

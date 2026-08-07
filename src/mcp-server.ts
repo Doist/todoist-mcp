@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
-import { registerTaskListApp, taskListResourceUri } from './mcp-apps/resources.js'
+import { registerTaskListApp } from './mcp-apps/resources.js'
 import {
     FEATURE_NAMES,
     type Feature,
@@ -9,53 +9,7 @@ import {
     registerTool,
 } from './mcp-helpers.js'
 import { productivityAnalysis } from './prompts/productivity-analysis.js'
-import { addComments } from './tools/add-comments.js'
-import { addFilters } from './tools/add-filters.js'
-import { addLabels } from './tools/add-labels.js'
-import { addProjects } from './tools/add-projects.js'
-import { addReminders } from './tools/add-reminders.js'
-import { addSections } from './tools/add-sections.js'
-import { addTasks } from './tools/add-tasks.js'
-import { analyzeProjectHealth } from './tools/analyze-project-health.js'
-import { completeTasks } from './tools/complete-tasks.js'
-import { deleteObject } from './tools/delete-object.js'
-import { exportProjectTemplate } from './tools/export-project-template.js'
-import { fetchObject } from './tools/fetch-object.js'
-import { fetch } from './tools/fetch.js'
-import { findActivity } from './tools/find-activity.js'
-import { findComments } from './tools/find-comments.js'
-import { findCompletedTasks } from './tools/find-completed-tasks.js'
-import { findFilters } from './tools/find-filters.js'
-import { findLabels } from './tools/find-labels.js'
-import { findProjectCollaborators } from './tools/find-project-collaborators.js'
-import { findProjects } from './tools/find-projects.js'
-import { findReminders } from './tools/find-reminders.js'
-import { findSections } from './tools/find-sections.js'
-import { findTasksByDate } from './tools/find-tasks-by-date.js'
-import { findTasks } from './tools/find-tasks.js'
-import { getOverview } from './tools/get-overview.js'
-import { getProductivityStats } from './tools/get-productivity-stats.js'
-import { getProjectActivityStats } from './tools/get-project-activity-stats.js'
-import { getProjectHealth } from './tools/get-project-health.js'
-import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
-import { importProjectTemplate } from './tools/import-project-template.js'
-import { listWorkspaces } from './tools/list-workspaces.js'
-import { manageAssignments } from './tools/manage-assignments.js'
-import { projectManagement } from './tools/project-management.js'
-import { projectMove } from './tools/project-move.js'
-import { reorderObjects } from './tools/reorder-objects.js'
-import { rescheduleTasks } from './tools/reschedule-tasks.js'
-import { search } from './tools/search.js'
-import { uncompleteTasks } from './tools/uncomplete-tasks.js'
-import { updateComments } from './tools/update-comments.js'
-import { updateFilters } from './tools/update-filters.js'
-import { updateLabels } from './tools/update-labels.js'
-import { updateProjects } from './tools/update-projects.js'
-import { updateReminders } from './tools/update-reminders.js'
-import { updateSections } from './tools/update-sections.js'
-import { updateTasks } from './tools/update-tasks.js'
-import { userInfo } from './tools/user-info.js'
-import { viewAttachment } from './tools/view-attachment.js'
+import { registeredTools } from './tool-registry.js'
 import { TODOIST_MCP_VERSION, createTodoistClient } from './usage-tracking.js'
 
 export const instructions = `
@@ -195,98 +149,18 @@ function getMcpServer({
     /**
      * MCP Apps
      */
-    const findTasksByDateToolWithUi = {
-        ...findTasksByDate,
-        _meta: {
-            ui: {
-                resourceUri: taskListResourceUri,
-            },
-        },
-    }
-
     registerTaskListApp(server)
 
     /**
      * Tools
+     *
+     * The surface is defined by `registeredTools`; see `tool-registry.ts`.
      */
     const toolArgs = { server, client: todoist, features }
 
-    // Task management tools
-    registerTool({ tool: addTasks, ...toolArgs })
-    registerTool({ tool: completeTasks, ...toolArgs })
-    registerTool({ tool: uncompleteTasks, ...toolArgs })
-    registerTool({ tool: updateTasks, ...toolArgs })
-    registerTool({ tool: rescheduleTasks, ...toolArgs })
-    registerTool({ tool: findTasks, ...toolArgs })
-    registerTool({ tool: findTasksByDateToolWithUi, ...toolArgs })
-    registerTool({ tool: findCompletedTasks, ...toolArgs })
-
-    // Project management tools
-    registerTool({ tool: addProjects, ...toolArgs })
-    registerTool({ tool: updateProjects, ...toolArgs })
-    registerTool({ tool: findProjects, ...toolArgs })
-    registerTool({ tool: projectManagement, ...toolArgs })
-    registerTool({ tool: projectMove, ...toolArgs })
-
-    // Section management tools
-    registerTool({ tool: addSections, ...toolArgs })
-    registerTool({ tool: updateSections, ...toolArgs })
-    registerTool({ tool: findSections, ...toolArgs })
-
-    // Comment management tools
-    registerTool({ tool: addComments, ...toolArgs })
-    registerTool({ tool: findComments, ...toolArgs })
-    registerTool({ tool: updateComments, ...toolArgs })
-
-    // Reminder management tools
-    registerTool({ tool: addReminders, ...toolArgs })
-    registerTool({ tool: findReminders, ...toolArgs })
-    registerTool({ tool: updateReminders, ...toolArgs })
-
-    // Attachment tools
-    registerTool({ tool: viewAttachment, ...toolArgs })
-
-    // Label management tools
-    registerTool({ tool: addLabels, ...toolArgs })
-    registerTool({ tool: updateLabels, ...toolArgs })
-    registerTool({ tool: findLabels, ...toolArgs })
-
-    // Filter management tools
-    registerTool({ tool: findFilters, ...toolArgs })
-    registerTool({ tool: addFilters, ...toolArgs })
-    registerTool({ tool: updateFilters, ...toolArgs })
-
-    // Activity and audit tools
-    registerTool({ tool: findActivity, ...toolArgs })
-    registerTool({ tool: getProductivityStats, ...toolArgs })
-
-    // Health and insights tools
-    registerTool({ tool: getProjectHealth, ...toolArgs })
-    registerTool({ tool: getProjectActivityStats, ...toolArgs })
-    registerTool({ tool: analyzeProjectHealth, ...toolArgs })
-    registerTool({ tool: getWorkspaceInsights, ...toolArgs })
-
-    // General tools
-    registerTool({ tool: getOverview, ...toolArgs })
-    registerTool({ tool: deleteObject, ...toolArgs })
-    registerTool({ tool: fetchObject, ...toolArgs })
-    registerTool({ tool: reorderObjects, ...toolArgs })
-    registerTool({ tool: userInfo, ...toolArgs })
-
-    // Assignment and collaboration tools
-    registerTool({ tool: findProjectCollaborators, ...toolArgs })
-    registerTool({ tool: manageAssignments, ...toolArgs })
-
-    // Template tools
-    registerTool({ tool: exportProjectTemplate, ...toolArgs })
-    registerTool({ tool: importProjectTemplate, ...toolArgs })
-
-    // Workspace tools
-    registerTool({ tool: listWorkspaces, ...toolArgs })
-
-    // OpenAI MCP tools
-    registerTool({ tool: search, ...toolArgs })
-    registerTool({ tool: fetch, ...toolArgs })
+    for (const tool of registeredTools) {
+        registerTool({ tool, ...toolArgs })
+    }
 
     /**
      * Prompts

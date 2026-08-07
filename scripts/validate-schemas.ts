@@ -158,14 +158,15 @@ function validateToolSchema(tool: {
  */
 async function validateAllSchemas(verbose: boolean = false): Promise<ValidationResult> {
     try {
-        const { tools } = await import(`${process.cwd()}/dist/index.js`)
+        const { registeredTools } = await import(`${process.cwd()}/dist/index.js`)
+
+        const allTools = registeredTools
 
         const allIssues: ValidationIssue[] = []
         let totalParameters = 0
-        const toolNames = Object.keys(tools)
 
-        for (const toolName of toolNames) {
-            const tool = tools[toolName]
+        for (const tool of allTools) {
+            const toolName = tool.name
             const toolIssues = validateToolSchema(tool)
             allIssues.push(...toolIssues)
 
@@ -199,7 +200,7 @@ async function validateAllSchemas(verbose: boolean = false): Promise<ValidationR
         return {
             success: allIssues.length === 0,
             issues: allIssues,
-            toolsChecked: toolNames.length,
+            toolsChecked: allTools.length,
             parametersChecked: totalParameters,
         }
     } catch (error) {
