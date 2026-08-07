@@ -46,8 +46,15 @@ function firstItem(input: Record<string, unknown>, key: string): Record<string, 
 type Scenario = {
     id: string
     prompt: string
-    /** Any of these counts as the right tool. */
-    expect: string[]
+    /**
+     * Any of these counts as the right tool. Use for a rule that names the
+     * tool to reach for. Omit when the rule is "don't do X" — an allowlist
+     * then fails legitimate lookup steps it did not anticipate, which is
+     * noise, not signal.
+     */
+    expect?: string[]
+    /** Calling any of these fails the scenario. Use for "don't do X" rules. */
+    forbid?: string[]
     /** Extra assertion on the arguments; return a reason on failure. */
     check?: Check
     /** What this scenario is protecting. */
@@ -61,7 +68,9 @@ const SCENARIOS: Scenario[] = [
         // the rule under test.
         id: 'reschedule-not-update',
         prompt: 'Move task 6XG4Vw2c9J ("Weekly review", repeats every Monday) to next Tuesday.',
-        expect: [ToolNames.RESCHEDULE_TASKS],
+        // The rule is "not update-tasks", so anything else -- including a
+        // preliminary lookup -- is acceptable.
+        forbid: [ToolNames.UPDATE_TASKS],
         guards: 'instructions: reschedule-tasks vs update-tasks (recurrence loss)',
     },
     {
@@ -113,10 +122,10 @@ const SCENARIOS: Scenario[] = [
     {
         id: 'archive-before-delete',
         prompt: 'Delete workspace project 6XQ3Plan99 ("Q3 Planning").',
-        // delete-object is deliberately NOT accepted here: deleting a workspace
-        // project before archiving it is the exact failure under test, so listing
-        // it would leave the scenario unable to fail.
-        expect: [ToolNames.PROJECT_MANAGEMENT, ToolNames.FIND_PROJECTS, ToolNames.GET_OVERVIEW],
+        // The rule is "archive first", so the only wrong first move is the
+        // delete itself. Archiving and any lookup (find-projects, get-overview,
+        // fetch-object) are all legitimate openers.
+        forbid: [ToolNames.DELETE_OBJECT],
         guards: 'instructions: workspace projects archive before delete',
     },
     {
@@ -276,13 +285,26 @@ async function runAttempt(
         if (!call) {
             return { ...base, calledTool: null, pass: false, reason: 'no tool call' }
         }
-        if (!scenario.expect.includes(call.name)) {
+        if (scenario.forbid?.includes(call.name)) {
+            return {
+                ...base,
+                calledTool: call.name,
+                pass: false,
+                reason: `called ${call.name}, which this rule forbids`,
+            }
+        }
+        if (scenario.expect && !scenario.expect.includes(call.name)) {
             return {
                 ...base,
                 calledTool: call.name,
                 pass: false,
                 reason: `expected ${scenario.expect.join(' or ')}`,
             }
+        }
+        // An argument check written for a specific tool must not run against a
+        // different one a forbid-only scenario legitimately allows.
+        if (scenario.forbid && !scenario.expect) {
+            return { ...base, calledTool: call.name, pass: true, reason: null }
         }
         const reason = scenario.check?.(call.input as Record<string, unknown>) ?? null
         return { ...base, calledTool: call.name, pass: reason === null, reason }
