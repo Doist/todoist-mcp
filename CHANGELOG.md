@@ -1,3 +1,9 @@
+## [12.5.3](https://github.com/Doist/todoist-mcp/compare/v12.5.2...v12.5.3) (2026-08-07)
+
+### Performance Improvements
+
+* cut the instructions block to cross-tool guidance only ([#563](https://github.com/Doist/todoist-mcp/issues/563)) ([abffb11](https://github.com/Doist/todoist-mcp/commit/abffb114199e0d76861f23e57e6444495586dc89)), closes [#561](https://github.com/Doist/todoist-mcp/issues/561) [#561](https://github.com/Doist/todoist-mcp/issues/561) [#561](https://github.com/Doist/todoist-mcp/issues/561) [#558](https://github.com/Doist/todoist-mcp/issues/558) [#562](https://github.com/Doist/todoist-mcp/issues/562)
+
 ## [12.5.2](https://github.com/Doist/todoist-mcp/compare/v12.5.1...v12.5.2) (2026-08-07)
 
 ### Performance Improvements
