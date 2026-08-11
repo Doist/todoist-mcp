@@ -112,7 +112,12 @@ npm run eval -- --label after
 
 Each run prints a pass rate per scenario per model and writes `tmp/eval/<label>.json`; diff the two. Narrow while iterating with `--scenario <id>`, `--repeats N`, `--models a,b`.
 
-Only the first tool call of a turn is inspected and nothing is executed, so it touches no Todoist data and needs no `TODOIST_API_KEY`. It does call real models, so it is deliberately **not** part of `npm test` — it costs money and is non-deterministic.
+Nothing is executed against Todoist, so it touches no Todoist data and needs no `TODOIST_API_KEY`. It does call real models, so it is deliberately **not** part of `npm test` — it costs money and is non-deterministic.
+
+Each attempt is judged on one call. Usually that is the first, with two exceptions, both there because a model doing the right thing was being scored as a failure:
+
+- **Context tools** (`CONTEXT_TOOLS`, currently just `user-info`) are answered with a canned result and judging moves to the next call. A model cannot turn "last week" into a date range without knowing today's date and the user's timezone, so asking first is correct — but an `expect` allowlist naming the tool under test cannot also name every reasonable lookup that precedes it.
+- **A turn carrying several calls** is judged on the first one that is not a context tool, since the order between "ask for the date" and "query the log" is arbitrary. A forbidden call outranks that, being the whole point of a forbid rule.
 
 Two things this has already caught that review and reading did not:
 
@@ -145,3 +150,5 @@ Scenarios live at the top of `scripts/eval-instructions.ts`. Two shapes, and pic
 - **`forbid`** — for a rule of the form "don't do X". Prefer this whenever the rule is prohibitive. An allowlist then has to enumerate every legitimate opener, and it will miss some: a model looking a project up with `fetch-object` before deleting it is behaving correctly, and an allowlist that forgot `fetch-object` scores it as a failure.
 
 Make sure a scenario can actually fail. One early scenario listed the destructive tool in its own `expect` and checked an argument condition that was true by construction — it scored 100% while measuring nothing.
+
+The opposite mistake is just as expensive: `completed-via-activity` reported 0% on Sonnet 5 for months while the model was answering it perfectly, because it opened with `user-info` and the allowlist only named `find-activity`. If a scenario sits at 0% on a capable model, check what it is actually calling before rewriting any tool description — a failure with a plausible-looking first call is worth a moment's suspicion. Adding the lookup to `expect` is not the fix; the judge would then pass on the lookup alone and check nothing. Add it to `CONTEXT_TOOLS` with a stub result instead.

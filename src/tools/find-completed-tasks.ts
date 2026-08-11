@@ -111,7 +111,7 @@ const OutputSchema = {
 const findCompletedTasks = {
     name: ToolNames.FIND_COMPLETED_TASKS,
     description:
-        'Get completed tasks. since/until are optional and default to a 7-day window when omitted. Includes all collaborators by default. Person-specific queries (summaries, plans, reports) require responsibleUser.',
+        'Get completed tasks in a date range. For "what did I complete/get done" questions, use find-activity instead — it reports completion events, including every occurrence of a recurring task, which this tool does not. since/until are optional and default to a 7-day window when omitted. Includes all collaborators by default. Person-specific queries (summaries, plans, reports) require responsibleUser.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
