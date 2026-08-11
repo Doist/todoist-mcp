@@ -36,8 +36,16 @@ import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import { instructions } from '../src/mcp-server.js'
 import { registeredTools } from '../src/tool-registry.js'
+import type { UserInfoStructured } from '../src/tools/user-info.js'
 import { createLimiter } from '../src/utils/concurrency.js'
 import { ToolNames } from '../src/utils/tool-names.js'
+
+/**
+ * The user ID the stubbed `user-info` reports. A scenario asking a first-person
+ * question can assert the model carried it into a filter argument rather than
+ * querying everyone.
+ */
+const EVAL_USER_ID = '2671355'
 
 type Check = (input: Record<string, unknown>) => string | null
 
@@ -91,9 +99,14 @@ const SCENARIOS: Scenario[] = [
             if (!input.dateFrom || !input.dateTo) {
                 return 'no dateFrom/dateTo, so this searches all history rather than last week'
             }
+            // find-activity reports every user's events by default, so "what did
+            // I get done" answered without this includes collaborators' work.
+            if (input.initiatorId !== EVAL_USER_ID) {
+                return `initiatorId is ${JSON.stringify(input.initiatorId)}, so this reports every collaborator's completions, not "I"`
+            }
             return null
         },
-        guards: 'instructions: find-activity vs find-completed-tasks, over a bounded range',
+        guards: 'instructions: find-activity vs find-completed-tasks, over a bounded range, filtered to the asker',
     },
     {
         id: 'resolve-person',
@@ -208,18 +221,20 @@ const MAX_CONCURRENCY = 4
  * every reasonable lookup that precedes it. So a call to one of these is
  * answered with the canned result below and judging moves to the next call.
  *
- * The result is fiction, but only its shape and internal consistency matter —
- * no scenario asserts on these values, and nothing runs against Todoist. Keep
- * it in step with the tool's real output schema so the model reads it the way
- * it would read a live one.
+ * The result is fiction, but its shape has to be real: a scenario may assert
+ * that the model carried a value through (see EVAL_USER_ID), and a model reads
+ * a malformed field the way it would read any other bad data. `satisfies` ties
+ * it to the tool's own output type, so a renamed or added field breaks here
+ * rather than drifting quietly. Formats must match too — `currentLocalTime`
+ * is what `toLocaleString('en-US', …)` produces, not ISO.
  */
 const CONTEXT_TOOLS: Record<string, unknown> = {
     [ToolNames.USER_INFO]: {
         type: 'user_info',
-        userId: '2671355',
+        userId: EVAL_USER_ID,
         fullName: 'Eval User',
         timezone: 'Europe/London',
-        currentLocalTime: '2026-08-11 09:30:00',
+        currentLocalTime: '08/11/2026, 09:30:00',
         startDay: 1,
         startDayName: 'Monday',
         weekStartDate: '2026-08-10',
@@ -230,7 +245,7 @@ const CONTEXT_TOOLS: Record<string, unknown> = {
         weeklyGoal: 30,
         email: 'eval@example.com',
         plan: 'Todoist Pro',
-    },
+    } satisfies UserInfoStructured,
 }
 
 /**
@@ -369,9 +384,15 @@ async function runAttempt(
             // date and queries the activity log in the same turn has made its
             // choice, and the order between the two is arbitrary. A forbidden
             // call outranks that — catching it is the point of a forbid rule.
+            //
+            // A tool a scenario expects is never treated as context, or a
+            // scenario testing the route *to* user-info could never pass: its
+            // expected call would be stubbed instead of judged.
+            const isContext = (c: Anthropic.ToolUseBlock) =>
+                Object.hasOwn(CONTEXT_TOOLS, c.name) && !scenario.expect?.includes(c.name)
             const substantive =
                 calls.find((c) => scenario.forbid?.includes(c.name)) ??
-                calls.find((c) => !(c.name in CONTEXT_TOOLS))
+                calls.find((c) => !isContext(c))
             if (substantive) {
                 const { pass, reason } = judge(scenario, substantive)
                 return { ...base, calledTool: substantive.name, pass, reason: reason || null }
