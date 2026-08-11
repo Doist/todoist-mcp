@@ -102,7 +102,7 @@ const getWorkspaceInsights = {
             structuredContent: {
                 workspaceId: resolved.workspaceId,
                 workspaceName: resolved.workspaceName,
-                folderId: insights.folderId,
+                folderId: insights.folderId ?? null,
                 projectInsights,
             },
         }
