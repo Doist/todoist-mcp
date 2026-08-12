@@ -13,7 +13,6 @@ function createMockHealth(overrides: Partial<ProjectHealth> = {}): ProjectHealth
         status: 'ON_TRACK',
         description: null,
         descriptionSummary: null,
-        taskRecommendations: null,
         projectId: 'proj-123',
         updatedAt: new Date('2026-03-29T10:00:00Z'),
         isStale: false,
