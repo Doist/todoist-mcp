@@ -1,3 +1,9 @@
+## [12.5.6](https://github.com/Doist/todoist-mcp/compare/v12.5.5...v12.5.6) (2026-08-12)
+
+### Bug Fixes
+
+* route "what did I complete?" to find-activity ([#569](https://github.com/Doist/todoist-mcp/issues/569)) ([212ac69](https://github.com/Doist/todoist-mcp/commit/212ac69adef909b100908f2d89f66944f6e41601))
+
 ## [12.5.5](https://github.com/Doist/todoist-mcp/compare/v12.5.4...v12.5.5) (2026-08-12)
 
 ### Bug Fixes
