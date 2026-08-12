@@ -28,8 +28,8 @@ const TaskContextOutputSchema = z.object({
     id: z.string().describe('The task ID.'),
     content: z.string().describe('The task content/title.'),
     priority: z.string().describe('The task priority (1-4).'),
-    due: z.string().nullable().optional().describe('The due date string, if set.'),
-    deadline: z.string().nullable().optional().describe('The deadline date string, if set.'),
+    due: z.string().optional().describe('The due date string, if set.'),
+    deadline: z.string().optional().describe('The deadline date string, if set.'),
     isCompleted: z.boolean().describe('Whether the task is completed.'),
     labels: z.array(z.string()).describe('Labels applied to this task.'),
 })
@@ -49,17 +49,14 @@ const OutputSchema = {
             status: z.enum(HEALTH_STATUSES).describe('The overall health status of the project.'),
             description: z
                 .string()
-                .nullable()
                 .optional()
                 .describe('Detailed description of the health assessment.'),
             descriptionSummary: z
                 .string()
-                .nullable()
                 .optional()
                 .describe('Brief summary of the health assessment.'),
             taskRecommendations: z
                 .array(TaskRecommendationOutputSchema)
-                .nullable()
                 .optional()
                 .describe('Specific recommendations for individual tasks.'),
             isStale: z
@@ -70,14 +67,13 @@ const OutputSchema = {
                 .describe('Whether a health analysis update is currently in progress.'),
             updatedAt: z
                 .string()
-                .nullable()
                 .optional()
                 .describe('When the health assessment was last updated.'),
         })
         .describe('Project health assessment.'),
     context: z
         .object({
-            projectDescription: z.string().nullable().describe('The project description, if any.'),
+            projectDescription: z.string().optional().describe('The project description, if any.'),
             projectMetrics: z
                 .object({
                     totalTasks: z.number().describe('Total number of tasks in the project.'),
@@ -89,7 +85,7 @@ const OutputSchema = {
                         .describe('Tasks completed in the current week.'),
                     averageCompletionTime: z
                         .number()
-                        .nullable()
+                        .optional()
                         .describe('Average task completion time in days, if available.'),
                 })
                 .describe('Aggregated project metrics.'),
@@ -222,14 +218,18 @@ const getProjectHealth = {
 
         const context = data.context
             ? {
-                  projectDescription: data.context.projectDescription,
-                  projectMetrics: data.context.projectMetrics,
+                  projectDescription: data.context.projectDescription ?? undefined,
+                  projectMetrics: {
+                      ...data.context.projectMetrics,
+                      averageCompletionTime:
+                          data.context.projectMetrics.averageCompletionTime ?? undefined,
+                  },
                   tasks: data.context.tasks.map((task) => ({
                       id: task.id,
                       content: task.content,
                       priority: task.priority,
-                      due: task.due ?? null,
-                      deadline: task.deadline ?? null,
+                      due: task.due ?? undefined,
+                      deadline: task.deadline ?? undefined,
                       isCompleted: task.isCompleted,
                       labels: task.labels,
                   })),
@@ -248,12 +248,12 @@ const getProjectHealth = {
                 },
                 health: {
                     status: data.health.status,
-                    description: data.health.description ?? null,
-                    descriptionSummary: data.health.descriptionSummary ?? null,
-                    taskRecommendations: data.health.taskRecommendations ?? null,
+                    description: data.health.description ?? undefined,
+                    descriptionSummary: data.health.descriptionSummary ?? undefined,
+                    taskRecommendations: data.health.taskRecommendations ?? undefined,
                     isStale: data.health.isStale,
                     updateInProgress: data.health.updateInProgress,
-                    updatedAt: data.health.updatedAt?.toISOString() ?? null,
+                    updatedAt: data.health.updatedAt?.toISOString(),
                 },
                 context,
             },

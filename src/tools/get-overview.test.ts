@@ -157,7 +157,7 @@ describe(`${GET_OVERVIEW} tool`, () => {
                 totalProjects: 0,
                 totalSections: 0,
                 hasNestedProjects: false,
-                inbox: null,
+                inbox: undefined,
             })
         })
     })
