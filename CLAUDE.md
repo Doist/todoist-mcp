@@ -4,6 +4,12 @@
 
 ## Tool Schema Design Rules
 
+### Output schemas must never use `.nullable()`
+
+`structuredContent` is sanitised with `removeNullFields` before it leaves the server, so a null can never reach a client. A nullable output field therefore declares a value the tool cannot deliver: the MCP SDK validates the sanitised payload against the declared `outputSchema` and fails the whole call with `Output validation error` the moment that field is stripped.
+
+Declare the field `.optional()` instead and leave the key out of `structuredContent` (`foo: value ?? undefined`) when there is nothing to report. `src/tools/output-schema-nullability.test.ts` enforces this across every registered tool.
+
 ### Removing/Clearing Optional Fields
 
 When you need to support clearing an optional field:

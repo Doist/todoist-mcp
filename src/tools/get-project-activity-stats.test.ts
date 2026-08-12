@@ -55,7 +55,7 @@ describe('get-project-activity-stats tool', () => {
                 { date: '2026-03-28', totalCount: 8 },
                 { date: '2026-03-27', totalCount: 3 },
             ],
-            weekItems: null,
+            weekItems: undefined,
         })
 
         expect(result.textContent).toContain('Daily Activity')
@@ -114,7 +114,7 @@ describe('get-project-activity-stats tool', () => {
 
         expect(result.structuredContent).toMatchObject({
             dayItems: [],
-            weekItems: null,
+            weekItems: undefined,
         })
         expect(result.textContent).toContain('No daily activity data available')
     })

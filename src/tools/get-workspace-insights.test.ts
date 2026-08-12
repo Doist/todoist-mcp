@@ -1,5 +1,7 @@
 import type { TodoistApi, WorkspaceInsights } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
+import { z } from 'zod'
+import { removeNullFields } from '../utils/sanitize-data.js'
 import { TEST_ERRORS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { workspaceResolver } from '../utils/workspace-resolver.js'
@@ -18,8 +20,9 @@ const mockTodoistApi = {
 const mockResolveWorkspace = vi.mocked(workspaceResolver.resolveWorkspace)
 
 function createMockInsights(overrides: Partial<WorkspaceInsights> = {}): WorkspaceInsights {
+    // The API dropped `folder_id` from this endpoint, so the SDK no longer
+    // receives one.
     return {
-        folderId: null,
         projectInsights: [
             {
                 projectId: 'proj-1',
@@ -94,7 +97,6 @@ describe('get-workspace-insights tool', () => {
         expect(result.structuredContent).toMatchObject({
             workspaceId: 'ws-123',
             workspaceName: 'Engineering',
-            folderId: null,
             projectInsights: [
                 {
                     projectId: 'proj-1',
@@ -108,11 +110,11 @@ describe('get-workspace-insights tool', () => {
                 },
                 {
                     projectId: 'proj-3',
-                    health: null,
-                    progress: null,
                 },
             ],
         })
+
+        expect(result.structuredContent).not.toHaveProperty('folderId')
 
         expect(result.textContent).toContain('Engineering')
         expect(result.textContent).toContain('**Projects:** 3')
@@ -142,11 +144,17 @@ describe('get-workspace-insights tool', () => {
             mockTodoistApi,
         )
 
-        expect(result.structuredContent.projectInsights[0]).toMatchObject({
+        expect(result.structuredContent.projectInsights[0]).toEqual({
             projectId: 'proj-1',
-            health: null,
-            progress: null,
+            health: undefined,
+            progress: undefined,
         })
+
+        // Nulls would be stripped on the way out, leaving structured content
+        // that no longer matches the declared output schema and failing the
+        // call with an MCP output validation error.
+        const sanitized = removeNullFields(result.structuredContent)
+        expect(() => z.object(getWorkspaceInsights.outputSchema).parse(sanitized)).not.toThrow()
 
         expect(result.textContent).toContain('status=N/A')
         expect(result.textContent).toContain('progress=N/A')

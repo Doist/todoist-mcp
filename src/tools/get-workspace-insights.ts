@@ -28,22 +28,21 @@ const ProjectInsightSchema = z.object({
                 .boolean()
                 .describe('Whether a health analysis update is in progress.'),
         })
-        .nullable()
-        .describe('Health data for this project, if available.'),
+        .optional()
+        .describe('Health data for this project. Omitted when the project has none.'),
     progress: z
         .object({
             completedCount: z.number().describe('Number of completed tasks.'),
             activeCount: z.number().describe('Number of active tasks.'),
             progressPercent: z.number().describe('Completion percentage (0-100).'),
         })
-        .nullable()
-        .describe('Progress data for this project, if available.'),
+        .optional()
+        .describe('Progress data for this project. Omitted when the project has none.'),
 })
 
 const OutputSchema = {
     workspaceId: z.string().describe('The resolved workspace ID.'),
     workspaceName: z.string().describe('The resolved workspace name.'),
-    folderId: z.string().nullable().describe('The folder ID, if applicable.'),
     projectInsights: z
         .array(ProjectInsightSchema)
         .describe('Health and progress insights for each project in the workspace.'),
@@ -74,14 +73,14 @@ const getWorkspaceInsights = {
                       isStale: p.health.isStale,
                       updateInProgress: p.health.updateInProgress,
                   }
-                : null,
+                : undefined,
             progress: p.progress
                 ? {
                       completedCount: p.progress.completedCount,
                       activeCount: p.progress.activeCount,
                       progressPercent: p.progress.progressPercent,
                   }
-                : null,
+                : undefined,
         }))
 
         const lines: string[] = [
@@ -102,7 +101,6 @@ const getWorkspaceInsights = {
             structuredContent: {
                 workspaceId: resolved.workspaceId,
                 workspaceName: resolved.workspaceName,
-                folderId: insights.folderId ?? null,
                 projectInsights,
             },
         }

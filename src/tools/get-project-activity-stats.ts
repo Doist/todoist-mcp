@@ -36,7 +36,7 @@ const OutputSchema = {
                 totalCount: z.number().describe('Number of tasks completed in this week.'),
             }),
         )
-        .nullable()
+        .optional()
         .describe('Weekly completion rollups. Only included when includeWeeklyCounts is true.'),
 }
 
@@ -89,7 +89,7 @@ const getProjectActivityStats = {
             structuredContent: {
                 projectId,
                 dayItems: stats.dayItems,
-                weekItems: stats.weekItems ?? null,
+                weekItems: stats.weekItems ?? undefined,
             },
         }
     },

@@ -89,7 +89,6 @@ const OutputSchema = {
             name: z.string().describe('The inbox project name.'),
             sections: z.array(SectionSchema).describe('Sections in the inbox project.'),
         })
-        .nullable()
         .optional()
         .describe('Inbox information (account overview only).'),
     projects: z
@@ -246,11 +245,11 @@ type ProjectStructure = {
 
 type AccountOverviewStructured = Record<string, unknown> & {
     type: 'account_overview'
-    inbox: {
+    inbox?: {
         id: string
         name: string
         sections: SectionSummary[]
-    } | null
+    }
     projects: ProjectStructure[]
     totalProjects: number
     totalSections: number
@@ -354,7 +353,7 @@ async function generateAccountOverview(
                   name: inbox.name,
                   sections: (sectionsByProject[inbox.id] || []).map(toSectionSummary),
               }
-            : null,
+            : undefined,
         projects: tree.map((project) =>
             buildProjectStructure(project as ProjectWithChildren, sectionsByProject),
         ),
