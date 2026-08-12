@@ -2,7 +2,9 @@ import type { TodoistApi } from '@doist/todoist-sdk'
 import type { ContentBlock } from '@modelcontextprotocol/sdk/types.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { registerTool, stripEmailsFromObject, stripEmailsFromText } from './mcp-helpers.js'
+import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
 import { addTasks } from './tools/add-tasks.js'
+import { workspaceResolver } from './utils/workspace-resolver.js'
 
 type RegisterToolArgs = Parameters<typeof registerTool>[0]
 type ToolFixture = RegisterToolArgs['tool']
@@ -365,5 +367,42 @@ describe('registerTool content ordering', () => {
         expect(content).toHaveLength(1)
         const only = content[0] as { type: string; text: string }
         expect(only.text).toBe('No tasks.')
+    })
+
+    it('preserves a null workspace folder ID in both output representations', async () => {
+        vi.stubEnv('NODE_ENV', 'production')
+        vi.stubEnv('USE_STRUCTURED_CONTENT', '')
+        vi.resetModules()
+
+        const { registerTool: registerToolFresh } = await import('./mcp-helpers.js')
+        const { mock, server } = captureRegisterToolMock()
+        const getWorkspaceInsightsMock = vi.fn().mockResolvedValue({ projectInsights: [] })
+        const client = { getWorkspaceInsights: getWorkspaceInsightsMock } as unknown as TodoistApi
+        const resolveWorkspace = vi.spyOn(workspaceResolver, 'resolveWorkspace').mockResolvedValue({
+            workspaceId: 'ws-123',
+            workspaceName: 'Engineering',
+        })
+
+        registerToolFresh({ tool: getWorkspaceInsights, server, client })
+
+        const callback = mock.mock.calls[0]?.[2] as (
+            args: Record<string, unknown>,
+            context: unknown,
+        ) => Promise<{
+            content?: ContentBlock[]
+            structuredContent?: Record<string, unknown>
+        }>
+
+        const output = await callback({ workspaceIdOrName: 'Engineering' }, {})
+
+        expect(getWorkspaceInsightsMock).toHaveBeenCalledWith('ws-123', {
+            projectIds: undefined,
+        })
+        expect(output.structuredContent).toMatchObject({ folderId: null })
+
+        const legacyJson = output.content?.[0] as { type: string; text: string }
+        expect(legacyJson.type).toBe('text')
+        expect(JSON.parse(legacyJson.text)).toMatchObject({ folderId: null })
+        resolveWorkspace.mockRestore()
     })
 })

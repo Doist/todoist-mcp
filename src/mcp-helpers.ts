@@ -7,7 +7,6 @@ import type { AnyTodoistTool, ExecuteResult } from './todoist-tool.js'
 import { formatToolExecutionError } from './tool-execution-error.js'
 import { runWithUsageTrackingContext } from './usage-tracking.js'
 import { executeWithRetry } from './utils/retry.js'
-import { removeNullFields } from './utils/sanitize-data.js'
 import { ToolNames } from './utils/tool-names.js'
 
 /**
@@ -84,9 +83,6 @@ function getToolOutput<StructuredContent extends Record<string, unknown>>({
     structuredContent: StructuredContent | undefined
     contentItems?: ContentBlock[]
 }) {
-    // Remove null fields from structured content before returning
-    const sanitizedContent = removeNullFields(structuredContent)
-
     // Always include structuredContent when available since all tools have outputSchema
     const result: Record<string, unknown> = {}
 
@@ -104,7 +100,7 @@ function getToolOutput<StructuredContent extends Record<string, unknown>>({
     if (!USE_STRUCTURED_CONTENT && structuredContent) {
         contentArray.push({
             type: 'text' as const,
-            text: JSON.stringify(sanitizedContent),
+            text: JSON.stringify(structuredContent),
         })
     }
 
@@ -116,7 +112,7 @@ function getToolOutput<StructuredContent extends Record<string, unknown>>({
         result.content = contentArray
     }
 
-    if (structuredContent) result.structuredContent = sanitizedContent
+    if (structuredContent) result.structuredContent = structuredContent
 
     return result
 }
