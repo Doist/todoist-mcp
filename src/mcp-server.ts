@@ -36,7 +36,7 @@ What each tool does and how to fill its parameters is in the tool's own descript
 
 **Finding things**
 
-- For "what did I complete?", use **find-activity** with objectType="task" and eventType="completed". It reports completion events, including each occurrence of a recurring task. **find-completed-tasks** lists completed tasks, which is not the same question.
+- For "what did I complete?", call **user-info** for the asker's user ID, then **find-activity** with objectType="task", eventType="completed", initiatorId, and dateFrom/dateTo. Without initiatorId the answer covers every collaborator. find-activity reports completion events, including each occurrence of a recurring task; **find-completed-tasks** lists completed tasks, which is not the same question.
 - To resolve a person's name or email to a user ID, or to answer "who is X?", use **find-project-collaborators** with just a searchTerm. It covers every shared project you can access plus yourself, so an empty result means they collaborate on none of them — not that they do not exist.
 - Before assigning work to someone, call **find-project-collaborators** again with the target projectId. Resolving an ID only proves they collaborate on *some* project you can see; assignment fails unless they collaborate on that one.
 - To find out whether a task hides subtasks, use **fetch-object** with includeChildren rather than a speculative **find-tasks** call.

@@ -43,7 +43,12 @@ const ArgsSchema = {
 
     taskId: z.string().optional().describe('Filter events by parent task ID (for subtask events).'),
 
-    initiatorId: z.string().optional().describe('Filter by the user ID who initiated the event.'),
+    initiatorId: z
+        .string()
+        .optional()
+        .describe(
+            'Filter by the user ID who initiated the event. A first-person question ("what did I complete") needs this: without it the results cover every collaborator. Get the ID from user-info when you do not already have it.',
+        ),
 
     dateFrom: optionalIsoDateOrDateTime(
         'Inclusive start of the activity range, as an ISO 8601 date or date-time. For all events on one local calendar day, use that day\'s start, for example "2026-08-02T00:00:00-04:00". Natural-language dates such as "tomorrow" are not supported.',
@@ -78,7 +83,7 @@ const OutputSchema = {
 const findActivity = {
     name: ToolNames.FIND_ACTIVITY,
     description:
-        'Retrieve activity logs to monitor and audit changes in Todoist. Shows events from all users by default (use initiatorId to filter by specific user). To answer what someone completed in a period, including recurring task occurrences, use objectType "task", eventType "completed", and dateFrom/dateTo. Track task completions, updates, deletions, project changes, and more with flexible filtering. Activity history availability and retention depend on the user plan.',
+        'Retrieve activity logs to monitor and audit changes in Todoist. Shows events from all users by default (use initiatorId to filter by specific user). To answer what someone completed in a period, including recurring task occurrences, use objectType "task", eventType "completed", and dateFrom/dateTo. For a first-person question ("what did I get done"), also set initiatorId to the current user from user-info, or the answer includes collaborators\' completions. Track task completions, updates, deletions, project changes, and more with flexible filtering. Activity history availability and retention depend on the user plan.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },

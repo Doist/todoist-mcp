@@ -83,7 +83,7 @@ const OutputSchema = {
 const getProductivityStats = {
     name: ToolNames.GET_PRODUCTIVITY_STATS,
     description:
-        'Get comprehensive productivity statistics including daily/weekly completion breakdowns, goal streaks (current, last, max), karma score and trends, and historical karma data. Useful for productivity analysis and tracking goal progress.',
+        'Get comprehensive productivity statistics including daily/weekly completion breakdowns, goal streaks (current, last, max), karma score and trends, and historical karma data. Useful for productivity analysis and tracking goal progress. Reports counts, streaks and karma only, never the tasks themselves — for "what did I complete", use find-activity.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: {

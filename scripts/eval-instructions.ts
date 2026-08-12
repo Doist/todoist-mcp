@@ -14,9 +14,11 @@
  *   git stash pop
  *   npx tsx scripts/eval-instructions.ts --label after
  *
- * Tool calls are never executed — only the first call of each turn is
- * inspected — so this touches no Todoist data and needs no Todoist token. It
- * does spend money on model calls; see --repeats and --models.
+ * Tool calls are never executed against Todoist, so this touches no Todoist
+ * data and needs no Todoist token. Judging looks at one call per attempt: the
+ * first, unless it is a context tool (see CONTEXT_TOOLS), in which case a
+ * canned result is fed back and the next call is judged. It does spend money
+ * on model calls; see --repeats and --models.
  *
  * Auth uses the Anthropic SDK's standard credential chain: either
  * ANTHROPIC_API_KEY (a key from the Anthropic Console at platform.claude.com),
@@ -34,8 +36,16 @@ import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import { instructions } from '../src/mcp-server.js'
 import { registeredTools } from '../src/tool-registry.js'
+import type { UserInfoStructured } from '../src/tools/user-info.js'
 import { createLimiter } from '../src/utils/concurrency.js'
 import { ToolNames } from '../src/utils/tool-names.js'
+
+/**
+ * The user ID the stubbed `user-info` reports. A scenario asking a first-person
+ * question can assert the model carried it into a filter argument rather than
+ * querying everyone.
+ */
+const EVAL_USER_ID = '2671355'
 
 type Check = (input: Record<string, unknown>) => string | null
 
@@ -89,9 +99,14 @@ const SCENARIOS: Scenario[] = [
             if (!input.dateFrom || !input.dateTo) {
                 return 'no dateFrom/dateTo, so this searches all history rather than last week'
             }
+            // find-activity reports every user's events by default, so "what did
+            // I get done" answered without this includes collaborators' work.
+            if (input.initiatorId !== EVAL_USER_ID) {
+                return `initiatorId is ${JSON.stringify(input.initiatorId)}, so this reports every collaborator's completions, not "I"`
+            }
             return null
         },
-        guards: 'instructions: find-activity vs find-completed-tasks, over a bounded range',
+        guards: 'instructions: find-activity vs find-completed-tasks, over a bounded range, filtered to the asker',
     },
     {
         id: 'resolve-person',
@@ -195,6 +210,51 @@ const DEFAULT_MODELS = ['claude-haiku-4-5', 'claude-sonnet-5']
 const DEFAULT_REPEATS = 5
 const MAX_CONCURRENCY = 4
 
+/**
+ * Tools a model may legitimately call before the one a scenario is testing, to
+ * establish context it has no other way to get — today's date, the user's
+ * timezone. "What did I get done last week?" cannot be turned into a date range
+ * without them.
+ *
+ * Judging the very first call outright scores that correct behaviour as a
+ * failure: an `expect` allowlist naming the tool under test cannot also name
+ * every reasonable lookup that precedes it. So a call to one of these is
+ * answered with the canned result below and judging moves to the next call.
+ *
+ * The result is fiction, but its shape has to be real: a scenario may assert
+ * that the model carried a value through (see EVAL_USER_ID), and a model reads
+ * a malformed field the way it would read any other bad data. `satisfies` ties
+ * it to the tool's own output type, so a renamed or added field breaks here
+ * rather than drifting quietly. Formats must match too — `currentLocalTime`
+ * is what `toLocaleString('en-US', …)` produces, not ISO.
+ */
+const CONTEXT_TOOLS: Record<string, unknown> = {
+    [ToolNames.USER_INFO]: {
+        type: 'user_info',
+        userId: EVAL_USER_ID,
+        fullName: 'Eval User',
+        timezone: 'Europe/London',
+        currentLocalTime: '08/11/2026, 09:30:00',
+        startDay: 1,
+        startDayName: 'Monday',
+        weekStartDate: '2026-08-10',
+        weekEndDate: '2026-08-16',
+        currentWeekNumber: 33,
+        completedToday: 3,
+        dailyGoal: 5,
+        weeklyGoal: 30,
+        email: 'eval@example.com',
+        plan: 'Todoist Pro',
+    } satisfies UserInfoStructured,
+}
+
+/**
+ * How many context calls an attempt may make before it is judged a failure.
+ * A model that keeps gathering context is not answering the question, and
+ * without a cap a loop would bill for turns forever.
+ */
+const MAX_CONTEXT_HOPS = 3
+
 function parseArgs() {
     const args = process.argv.slice(2)
     const get = (flag: string) => {
@@ -254,6 +314,28 @@ type Attempt = {
      */
     errored: boolean
     usage: Usage
+    /** Context calls answered with a stub before the judged one. */
+    contextHops: number
+}
+
+/** Verdict on the one call a scenario is judged by. */
+function judge(
+    scenario: Scenario,
+    call: Anthropic.ToolUseBlock,
+): { pass: boolean; reason: string } {
+    if (scenario.forbid?.includes(call.name)) {
+        return { pass: false, reason: `called ${call.name}, which this rule forbids` }
+    }
+    if (scenario.expect && !scenario.expect.includes(call.name)) {
+        return { pass: false, reason: `expected ${scenario.expect.join(' or ')}` }
+    }
+    // An argument check written for a specific tool must not run against a
+    // different one a forbid-only scenario legitimately allows.
+    if (scenario.forbid && !scenario.expect) {
+        return { pass: true, reason: '' }
+    }
+    const reason = scenario.check?.(call.input as Record<string, unknown>) ?? null
+    return { pass: reason === null, reason: reason ?? '' }
 }
 
 async function runAttempt(
@@ -267,51 +349,77 @@ async function runAttempt(
         model,
         errored: false,
         usage: { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 },
+        contextHops: 0,
     }
+    const messages: Anthropic.MessageParam[] = [{ role: 'user', content: scenario.prompt }]
     try {
-        const response = await client.messages.create({
-            model,
-            max_tokens: 4096,
-            // Tools render before system, so one breakpoint here caches both.
-            system: [{ type: 'text', text: instructions, cache_control: { type: 'ephemeral' } }],
-            tools,
-            messages: [{ role: 'user', content: scenario.prompt }],
-        })
+        for (let hop = 0; ; hop++) {
+            const response = await client.messages.create({
+                model,
+                max_tokens: 4096,
+                // Tools render before system, so one breakpoint here caches both.
+                system: [
+                    { type: 'text', text: instructions, cache_control: { type: 'ephemeral' } },
+                ],
+                tools,
+                messages,
+            })
 
-        base.usage = {
-            input: response.usage.input_tokens,
-            output: response.usage.output_tokens,
-            cacheWrite: response.usage.cache_creation_input_tokens ?? 0,
-            cacheRead: response.usage.cache_read_input_tokens ?? 0,
-        }
+            base.usage = {
+                input: base.usage.input + response.usage.input_tokens,
+                output: base.usage.output + response.usage.output_tokens,
+                cacheWrite:
+                    base.usage.cacheWrite + (response.usage.cache_creation_input_tokens ?? 0),
+                cacheRead: base.usage.cacheRead + (response.usage.cache_read_input_tokens ?? 0),
+            }
 
-        const call = response.content.find((b) => b.type === 'tool_use')
-        if (!call) {
-            return { ...base, calledTool: null, pass: false, reason: 'no tool call' }
-        }
-        if (scenario.forbid?.includes(call.name)) {
-            return {
-                ...base,
-                calledTool: call.name,
-                pass: false,
-                reason: `called ${call.name}, which this rule forbids`,
+            const calls = response.content.filter((b) => b.type === 'tool_use')
+            const call = calls[0]
+            if (!call) {
+                return { ...base, calledTool: null, pass: false, reason: 'no tool call' }
             }
-        }
-        if (scenario.expect && !scenario.expect.includes(call.name)) {
-            return {
-                ...base,
-                calledTool: call.name,
-                pass: false,
-                reason: `expected ${scenario.expect.join(' or ')}`,
+
+            // A turn can carry several calls at once. Judge the substantive one
+            // rather than whichever block came first: a model that asks for the
+            // date and queries the activity log in the same turn has made its
+            // choice, and the order between the two is arbitrary. A forbidden
+            // call outranks that — catching it is the point of a forbid rule.
+            //
+            // A tool a scenario expects is never treated as context, or a
+            // scenario testing the route *to* user-info could never pass: its
+            // expected call would be stubbed instead of judged.
+            const isContext = (c: Anthropic.ToolUseBlock) =>
+                Object.hasOwn(CONTEXT_TOOLS, c.name) && !scenario.expect?.includes(c.name)
+            const substantive =
+                calls.find((c) => scenario.forbid?.includes(c.name)) ??
+                calls.find((c) => !isContext(c))
+            if (substantive) {
+                const { pass, reason } = judge(scenario, substantive)
+                return { ...base, calledTool: substantive.name, pass, reason: reason || null }
             }
+
+            // Nothing but context gathering, so answer it and judge what the
+            // model reaches for next.
+            if (hop >= MAX_CONTEXT_HOPS) {
+                return {
+                    ...base,
+                    calledTool: call.name,
+                    pass: false,
+                    reason: `still gathering context after ${MAX_CONTEXT_HOPS} calls`,
+                }
+            }
+
+            base.contextHops = hop + 1
+            messages.push({ role: 'assistant', content: response.content })
+            messages.push({
+                role: 'user',
+                content: calls.map((c) => ({
+                    type: 'tool_result' as const,
+                    tool_use_id: c.id,
+                    content: JSON.stringify(CONTEXT_TOOLS[c.name]),
+                })),
+            })
         }
-        // An argument check written for a specific tool must not run against a
-        // different one a forbid-only scenario legitimately allows.
-        if (scenario.forbid && !scenario.expect) {
-            return { ...base, calledTool: call.name, pass: true, reason: null }
-        }
-        const reason = scenario.check?.(call.input as Record<string, unknown>) ?? null
-        return { ...base, calledTool: call.name, pass: reason === null, reason }
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         return {
