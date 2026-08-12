@@ -1,3 +1,9 @@
+## [12.5.5](https://github.com/Doist/todoist-mcp/compare/v12.5.4...v12.5.5) (2026-08-12)
+
+### Bug Fixes
+
+* stop declaring output fields the sanitiser strips ([#571](https://github.com/Doist/todoist-mcp/issues/571)) ([6e1d285](https://github.com/Doist/todoist-mcp/commit/6e1d2859da7f5f44198020aa382d55f16e72edc8))
+
 ## [12.5.4](https://github.com/Doist/todoist-mcp/compare/v12.5.3...v12.5.4) (2026-08-11)
 
 ### Bug Fixes
