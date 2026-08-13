@@ -19,11 +19,6 @@ const ArgsSchema = {
         ),
 }
 
-const TaskRecommendationOutputSchema = z.object({
-    taskId: z.string().describe('The ID of the task this recommendation is for.'),
-    recommendation: z.string().describe('The recommendation for this task.'),
-})
-
 const TaskContextOutputSchema = z.object({
     id: z.string().describe('The task ID.'),
     content: z.string().describe('The task content/title.'),
@@ -55,10 +50,6 @@ const OutputSchema = {
                 .string()
                 .optional()
                 .describe('Brief summary of the health assessment.'),
-            taskRecommendations: z
-                .array(TaskRecommendationOutputSchema)
-                .optional()
-                .describe('Specific recommendations for individual tasks.'),
             isStale: z
                 .boolean()
                 .describe('Whether the health data is stale and may need refreshing.'),
@@ -156,15 +147,6 @@ function generateTextContent(
         lines.push(health.description)
     }
 
-    // Task recommendations
-    if (health.taskRecommendations && health.taskRecommendations.length > 0) {
-        lines.push('')
-        lines.push('## Task Recommendations')
-        for (const rec of health.taskRecommendations) {
-            lines.push(`- **Task ${rec.taskId}**: ${rec.recommendation}`)
-        }
-    }
-
     // Context (if included)
     if (context) {
         lines.push('')
@@ -198,7 +180,7 @@ function generateTextContent(
 const getProjectHealth = {
     name: ToolNames.GET_PROJECT_HEALTH,
     description:
-        'Get a comprehensive health assessment for a project including completion progress, health status (EXCELLENT, ON_TRACK, AT_RISK, CRITICAL), and optional detailed context with project metrics and task-level recommendations. Use includeContext=true for full detail including task data.',
+        'Get a comprehensive health assessment for a project including completion progress, health status (EXCELLENT, ON_TRACK, AT_RISK, CRITICAL), and optional detailed context with project metrics and task-level data. Use includeContext=true for that full detail.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: {
@@ -250,7 +232,6 @@ const getProjectHealth = {
                     status: data.health.status,
                     description: data.health.description ?? undefined,
                     descriptionSummary: data.health.descriptionSummary ?? undefined,
-                    taskRecommendations: data.health.taskRecommendations ?? undefined,
                     isStale: data.health.isStale,
                     updateInProgress: data.health.updateInProgress,
                     updatedAt: data.health.updatedAt?.toISOString(),

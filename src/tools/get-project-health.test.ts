@@ -33,7 +33,6 @@ function createMockHealth(overrides: Partial<ProjectHealth> = {}): ProjectHealth
         status: 'ON_TRACK',
         description: 'Project is progressing well.',
         descriptionSummary: 'On track',
-        taskRecommendations: null,
         projectId: 'proj-123',
         updatedAt: new Date('2026-03-28T10:00:00Z'),
         isStale: false,
@@ -259,30 +258,6 @@ describe('get-project-health tool', () => {
         expect(result.textContent).toContain('update is currently in progress')
         expect(result.structuredContent).toMatchObject({
             health: { updateInProgress: true },
-        })
-    })
-
-    it('should include task recommendations in output', async () => {
-        const recommendations = [
-            { taskId: 'task-1', recommendation: 'Break this task into subtasks' },
-            { taskId: 'task-2', recommendation: 'Set a due date' },
-        ]
-
-        mockTodoistApi.getProjectProgress.mockResolvedValue(createMockProgress())
-        mockTodoistApi.getProjectHealth.mockResolvedValue(
-            createMockHealth({ taskRecommendations: recommendations }),
-        )
-
-        const result = await getProjectHealth.execute(
-            { projectId: 'proj-123', includeContext: false },
-            mockTodoistApi,
-        )
-
-        expect(result.textContent).toContain('Task Recommendations')
-        expect(result.textContent).toContain('Break this task into subtasks')
-        expect(result.textContent).toContain('Set a due date')
-        expect(result.structuredContent).toMatchObject({
-            health: { taskRecommendations: recommendations },
         })
     })
 
