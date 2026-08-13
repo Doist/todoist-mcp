@@ -1,3 +1,9 @@
+## [12.5.7](https://github.com/Doist/todoist-mcp/compare/v12.5.6...v12.5.7) (2026-08-13)
+
+### Bug Fixes
+
+* drop task recommendations from project health ([#572](https://github.com/Doist/todoist-mcp/issues/572)) ([ae7e553](https://github.com/Doist/todoist-mcp/commit/ae7e553a47127c3e75be1113c93f52ee103a695e))
+
 ## [12.5.6](https://github.com/Doist/todoist-mcp/compare/v12.5.5...v12.5.6) (2026-08-12)
 
 ### Bug Fixes
