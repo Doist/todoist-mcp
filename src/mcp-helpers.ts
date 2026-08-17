@@ -1,8 +1,11 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
-import { registerAppTool } from '@modelcontextprotocol/ext-apps/server'
-import type { McpServer, ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { ContentBlock, ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
-import type { z } from 'zod'
+import type {
+    McpServer,
+    ToolCallback,
+    ContentBlock,
+    ToolAnnotations,
+} from '@modelcontextprotocol/server'
+import { z } from 'zod'
 import type { AnyTodoistTool, ExecuteResult } from './todoist-tool.js'
 import { formatToolExecutionError } from './tool-execution-error.js'
 import { runWithUsageTrackingContext } from './usage-tracking.js'
@@ -179,6 +182,25 @@ function hasAppUiMeta(meta: Record<string, unknown> | undefined): meta is AppToo
     return typeof meta.ui === 'object' && meta.ui !== null
 }
 
+function normalizeAppToolMeta(meta: AppToolMeta): Record<string, unknown> {
+    const ui =
+        typeof meta.ui === 'object' && meta.ui !== null
+            ? (meta.ui as Record<string, unknown>)
+            : undefined
+    const resourceUri = ui?.resourceUri
+    const legacyResourceUri = meta['ui/resourceUri']
+
+    if (typeof resourceUri === 'string' && typeof legacyResourceUri !== 'string') {
+        return { ...meta, 'ui/resourceUri': resourceUri }
+    }
+
+    if (typeof legacyResourceUri === 'string' && typeof resourceUri !== 'string') {
+        return { ...meta, ui: { ...ui, resourceUri: legacyResourceUri } }
+    }
+
+    return meta
+}
+
 /**
  * Tools that expose user emails in their outputs.
  * When adding new tools that return user emails, update this list
@@ -258,12 +280,15 @@ function registerTool({
         client: TodoistApi,
     ) => ExecuteResult<z.ZodRawShape>
 
+    const inputSchema = z.object(tool.parameters)
+    const outputSchema = tool.outputSchema ? z.object(tool.outputSchema) : undefined
+
     // `getToolOutput` assembles its result incrementally and so is typed as a
     // plain record, which does not structurally match `CallToolResult` (that
     // requires `content`). The values it produces are valid results; only the
     // static shape is looser.
     // @ts-expect-error see above
-    const cb: ToolCallback<z.ZodRawShape> = async (args, _context) => {
+    const cb: ToolCallback<typeof inputSchema> = async (args, _context) => {
         try {
             let { textContent, structuredContent, contentItems } =
                 await runWithUsageTrackingContext(tool.name, () =>
@@ -289,23 +314,12 @@ function registerTool({
 
     const toolConfig = {
         description: tool.description,
-        inputSchema: tool.parameters,
-        ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
+        inputSchema,
+        ...(outputSchema ? { outputSchema } : {}),
         annotations: getMcpAnnotations(tool),
-        ...(tool._meta ? { _meta: tool._meta } : {}),
-    }
-
-    if (hasAppUiMeta(tool._meta)) {
-        registerAppTool(
-            server,
-            tool.name,
-            {
-                ...toolConfig,
-                _meta: tool._meta,
-            },
-            cb,
-        )
-        return
+        ...(tool._meta
+            ? { _meta: hasAppUiMeta(tool._meta) ? normalizeAppToolMeta(tool._meta) : tool._meta }
+            : {}),
     }
 
     server.registerTool(tool.name, toolConfig, cb)

@@ -1,5 +1,5 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
-import type { ContentBlock, ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
+import type { ContentBlock, ToolAnnotations } from '@modelcontextprotocol/server'
 import type { z } from 'zod'
 
 type ExecuteResult<Output extends z.ZodRawShape> = Promise<{

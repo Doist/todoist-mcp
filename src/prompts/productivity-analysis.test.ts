@@ -1,4 +1,4 @@
-import type { GetPromptResult } from '@modelcontextprotocol/sdk/types.js'
+import type { GetPromptResult } from '@modelcontextprotocol/server'
 import { buildPromptText, computeDateRange, productivityAnalysis } from './productivity-analysis.js'
 
 function getPromptText(result: GetPromptResult): string {

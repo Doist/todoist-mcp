@@ -35,6 +35,7 @@ For convenience, we also include a function that initializes an MCP Server with 
 
 ```js
 import { getMcpServer } from '@doist/todoist-mcp'
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
 
 async function main() {
     const server = getMcpServer({ todoistApiKey: process.env.TODOIST_API_KEY })

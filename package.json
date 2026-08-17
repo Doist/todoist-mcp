@@ -74,10 +74,12 @@
         "zod": "4.3.6"
     },
     "peerDependencies": {
-        "@modelcontextprotocol/sdk": "^1.25.0"
+        "@modelcontextprotocol/node": "^2.0.0",
+        "@modelcontextprotocol/server": "^2.0.0"
     },
     "devDependencies": {
         "@anthropic-ai/sdk": "0.115.0",
+        "@modelcontextprotocol/client": "2.0.0",
         "@modelcontextprotocol/inspector": "0.22.0",
         "@semantic-release/changelog": "6.0.3",
         "@semantic-release/exec": "7.1.0",

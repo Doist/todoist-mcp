@@ -1,6 +1,7 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
-import type { ContentBlock } from '@modelcontextprotocol/sdk/types.js'
+import type { ContentBlock } from '@modelcontextprotocol/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import { registerTool, stripEmailsFromObject, stripEmailsFromText } from './mcp-helpers.js'
 import { addTasks } from './tools/add-tasks.js'
 
@@ -116,7 +117,7 @@ describe('registerTool config', () => {
 
     it('includes outputSchema when the tool declares one', () => {
         const { mock, server, client } = captureRegisterToolMock()
-        const outputSchema = {}
+        const outputSchema = { value: z.string() }
 
         registerTool({
             tool: buildToolFixture({
@@ -130,7 +131,9 @@ describe('registerTool config', () => {
         })
 
         const config = mock.mock.calls[0]?.[1] as Record<string, unknown>
-        expect(config.outputSchema).toBe(outputSchema)
+        expect(config.inputSchema).toBeInstanceOf(z.ZodObject)
+        expect(config.outputSchema).toBeInstanceOf(z.ZodObject)
+        expect((config.outputSchema as z.ZodObject).shape).toHaveProperty('value')
     })
 })
 
