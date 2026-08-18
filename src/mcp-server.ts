@@ -42,6 +42,11 @@ What each tool does and how to fill its parameters is in the tool's own descript
 - To find out whether a task hides subtasks, use **fetch-object** with includeChildren rather than a speculative **find-tasks** call.
 - Filter tasks by label **name**. Label IDs are only for **delete-object** and **update-labels**. Shared labels can be renamed but not recoloured, reordered or favourited.
 
+**Comments**
+
+- Comments notify only the people **add-comments** is handed. When a comment mentions someone, name them in \`notifyUsers\` — writing "@Ana" in the text notifies nobody. Omit \`notifyUsers\` to notify whoever the Todoist apps would, or pass \`["none"]\` to stay silent.
+- Notification cannot be sent when editing a comment, only when adding one.
+
 **Deleting and archiving**
 
 - **delete-object** removes every object type; there is no per-type delete tool. Reminders use type "reminder", location reminders "location_reminder".

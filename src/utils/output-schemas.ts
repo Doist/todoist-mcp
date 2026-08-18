@@ -98,6 +98,10 @@ const CommentSchema = z.object({
     content: z.string(),
     postedAt: z.string().describe('ISO 8601.'),
     postedUid: z.string().optional(),
+    notifiedUserIds: z
+        .array(z.string())
+        .optional()
+        .describe('Users notified about this comment. Absent when nobody was notified.'),
     fileAttachment: AttachmentSchema.optional(),
 })
 
