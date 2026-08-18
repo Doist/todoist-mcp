@@ -1,5 +1,7 @@
 import type { Comment, Task, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
+import { z } from 'zod'
+import { ApiLimits } from '../utils/constants.js'
 import { createMockTask, createMockUser } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { resolveUserRefs } from '../utils/user-resolver.js'
@@ -542,6 +544,27 @@ describe(`${ADD_COMMENTS} tool`, () => {
                 mockTodoistApi,
             )
             expect(silent.structuredContent?.comments[0]?.notifiedUserIds).toBeUndefined()
+        })
+    })
+
+    describe('notifyUsers schema bounds', () => {
+        const parse = (notifyUsers: unknown) =>
+            z.object(addComments.parameters).safeParse({
+                comments: [{ taskId: 'task456', content: 'x', notifyUsers }],
+            })
+
+        it('rejects an empty list, so ["none"] stays the only way to stay silent', () => {
+            expect(parse([]).success).toBe(false)
+        })
+
+        it('rejects more recipients than a single comment may notify', () => {
+            const tooMany = Array.from(
+                { length: ApiLimits.NOTIFY_USERS_MAX + 1 },
+                (_, i) => `u${i}`,
+            )
+
+            expect(parse(tooMany).success).toBe(false)
+            expect(parse(tooMany.slice(0, ApiLimits.NOTIFY_USERS_MAX)).success).toBe(true)
         })
     })
 

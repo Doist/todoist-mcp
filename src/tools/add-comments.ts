@@ -8,6 +8,7 @@ import {
     getDefaultCommentRecipients,
     isNoNotifyList,
 } from '../utils/comment-recipients.js'
+import { ApiLimits } from '../utils/constants.js'
 import { CommentSchema as CommentOutputSchema } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { resolveUserRefs } from '../utils/user-resolver.js'
@@ -23,6 +24,8 @@ const CommentSchema = z.object({
     content: z.string().min(1).describe('The content of the comment.'),
     notifyUsers: z
         .array(z.string().min(1))
+        .min(1)
+        .max(ApiLimits.NOTIFY_USERS_MAX)
         .optional()
         .describe(
             `Who to notify about this comment — a user ID, email, full name, or "me" for each person. Set this whenever the comment mentions someone; the text of an @mention notifies nobody on its own. Omit to notify whoever the Todoist apps would (the task's assignee, assigner and creator on a first comment, or the previous comment's participants on a reply). Pass ["${NO_NOTIFY_KEYWORD}"] to notify nobody.`,

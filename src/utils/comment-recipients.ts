@@ -1,10 +1,4 @@
-import type {
-    Comment,
-    GetCommentsResponse,
-    GetTaskCommentsArgs,
-    TodoistApi,
-} from '@doist/todoist-sdk'
-import { fetchAllPages } from '../tool-helpers.js'
+import type { Comment, GetTaskCommentsArgs, TodoistApi } from '@doist/todoist-sdk'
 
 /** Value that tells `add-comments` to post without notifying anyone. */
 export const NO_NOTIFY_KEYWORD = 'none'
@@ -63,19 +57,26 @@ async function getLatestComment(
     client: TodoistApi,
     target: CommentTarget,
 ): Promise<Comment | undefined> {
-    // The SDK brands the unused key as `never` on each half of
-    // `GetTaskCommentsArgs | GetProjectCommentsArgs`, which a generic cannot
-    // infer across, so pin one half and let the target supply either key.
-    const comments = await fetchAllPages<GetTaskCommentsArgs, GetCommentsResponse, Comment>({
-        apiMethod: (args) => client.getComments(args),
-        args: target as GetTaskCommentsArgs,
-    })
+    let latest: Comment | undefined
+    let cursor: string | null = null
 
-    // The API does not guarantee an order, so pick the newest explicitly.
-    return comments.reduce<Comment | undefined>(
-        (latest, comment) => (!latest || comment.postedAt > latest.postedAt ? comment : latest),
-        undefined,
-    )
+    // Walked a page at a time, keeping only the newest comment seen. A thread
+    // can be arbitrarily long and all we want from it is its last participant,
+    // so there is no reason to hold the whole history in memory. Page order is
+    // not guaranteed, so every page is still compared.
+    do {
+        const response = await client.getComments({
+            ...(target.taskId ? { taskId: target.taskId } : { projectId: target.projectId }),
+            cursor,
+        } as GetTaskCommentsArgs)
+
+        for (const comment of response.results) {
+            if (!latest || comment.postedAt > latest.postedAt) latest = comment
+        }
+        cursor = response.nextCursor
+    } while (cursor)
+
+    return latest
 }
 
 function dedupe(userIds: (string | null | undefined)[], currentUserId: string): string[] {

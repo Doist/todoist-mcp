@@ -398,9 +398,29 @@ export async function resolveUserNameToId(
  * @throws Error naming every reference that could not be resolved
  */
 export async function resolveUserRefs(client: TodoistApi, refs: string[]): Promise<ResolvedUser[]> {
-    const resolutions = await Promise.all(refs.map((ref) => userResolver.resolveUser(client, ref)))
+    const seenRefs = new Set<string>()
+    const seenUserIds = new Set<string>()
+    const resolved: ResolvedUser[] = []
+    const unresolved: string[] = []
 
-    const unresolved = refs.filter((_ref, index) => !resolutions[index])
+    // Resolved one at a time on purpose: the first lookup populates the
+    // collaborator cache that the rest read, where resolving in parallel would
+    // send every reference through its own full collaborator fetch.
+    for (const ref of refs) {
+        const dedupeKey = ref.trim().toLowerCase()
+        if (seenRefs.has(dedupeKey)) continue
+        seenRefs.add(dedupeKey)
+
+        const user = await userResolver.resolveUser(client, ref)
+        if (!user) {
+            unresolved.push(ref)
+            continue
+        }
+        if (seenUserIds.has(user.userId)) continue
+        seenUserIds.add(user.userId)
+        resolved.push(user)
+    }
+
     if (unresolved.length > 0) {
         const names = unresolved.map((ref) => `"${ref}"`).join(', ')
         throw new Error(
@@ -408,12 +428,5 @@ export async function resolveUserRefs(client: TodoistApi, refs: string[]): Promi
         )
     }
 
-    const seen = new Set<string>()
-    const resolved: ResolvedUser[] = []
-    for (const user of resolutions) {
-        if (!user || seen.has(user.userId)) continue
-        seen.add(user.userId)
-        resolved.push(user)
-    }
     return resolved
 }

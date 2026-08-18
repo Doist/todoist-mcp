@@ -309,4 +309,19 @@ describe('resolveUserRefs', () => {
     it('resolves nothing for an empty list', async () => {
         await expect(resolveUserRefs(mockClient, [])).resolves.toEqual([])
     })
+
+    it('looks a repeated reference up only once', async () => {
+        await resolveUserRefs(mockClient, ['Ana Lovelace', 'ana lovelace', '  Ana Lovelace  '])
+
+        // The collaborator lookup is shared, so a repeated name must not send
+        // the whole project list off to be fetched again.
+        expect(mockClient.getProjects).toHaveBeenCalledTimes(1)
+    })
+
+    it('reuses the warmed collaborator cache across distinct references', async () => {
+        await resolveUserRefs(mockClient, ['Ana Lovelace', 'Bo Turing'])
+
+        expect(mockClient.getProjects).toHaveBeenCalledTimes(1)
+        expect(mockClient.getProjectCollaborators).toHaveBeenCalledTimes(1)
+    })
 })

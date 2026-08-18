@@ -29,6 +29,8 @@ export const ApiLimits = {
     COMMENTS_DEFAULT: 10,
     /** Maximum limit for comment search and list operations */
     COMMENTS_MAX: 10,
+    /** Maximum number of users a single comment can notify */
+    NOTIFY_USERS_MAX: 25,
     /** Default limit for activity log listings */
     ACTIVITY_DEFAULT: 20,
     /** Maximum limit for activity log search and list operations */

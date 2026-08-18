@@ -167,6 +167,40 @@ describe('getDefaultCommentRecipients', () => {
         })
     })
 
+    it('walks every page of a long thread to reach the newest comment', async () => {
+        mockClient.getComments
+            .mockResolvedValueOnce({
+                results: [
+                    createComment({ postedAt: new Date('2024-01-01T09:00:00Z'), postedUid: 'p1' }),
+                ],
+                nextCursor: 'page-2',
+            })
+            .mockResolvedValueOnce({
+                results: [
+                    createComment({ postedAt: new Date('2024-02-01T09:00:00Z'), postedUid: 'p2' }),
+                ],
+                nextCursor: 'page-3',
+            })
+            .mockResolvedValueOnce({
+                results: [
+                    createComment({ postedAt: new Date('2024-03-01T09:00:00Z'), postedUid: 'p3' }),
+                ],
+                nextCursor: null,
+            })
+
+        const recipients = await getDefaultCommentRecipients(
+            mockClient,
+            { taskId: 'task-1' },
+            CURRENT_USER_ID,
+        )
+
+        expect(mockClient.getComments).toHaveBeenCalledTimes(3)
+        expect(mockClient.getComments).toHaveBeenLastCalledWith(
+            expect.objectContaining({ cursor: 'page-3' }),
+        )
+        expect(recipients).toEqual(['p3'])
+    })
+
     describe('a project with no comments yet', () => {
         it('notifies nobody, as a project has no assignee to fall back on', async () => {
             const recipients = await getDefaultCommentRecipients(
