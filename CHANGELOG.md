@@ -1,3 +1,9 @@
+## [12.6.0](https://github.com/Doist/todoist-mcp/compare/v12.5.7...v12.6.0) (2026-08-18)
+
+### Features
+
+* **comments:** notify collaborators when adding a comment ([#580](https://github.com/Doist/todoist-mcp/issues/580)) ([80f1308](https://github.com/Doist/todoist-mcp/commit/80f1308a29c95cca3e73195380aafca515236764))
+
 ## [12.5.7](https://github.com/Doist/todoist-mcp/compare/v12.5.6...v12.5.7) (2026-08-13)
 
 ### Bug Fixes
