@@ -377,6 +377,7 @@ function mapComment(comment: Comment) {
         content: comment.content,
         postedAt: comment.postedAt.toISOString(),
         postedUid: comment.postedUid ?? undefined,
+        notifiedUserIds: comment.uidsToNotify?.length ? comment.uidsToNotify : undefined,
         fileAttachment: comment.fileAttachment
             ? {
                   resourceType: comment.fileAttachment.resourceType,

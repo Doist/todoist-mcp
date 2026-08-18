@@ -1,6 +1,12 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
-import { BoundedTtlCache, SELF_USER_KEYWORD, UserResolver } from './user-resolver.js'
+import {
+    BoundedTtlCache,
+    SELF_USER_KEYWORD,
+    UserResolver,
+    resolveUserRefs,
+    userResolver,
+} from './user-resolver.js'
 
 describe('BoundedTtlCache', () => {
     it('evicts the least recently used entry at capacity', () => {
@@ -250,5 +256,57 @@ describe('UserResolver', () => {
                 email: 'ada@example.com',
             })
         })
+    })
+})
+
+describe('resolveUserRefs', () => {
+    const collaborators = [
+        { id: '111', name: 'Ana Lovelace', email: 'ana@example.com' },
+        { id: '222', name: 'Bo Turing', email: 'bo@example.com' },
+    ]
+
+    let mockClient: Mocked<TodoistApi>
+
+    beforeEach(() => {
+        userResolver.clearCache()
+        mockClient = {
+            getUser: vi
+                .fn()
+                .mockResolvedValue({ id: '999', fullName: 'Me', email: 'me@example.com' }),
+            getProjects: vi
+                .fn()
+                .mockResolvedValue({ results: [{ id: 'p1', isShared: true }], nextCursor: null }),
+            getProjectCollaborators: vi
+                .fn()
+                .mockResolvedValue({ results: collaborators, nextCursor: null }),
+        } as unknown as Mocked<TodoistApi>
+    })
+
+    it('resolves IDs, emails, names and "me" in one pass', async () => {
+        const resolved = await resolveUserRefs(mockClient, ['111', 'bo@example.com', 'me'])
+
+        expect(resolved.map((user) => user.userId)).toEqual(['111', '222', '999'])
+    })
+
+    it('preserves input order and collapses duplicates', async () => {
+        const resolved = await resolveUserRefs(mockClient, [
+            'Bo Turing',
+            'ana@example.com',
+            'bo@example.com',
+        ])
+
+        expect(resolved.map((user) => user.userId)).toEqual(['222', '111'])
+    })
+
+    it('names every unresolvable reference in a single error', async () => {
+        await expect(
+            resolveUserRefs(mockClient, ['Ana Lovelace', 'Ghost', 'Phantom']),
+        ).rejects.toThrow(
+            'Could not find user(s): "Ghost", "Phantom". Make sure they are collaborators on a shared project.',
+        )
+    })
+
+    it('resolves nothing for an empty list', async () => {
+        await expect(resolveUserRefs(mockClient, [])).resolves.toEqual([])
     })
 })

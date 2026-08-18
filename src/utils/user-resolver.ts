@@ -381,3 +381,39 @@ export async function resolveUserNameToId(
 ): Promise<ResolvedUser | null> {
     return userResolver.resolveUser(client, nameOrId)
 }
+
+/**
+ * Resolve a list of user references — IDs, emails, full names, or the "me"
+ * keyword — to users, in one pass.
+ *
+ * Order of the input is preserved and duplicates are collapsed, so callers can
+ * hand the result straight to an API that expects a recipient list. Every
+ * reference that cannot be resolved is reported in a single error rather than
+ * failing on the first one, so the caller learns about all the bad references
+ * at once.
+ *
+ * @param client - Todoist API client
+ * @param refs - User references to resolve
+ * @returns The resolved users, deduplicated by user ID
+ * @throws Error naming every reference that could not be resolved
+ */
+export async function resolveUserRefs(client: TodoistApi, refs: string[]): Promise<ResolvedUser[]> {
+    const resolutions = await Promise.all(refs.map((ref) => userResolver.resolveUser(client, ref)))
+
+    const unresolved = refs.filter((_ref, index) => !resolutions[index])
+    if (unresolved.length > 0) {
+        const names = unresolved.map((ref) => `"${ref}"`).join(', ')
+        throw new Error(
+            `Could not find user(s): ${names}. Make sure they are collaborators on a shared project.`,
+        )
+    }
+
+    const seen = new Set<string>()
+    const resolved: ResolvedUser[] = []
+    for (const user of resolutions) {
+        if (!user || seen.has(user.userId)) continue
+        seen.add(user.userId)
+        resolved.push(user)
+    }
+    return resolved
+}
