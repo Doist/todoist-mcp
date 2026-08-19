@@ -1,3 +1,13 @@
+## [13.0.0](https://github.com/Doist/todoist-mcp/compare/v12.6.0...v13.0.0) (2026-08-19)
+
+### ⚠ BREAKING CHANGES
+
+* migrate to MCP SDK v2 (#579)
+
+### Features
+
+* migrate to MCP SDK v2 ([#579](https://github.com/Doist/todoist-mcp/issues/579)) ([9daaaf7](https://github.com/Doist/todoist-mcp/commit/9daaaf7280a3ecb82e80cfc8c828b727d653951b))
+
 ## [12.6.0](https://github.com/Doist/todoist-mcp/compare/v12.5.7...v12.6.0) (2026-08-18)
 
 ### Features
