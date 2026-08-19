@@ -78,6 +78,39 @@ describe(`${UPDATE_FILTERS} tool`, () => {
             expect(result.structuredContent.totalCount).toBe(1)
         })
 
+        it('should update a filter description', async () => {
+            const updatedFilter = createMockFilter({ id: 'filter-1' })
+            mockTodoistApi.sync.mockResolvedValue({ filters: [updatedFilter] })
+
+            await updateFilters.execute(
+                { filters: [{ id: 'filter-1', description: 'Everything due this week' }] },
+                mockTodoistApi,
+            )
+
+            const commandCall = mockTodoistApi.sync.mock.calls[0]?.[0]
+            expect(commandCall?.commands?.[0]?.args).toMatchObject({
+                id: 'filter-1',
+                description: 'Everything due this week',
+            })
+        })
+
+        it('should clear a description when passed "remove"', async () => {
+            const updatedFilter = createMockFilter({ id: 'filter-1' })
+            mockTodoistApi.sync.mockResolvedValue({ filters: [updatedFilter] })
+
+            await updateFilters.execute(
+                { filters: [{ id: 'filter-1', description: 'remove' }] },
+                mockTodoistApi,
+            )
+
+            // The sentinel becomes null, which is what the API reads as "clear it".
+            const commandCall = mockTodoistApi.sync.mock.calls[0]?.[0]
+            expect(commandCall?.commands?.[0]?.args).toMatchObject({
+                id: 'filter-1',
+                description: null,
+            })
+        })
+
         it('should update isFavorite status', async () => {
             const updatedFilter = createMockFilter({ id: 'filter-1', isFavorite: true })
             mockTodoistApi.sync.mockResolvedValue({ filters: [updatedFilter] })

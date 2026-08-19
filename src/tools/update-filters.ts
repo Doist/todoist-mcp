@@ -2,6 +2,7 @@ import { type ColorKey, createCommand } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { ColorOutputSchema, ColorSchema } from '../utils/colors.js'
+import { readFilterDescription } from '../utils/filter-description.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { FilterOutputSchema } from './find-filters.js'
 
@@ -14,6 +15,12 @@ const FilterUpdateSchema = z.object({
         .optional()
         .describe(
             'The new filter query string. Examples: "today & p1", "#Work & overdue", "@email & today".',
+        ),
+    description: z
+        .string()
+        .optional()
+        .describe(
+            'A markdown description explaining what the filter is for. Use "remove" to clear the description; omit the field to leave it unchanged.',
         ),
     color: ColorSchema,
     isFavorite: z.boolean().optional().describe('Whether to mark the filter as a favorite.'),
@@ -74,10 +81,14 @@ const updateFilters = {
         }
 
         const commands = toUpdate.map((filter) => {
-            const { id, color, ...otherArgs } = filter
+            const { id, color, description, ...otherArgs } = filter
             return createCommand('filter_update', {
                 id,
                 ...otherArgs,
+                // "remove" is the house sentinel for clearing a field; the API clears on null.
+                ...(description !== undefined
+                    ? { description: description === 'remove' ? null : description }
+                    : {}),
                 ...(color !== undefined ? { color: color as ColorKey } : {}),
             })
         })
@@ -94,6 +105,7 @@ const updateFilters = {
                 id: f.id,
                 name: f.name,
                 query: f.query,
+                description: readFilterDescription(f),
                 color: ColorOutputSchema.parse(f.color),
                 isFavorite: f.isFavorite,
                 itemOrder: f.itemOrder,
