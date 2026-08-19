@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { ColorOutputSchema } from '../utils/colors.js'
+import { readFilterDescription } from '../utils/filter-description.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const ArgsSchema = {
@@ -16,6 +17,12 @@ const FilterOutputSchema = z.object({
     id: z.string().describe('The unique ID of the filter.'),
     name: z.string().describe('The name of the filter.'),
     query: z.string().describe('The filter query string (e.g. "today & p1", "#Work & overdue").'),
+    description: z
+        .string()
+        .nullish()
+        .describe(
+            'A markdown description explaining what the filter is for. Null when the filter has none.',
+        ),
     color: ColorOutputSchema,
     isFavorite: z.boolean().describe('Whether the filter is marked as favorite.'),
     itemOrder: z.number().describe('The display order of the filter.'),
@@ -48,6 +55,7 @@ const findFilters = {
             id: f.id,
             name: f.name,
             query: f.query,
+            description: readFilterDescription(f),
             color: ColorOutputSchema.parse(f.color),
             isFavorite: f.isFavorite,
             itemOrder: f.itemOrder,

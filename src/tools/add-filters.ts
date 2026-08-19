@@ -14,6 +14,10 @@ const FilterSchema = z.object({
             'The filter query string. Examples: "today & p1", "#Work & overdue", "@email & today", "(p1 | p2) & !assigned". ' +
                 'Operators: | (OR), & (AND), ! (NOT), () grouping, , (multiple queries).',
         ),
+    description: z
+        .string()
+        .optional()
+        .describe('A markdown description explaining what the filter is for.'),
     color: ColorSchema,
     isFavorite: z
         .boolean()
@@ -49,6 +53,9 @@ const addFilters = {
                 {
                     name: filter.name,
                     query: filter.query,
+                    ...(filter.description !== undefined
+                        ? { description: filter.description }
+                        : {}),
                     ...(filter.color !== undefined ? { color: filter.color as ColorKey } : {}),
                     ...(filter.isFavorite !== undefined ? { isFavorite: filter.isFavorite } : {}),
                 },
@@ -73,6 +80,7 @@ const addFilters = {
                     id: realId,
                     name: filter.name,
                     query: filter.query,
+                    description: filter.description ?? null,
                     color: outputColor,
                     isFavorite: filter.isFavorite ?? false,
                     itemOrder: 0,
