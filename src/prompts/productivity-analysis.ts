@@ -1,7 +1,7 @@
-import type { GetPromptResult } from '@modelcontextprotocol/sdk/types.js'
+import type { GetPromptResult } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 
-const argsSchema = {
+const argsSchema = z.object({
     period: z
         .enum(['today', '7d', '14d', '30d', 'this-week', 'this-month'])
         .default('7d')
@@ -18,9 +18,9 @@ const argsSchema = {
         .string()
         .optional()
         .describe('Optional project ID to scope the analysis to a specific project.'),
-}
+})
 
-type PromptArgs = z.infer<z.ZodObject<typeof argsSchema>>
+type PromptArgs = z.infer<typeof argsSchema>
 
 /**
  * Compute the date range (since/until as YYYY-MM-DD) for a given period.

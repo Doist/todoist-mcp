@@ -52,7 +52,8 @@ export default defineConfig({
         rollupOptions: {
             // Externalize dependencies to avoid bundling them
             external: [
-                '@modelcontextprotocol/sdk',
+                '@modelcontextprotocol/node',
+                '@modelcontextprotocol/server',
                 '@doist/todoist-sdk',
                 'date-fns',
                 'dotenv',

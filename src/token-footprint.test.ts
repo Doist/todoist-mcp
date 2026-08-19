@@ -6,12 +6,11 @@ import { instructions } from './mcp-server.js'
 import type { AnyTodoistTool } from './todoist-tool.js'
 import { registeredTools } from './tool-registry.js'
 
-// The SDK serializes tool schemas with these options; see `toJsonSchemaCompat`
-// in @modelcontextprotocol/sdk's server/mcp.js. Zod defaults `io` to 'output',
-// which measures a schema the wire never carries — for tools using `.pipe()`
-// that can be several times the real cost. Keep these in step with the SDK.
-const INPUT_SCHEMA_OPTIONS = { unrepresentable: 'any', io: 'input', target: 'draft-7' } as const
-const OUTPUT_SCHEMA_OPTIONS = { unrepresentable: 'any', io: 'output', target: 'draft-7' } as const
+// SDK v2 serializes Standard Schemas as JSON Schema 2020-12. Zod defaults `io`
+// to 'output', which measures a schema the wire never carries — for tools using
+// `.pipe()` that can be several times the real cost. Keep these in step with the SDK.
+const INPUT_SCHEMA_OPTIONS = { io: 'input', target: 'draft-2020-12' } as const
+const OUTPUT_SCHEMA_OPTIONS = { io: 'output', target: 'draft-2020-12' } as const
 
 function tokens(text: string): number {
     return encode(text).length
@@ -26,8 +25,8 @@ function formatToolTitle(name: string): string {
 }
 
 /**
- * Mirror of the `_meta` normalisation `registerAppTool` applies, which fills in
- * whichever of the two widget resource-URI spellings the tool did not declare.
+ * Mirror of the `_meta` normalisation in `registerTool`, which fills in whichever
+ * of the two widget resource-URI spellings the tool did not declare.
  */
 function normalizeAppUiMeta(meta: Record<string, unknown>): Record<string, unknown> {
     const ui = meta.ui as { resourceUri?: string } | undefined

@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { RESOURCE_MIME_TYPE, registerAppResource } from '@modelcontextprotocol/ext-apps/server'
-import { ResourceTemplate, type McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server'
+import { ResourceTemplate } from '@modelcontextprotocol/server'
+import type { McpServer } from '@modelcontextprotocol/server'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const TASK_LIST_HTML_PATHS = [
@@ -74,12 +75,12 @@ function createTaskListResourceResult(uri: string) {
  * Register the task list MCP App resource on the server.
  */
 function registerTaskListApp(server: McpServer) {
-    registerAppResource(
-        server,
+    server.registerResource(
         'todoist-task-list',
         taskListResourceUri,
         {
             description: taskListResourceDescription,
+            mimeType: RESOURCE_MIME_TYPE,
             _meta: taskListResourceMeta,
         },
         async () => createTaskListResourceResult(taskListResourceUri),

@@ -1,4 +1,4 @@
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { NodeStreamableHTTPServerTransport } from '@modelcontextprotocol/node'
 import express, { type Express, type Request, type Response } from 'express'
 import { getMcpServer } from './mcp-server.js'
 import { requireTrustedHost } from './middleware/require-trusted-host.js'
@@ -41,7 +41,7 @@ function createHttpApp({ todoistApiKey, baseUrl, allowedHosts }: CreateHttpAppOp
         requireValidTodoistToken({ type: 'static', apiKey: todoistApiKey, baseUrl }),
         async (req: Request, res: Response) => {
             try {
-                const transport = new StreamableHTTPServerTransport({
+                const transport = new NodeStreamableHTTPServerTransport({
                     sessionIdGenerator: undefined,
                 })
 
