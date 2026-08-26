@@ -1,3 +1,9 @@
+## [13.1.1](https://github.com/Doist/todoist-mcp/compare/v13.1.0...v13.1.1) (2026-08-26)
+
+### Bug Fixes
+
+* align get-overview section output schema ([#584](https://github.com/Doist/todoist-mcp/issues/584)) ([1222a6f](https://github.com/Doist/todoist-mcp/commit/1222a6fa9598449b1e4a367388459b0a337be5be)), closes [#583](https://github.com/Doist/todoist-mcp/issues/583)
+
 ## [13.1.0](https://github.com/Doist/todoist-mcp/compare/v13.0.0...v13.1.0) (2026-08-26)
 
 ### Features
