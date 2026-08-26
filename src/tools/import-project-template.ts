@@ -1,3 +1,4 @@
+import { parseTodoistUrl } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { mapComment, mapTask } from '../tool-helpers.js'
@@ -37,19 +38,17 @@ function extractTemplateId(input: string): string {
         )
     }
 
-    const segments = url.pathname.split('/').filter(Boolean)
-    if (!segments.includes('templates')) {
+    // The SDK recognises a fixed set of Todoist hosts, which is narrower than
+    // the subdomains accepted above, so point the URL at the canonical host
+    // before reading the template ID out of the path.
+    url.hostname = 'todoist.com'
+
+    const parsed = parseTodoistUrl(url.toString())
+    if (parsed?.type !== 'template') {
         throw new Error(`"${trimmed}" is not a Todoist template URL.`)
     }
 
-    const last = segments.at(-1)
-    const id = last === 'view' ? segments.at(-2) : last
-
-    if (!id) {
-        throw new Error(`Could not read a template ID from "${trimmed}".`)
-    }
-
-    return id
+    return parsed.id
 }
 
 function isTodoistHost(hostname: string): boolean {
