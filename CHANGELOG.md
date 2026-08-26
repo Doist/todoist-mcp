@@ -1,3 +1,9 @@
+## [13.1.0](https://github.com/Doist/todoist-mcp/compare/v13.0.0...v13.1.0) (2026-08-26)
+
+### Features
+
+* take todoist-sdk 15 and read template IDs with it ([#582](https://github.com/Doist/todoist-mcp/issues/582)) ([db8d70d](https://github.com/Doist/todoist-mcp/commit/db8d70d43263a359659a536071f97bc6e75d23fa))
+
 ## [13.0.0](https://github.com/Doist/todoist-mcp/compare/v12.6.0...v13.0.0) (2026-08-19)
 
 ### ⚠ BREAKING CHANGES
