@@ -27,7 +27,7 @@ const ProjectStructureSchema: z.ZodType<{
     parentId?: string
     folderId?: string
     childOrder: number
-    sections: { id: string; name: string }[]
+    sections: SectionSummary[]
     children: unknown[]
 }> = z.lazy(() =>
     z.object({
@@ -42,12 +42,7 @@ const ProjectStructureSchema: z.ZodType<{
             .optional()
             .describe('The folder ID this project belongs to (workspace projects only).'),
         childOrder: z.number().describe('The ordering index among siblings.'),
-        sections: z.array(
-            z.object({
-                id: z.string(),
-                name: z.string(),
-            }),
-        ),
+        sections: z.array(SectionSchema),
         children: z.array(ProjectStructureSchema).describe('Nested child projects.'),
     }),
 )

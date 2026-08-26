@@ -1,5 +1,6 @@
 import type { PersonalProject, Section, Task, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
+import { z } from 'zod'
 import { removeNullFields } from '../utils/sanitize-data.js'
 import {
     createMockProject,
@@ -10,7 +11,7 @@ import {
     TEST_IDS,
 } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
-import { getOverview } from './get-overview.js'
+import { type AccountOverviewStructured, getOverview } from './get-overview.js'
 
 // Mock the Todoist API
 const mockTodoistApi = {
@@ -73,7 +74,7 @@ describe(`${GET_OVERVIEW} tool`, () => {
             expect(result.textContent).toMatchSnapshot()
 
             // Test structured content sanity checks
-            const structuredContent = result.structuredContent
+            const structuredContent = result.structuredContent as AccountOverviewStructured
             expect(structuredContent).toEqual(
                 expect.objectContaining({
                     type: 'account_overview',
@@ -89,6 +90,15 @@ describe(`${GET_OVERVIEW} tool`, () => {
                 }),
             )
             expect(structuredContent.projects).toHaveLength(1) // Only non-inbox projects
+            expect(structuredContent.projects[0]?.sections).toEqual([
+                expect.objectContaining({
+                    id: TEST_IDS.SECTION_1,
+                    sectionOrder: 1,
+                }),
+            ])
+            expect(() =>
+                z.object(getOverview.outputSchema).parse(removeNullFields(structuredContent)),
+            ).not.toThrow()
         })
 
         it('should produce structured content that survives removeNullFields sanitization', async () => {
