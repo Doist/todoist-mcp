@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
 import { isInboxProjectId, resolveInboxProjectId } from '../tool-helpers.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
 import {
     FailureSchema,
     SectionSchema as SectionOutputSchema,
@@ -87,6 +88,8 @@ const addSections = {
                 })
             }
         })
+
+        logBatchFailures(ToolNames.ADD_SECTIONS, sections.length, failures, { redactItems: true })
 
         const textContent = generateTextContent({ sections: newSections, failures })
 

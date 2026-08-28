@@ -10,6 +10,7 @@ import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
 import { isInboxProjectId, mapTask } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
 import { getMoveLimiter, getWriteLimiter } from '../utils/concurrency.js'
 import { BatchLimits, DisplayLimits } from '../utils/constants.js'
 import { DurationParseError, parseDuration } from '../utils/duration-parser.js'
@@ -356,6 +357,8 @@ const updateTasks = {
         // failures uniform and preserves the per-item reason for each task, rather than
         // collapsing them into one opaque error.
         const mappedTasks = updatedTasks.map(mapTask)
+
+        logBatchFailures(ToolNames.UPDATE_TASKS, tasks.length, failures)
 
         const textContent = generateTextContent({
             tasks: mappedTasks,

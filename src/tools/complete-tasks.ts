@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
 import { FailureSchema } from '../utils/output-schemas.js'
 import { summarizeBatch } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -31,13 +33,17 @@ const completeTasks = {
                 await client.closeTask(id)
                 completed.push(id)
             } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+                // `formatBatchItemError` keeps the status and error tag, so a
+                // quota rejection stays distinguishable from a missing task
+                // once the failures are aggregated.
                 failures.push({
                     item: id,
-                    error: errorMessage,
+                    error: formatBatchItemError(error),
                 })
             }
         }
+
+        logBatchFailures(ToolNames.COMPLETE_TASKS, args.ids.length, failures)
 
         const textContent = generateTextContent({
             completed,

@@ -123,7 +123,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; add
 
 ## `src/utils/` catalog — don't reimplement
 
-- `constants.ts` — `ApiLimits` (batch sizes, max string lengths), `BatchLimits`, `ConcurrencyLimits`
+- `constants.ts` — `ApiLimits` (batch sizes, max string lengths), `BatchLimits`, `ConcurrencyLimits`, `LogLimits`
 - `tool-names.ts` — `ToolNames` enum of every registered tool name
 - `output-schemas.ts` — Reusable Zod schemas: TaskSchema, ProjectSchema, SectionSchema, CommentSchema, etc.
 - `schema-helpers.ts` — Zod builders used across tools
@@ -137,6 +137,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; add
 - `reminder-schemas.ts` — reminder-specific shapes
 - `assignment-validator.ts` — validate collaborator assignments
 - `user-resolver.ts` / `workspace-resolver.ts` — resolve user/workspace refs
+- `batch-failures.ts` — `logBatchFailures`, the one log line a batch tool writes for the items it could not act on
 - `response-builders.ts` — `summarizeTaskOperation`, `summarizeBatch`, `appendFailureSummary`, `previewTasks` (keep output messages consistent)
 - `retry.ts` — `executeWithRetry()` used inside `registerTool`; exponential backoff with full jitter
 - `concurrency.ts` — `getMoveLimiter`/`getWriteLimiter` bound how many write requests a batch tool has in flight. Limiters are per account (registered by `createTodoistClient`), because the HTTP transport builds a client per request. Task moves get their own single-slot lane: the API locks a task's whole tree for a move, so overlapping moves contend

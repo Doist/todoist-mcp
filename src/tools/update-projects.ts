@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
 import { mapProject } from '../tool-helpers.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
 import { ColorSchema } from '../utils/colors.js'
 import { FailureSchema, ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
 import { appendFailureSummary } from '../utils/response-builders.js'
@@ -108,6 +109,8 @@ const updateProjects = {
                 skippedNoValidValues++
             }
         }
+
+        logBatchFailures(ToolNames.UPDATE_PROJECTS, projects.length, failures)
 
         const textContent = generateTextContent({
             projects: updatedProjects,
