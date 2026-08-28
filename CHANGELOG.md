@@ -1,3 +1,9 @@
+## [13.1.2](https://github.com/Doist/todoist-mcp/compare/v13.1.1...v13.1.2) (2026-08-28)
+
+### Bug Fixes
+
+* log the batch items a tool could not act on ([#585](https://github.com/Doist/todoist-mcp/issues/585)) ([729d1f5](https://github.com/Doist/todoist-mcp/commit/729d1f57f0dbe86c91c7d7e937c188f7923dfabe))
+
 ## [13.1.1](https://github.com/Doist/todoist-mcp/compare/v13.1.0...v13.1.1) (2026-08-26)
 
 ### Bug Fixes
