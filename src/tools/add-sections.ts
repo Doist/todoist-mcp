@@ -89,7 +89,7 @@ const addSections = {
             }
         })
 
-        logBatchFailures(ToolNames.ADD_SECTIONS, sections.length, failures)
+        logBatchFailures(ToolNames.ADD_SECTIONS, sections.length, failures, { redactItems: true })
 
         const textContent = generateTextContent({ sections: newSections, failures })
 

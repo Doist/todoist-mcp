@@ -164,7 +164,7 @@ const addTasks = {
 
         const mappedTasks = newTasks.map(mapTask)
 
-        logBatchFailures(ToolNames.ADD_TASKS, tasks.length, failures)
+        logBatchFailures(ToolNames.ADD_TASKS, tasks.length, failures, { redactItems: true })
 
         const textContent = generateTextContent({
             tasks: mappedTasks,

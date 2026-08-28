@@ -112,7 +112,7 @@ const addProjects = {
         })
 
         const mappedProjects = newProjects.map(mapProject)
-        logBatchFailures(ToolNames.ADD_PROJECTS, projects.length, failures)
+        logBatchFailures(ToolNames.ADD_PROJECTS, projects.length, failures, { redactItems: true })
 
         const textContent = generateTextContent({ projects: newProjects, failures })
 
