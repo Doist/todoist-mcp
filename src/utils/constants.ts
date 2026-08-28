@@ -53,6 +53,12 @@ export const DisplayLimits = {
     BATCH_OPERATION_THRESHOLD: 10,
 } as const
 
+// Log Limits
+export const LogLimits = {
+    /** Maximum number of failed items named in one log line */
+    MAX_FAILURES_LOGGED: 5,
+} as const
+
 // Batch Operation Limits
 export const BatchLimits = {
     /** Maximum tasks accepted by one task create or update operation */

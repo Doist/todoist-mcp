@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
 import { FailureSchema } from '../utils/output-schemas.js'
 import { summarizeBatch } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -38,6 +39,8 @@ const uncompleteTasks = {
                 })
             }
         }
+
+        logBatchFailures(ToolNames.UNCOMPLETE_TASKS, args.ids.length, failures)
 
         const textContent = generateTextContent({
             uncompleted,

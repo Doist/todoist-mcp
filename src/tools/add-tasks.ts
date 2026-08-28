@@ -9,6 +9,7 @@ import {
 } from '../tool-execution-error.js'
 import { isInboxProjectId, mapTask } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
 import { BatchLimits } from '../utils/constants.js'
 import { DurationParseError, parseDuration } from '../utils/duration-parser.js'
 import { FailureSchema, TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
@@ -162,6 +163,8 @@ const addTasks = {
         }
 
         const mappedTasks = newTasks.map(mapTask)
+
+        logBatchFailures(ToolNames.ADD_TASKS, tasks.length, failures)
 
         const textContent = generateTextContent({
             tasks: mappedTasks,

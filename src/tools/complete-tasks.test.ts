@@ -290,4 +290,37 @@ describe(`${COMPLETE_TASKS} tool`, () => {
             expect(result.textContent).toMatchSnapshot()
         })
     })
+
+    describe('logging', () => {
+        it('logs the tasks it could not complete', async () => {
+            const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+            mockTodoistApi.closeTask.mockImplementation(async (id: string) => {
+                if (id === 'task-2') {
+                    throw new Error('HTTP 404: Not Found')
+                }
+                return true
+            })
+
+            await completeTasks.execute({ ids: ['task-1', 'task-2'] }, mockTodoistApi)
+
+            expect(consoleErrorSpy).toHaveBeenCalledWith(`${COMPLETE_TASKS}: items failed`, {
+                failed: 1,
+                of: 2,
+                sample: [{ item: 'task-2', error: 'HTTP 404: Not Found' }],
+            })
+
+            consoleErrorSpy.mockRestore()
+        })
+
+        it('stays quiet when every task completes', async () => {
+            const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+            mockTodoistApi.closeTask.mockResolvedValue(true)
+
+            await completeTasks.execute({ ids: ['task-1'] }, mockTodoistApi)
+
+            expect(consoleErrorSpy).not.toHaveBeenCalled()
+
+            consoleErrorSpy.mockRestore()
+        })
+    })
 })
