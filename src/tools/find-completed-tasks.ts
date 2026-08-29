@@ -4,7 +4,7 @@ import type { TodoistTool } from '../todoist-tool.js'
 import { mapTask, resolveInboxProjectId } from '../tool-helpers.js'
 import { ApiLimits } from '../utils/constants.js'
 import { getDateInOffset, parseGmtOffsetToMinutes, shiftDateStringByDays } from '../utils/date.js'
-import { generateLabelsFilter, LabelsSchema } from '../utils/labels.js'
+import { formatLabelsHint, generateLabelsFilter, LabelsSchema } from '../utils/labels.js'
 import { TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import { previewTasks, summarizeList } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -236,10 +236,7 @@ function generateTextContent({
 
     // Add label filter information
     if (args.labels && args.labels.length > 0) {
-        const labelText = args.labels
-            .map((label) => `@${label}`)
-            .join(args.labelsOperator === 'and' ? ' & ' : ' | ')
-        filterHints.push(`labels: ${labelText}`)
+        filterHints.push(`labels: ${formatLabelsHint(args.labels, args.labelsOperator)}`)
     }
 
     // Add responsible user filter information
