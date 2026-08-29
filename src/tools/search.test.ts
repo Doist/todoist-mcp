@@ -1,10 +1,12 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, type MockedFunction, vi } from 'vitest'
 import { getTasksByFilter } from '../tool-helpers.js'
+import { ApiLimits } from '../utils/constants.js'
 import {
     createMappedTask,
     createMockApiResponse,
     createMockProject,
+    createMockTask,
     TEST_IDS,
 } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -25,11 +27,13 @@ const mockGetTasksByFilter = getTasksByFilter as MockedFunction<typeof getTasksB
 // Mock the Todoist API
 const mockTodoistApi = {
     searchProjects: vi.fn(),
+    searchCompletedTasks: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 describe(`${SEARCH} tool`, () => {
     beforeEach(() => {
         vi.clearAllMocks()
+        mockTodoistApi.searchCompletedTasks.mockResolvedValue({ items: [], nextCursor: null })
     })
 
     describe('searching tasks and projects', () => {
@@ -91,6 +95,51 @@ describe(`${SEARCH} tool`, () => {
                 id: `project:${TEST_IDS.PROJECT_WORK}`,
                 title: 'Important Work Project',
                 url: `https://app.todoist.com/app/project/${TEST_IDS.PROJECT_WORK}`,
+            })
+        })
+
+        it('lists completed tasks after active tasks and before projects', async () => {
+            mockGetTasksByFilter.mockResolvedValue({
+                tasks: [createMappedTask({ id: 'active-task', content: 'Active report' })],
+                nextCursor: null,
+            })
+            mockTodoistApi.searchCompletedTasks.mockResolvedValue({
+                items: [createMockTask({ id: 'completed-task', content: 'Completed report' })],
+                nextCursor: 'ignored-next-page',
+            })
+            mockTodoistApi.searchProjects.mockResolvedValue(
+                createMockApiResponse([
+                    createMockProject({ id: 'report-project', name: 'Report project' }),
+                ]),
+            )
+
+            const result = await search.execute({ query: 'report' }, mockTodoistApi)
+
+            expect(mockTodoistApi.searchCompletedTasks).toHaveBeenCalledWith({
+                query: 'report',
+                limit: ApiLimits.COMPLETED_TASKS_DEFAULT,
+            })
+            const expectedResults = [
+                {
+                    id: 'task:active-task',
+                    title: 'Active report',
+                    url: 'https://app.todoist.com/app/task/active-task',
+                },
+                {
+                    id: 'task:completed-task',
+                    title: '[completed] Completed report',
+                    url: 'https://app.todoist.com/app/task/completed-task',
+                },
+                {
+                    id: 'project:report-project',
+                    title: 'Report project',
+                    url: 'https://app.todoist.com/app/project/report-project',
+                },
+            ]
+            expect(JSON.parse(result.textContent ?? '{}').results).toEqual(expectedResults)
+            expect(result.structuredContent).toEqual({
+                results: expectedResults,
+                totalCount: 3,
             })
         })
 
@@ -195,6 +244,18 @@ describe(`${SEARCH} tool`, () => {
 
             await expect(search.execute({ query: 'test' }, mockTodoistApi)).rejects.toThrow(
                 'Project search failed',
+            )
+        })
+
+        it('should throw error for completed task search failure', async () => {
+            mockGetTasksByFilter.mockResolvedValue({ tasks: [], nextCursor: null })
+            mockTodoistApi.searchCompletedTasks.mockRejectedValue(
+                new Error('Completed task search failed'),
+            )
+            mockTodoistApi.searchProjects.mockResolvedValue(createMockApiResponse([]))
+
+            await expect(search.execute({ query: 'test' }, mockTodoistApi)).rejects.toThrow(
+                'Completed task search failed',
             )
         })
     })

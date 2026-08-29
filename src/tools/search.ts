@@ -37,23 +37,25 @@ const OutputSchema = {
 const search = {
     name: ToolNames.SEARCH,
     description:
-        'Search across tasks and projects in Todoist. Returns a list of relevant results with IDs, titles, and URLs.',
+        'Search across active tasks, completed tasks, and projects in Todoist. Returns a list of relevant results with IDs, titles, and URLs. Completed task titles start with "[completed]".',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     async execute(args, client) {
         const { query } = args
 
-        // Search both tasks and projects in parallel
+        // Search active tasks, completed tasks, and projects in parallel
         // Use TASKS_MAX for search since this tool doesn't support pagination
+        // Completed task search returns at most one 50-item page
         // For projects, use server-side search
-        const [tasksResult, projects] = await Promise.all([
+        const [tasksResult, completedTasksResult, projects] = await Promise.all([
             getTasksByFilter({
                 client,
                 query: `search: ${query}`,
                 limit: ApiLimits.TASKS_MAX,
                 cursor: undefined,
             }),
+            client.searchCompletedTasks({ query, limit: ApiLimits.COMPLETED_TASKS_DEFAULT }),
             searchAllProjects(client, query),
         ])
 
@@ -65,6 +67,15 @@ const search = {
             results.push({
                 id: `task:${task.id}`,
                 title: task.content,
+                url: getTaskUrl(task.id),
+            })
+        }
+
+        // Add completed task results after active tasks
+        for (const task of completedTasksResult.items) {
+            results.push({
+                id: `task:${task.id}`,
+                title: `[completed] ${task.content}`,
                 url: getTaskUrl(task.id),
             })
         }
