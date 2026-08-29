@@ -21,7 +21,7 @@ import { TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import { previewTasks, summarizeList } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
 
-const { FIND_COMPLETED_TASKS, ADD_TASKS } = ToolNames
+const { FIND_COMPLETED_TASKS, SEARCH_COMPLETED_TASKS, ADD_TASKS } = ToolNames
 
 const ArgsSchema = {
     searchText: z.string().optional().describe('The text to search for in tasks.'),
@@ -445,13 +445,17 @@ function generateTextContent({
                 const email = assigneeEmail || args.responsibleUser
                 zeroReasonHints.push(`No tasks assigned to ${email}`)
                 zeroReasonHints.push('Check if the user name is correct')
-                zeroReasonHints.push(`Check completed tasks with ${FIND_COMPLETED_TASKS}`)
+                zeroReasonHints.push(
+                    args.searchText
+                        ? `Search completed tasks with ${SEARCH_COMPLETED_TASKS}`
+                        : `Check completed tasks with ${FIND_COMPLETED_TASKS}`,
+                )
             }
             if (args.searchText) {
                 zeroReasonHints.push('Try broader search terms')
                 zeroReasonHints.push('Verify spelling and try partial words')
                 if (!args.responsibleUser) {
-                    zeroReasonHints.push(`Check completed tasks with ${FIND_COMPLETED_TASKS}`)
+                    zeroReasonHints.push(`Search completed tasks with ${SEARCH_COMPLETED_TASKS}`)
                 }
             }
         }
