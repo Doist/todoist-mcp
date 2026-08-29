@@ -59,35 +59,24 @@ const search = {
             searchAllProjects(client, query),
         ])
 
-        // Build results array
-        const results: SearchResult[] = []
-
-        // Add task results with composite IDs
-        for (const task of tasksResult.tasks) {
-            results.push({
+        // Build results with composite IDs: active tasks, then completed tasks, then projects
+        const results: SearchResult[] = [
+            ...tasksResult.tasks.map((task) => ({
                 id: `task:${task.id}`,
                 title: task.content,
                 url: getTaskUrl(task.id),
-            })
-        }
-
-        // Add completed task results after active tasks
-        for (const task of completedTasksResult.items) {
-            results.push({
+            })),
+            ...completedTasksResult.items.map((task) => ({
                 id: `task:${task.id}`,
                 title: `[completed] ${task.content}`,
                 url: getTaskUrl(task.id),
-            })
-        }
-
-        // Add project results with composite IDs
-        for (const project of projects) {
-            results.push({
+            })),
+            ...projects.map((project) => ({
                 id: `project:${project.id}`,
                 title: project.name,
                 url: getProjectUrl(project.id),
-            })
-        }
+            })),
+        ]
 
         return {
             textContent: JSON.stringify({ results }),
