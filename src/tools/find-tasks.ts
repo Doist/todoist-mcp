@@ -36,7 +36,9 @@ const ArgsSchema = {
     responsibleUser: z
         .string()
         .optional()
-        .describe('Find tasks assigned to this user. Can be a user ID, name, or email address.'),
+        .describe(
+            'Find tasks assigned to this user. Can be a user ID, name, or email address. The current user also includes unassigned tasks.',
+        ),
     responsibleUserFiltering: z
         .enum(RESPONSIBLE_USER_FILTERING)
         .optional()
@@ -212,10 +214,16 @@ const findTasks = {
             }
         }
 
-        // If only responsibleUid is provided (without containers or raw filter), use assignee filter
+        // If only responsibleUid is provided (without containers or raw filter), use responsible user filtering
         if (resolvedAssigneeId && !searchText && !hasLabels && !resolvedFilter) {
+            const responsibleUserFilter = buildResponsibleUserQueryFilter({
+                resolvedAssigneeId,
+                assigneeEmail,
+                currentUserId: todoistUser.id,
+                responsibleUserFiltering,
+            })
             const { results: tasks, nextCursor } = await client.getTasksByFilter({
-                query: `assigned to: ${assigneeEmail}`,
+                query: responsibleUserFilter,
                 lang: 'en',
                 limit,
                 cursor: cursor ?? null,
@@ -265,6 +273,7 @@ const findTasks = {
             const responsibleUserFilter = buildResponsibleUserQueryFilter({
                 resolvedAssigneeId,
                 assigneeEmail,
+                currentUserId: todoistUser.id,
                 responsibleUserFiltering,
             })
             query = appendToQuery(query, responsibleUserFilter)

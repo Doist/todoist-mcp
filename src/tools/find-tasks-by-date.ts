@@ -61,7 +61,7 @@ export const ArgsSchema = {
         .string()
         .optional()
         .describe(
-            'Filter tasks assigned to this user. User ID, name, or email. For personal queries (summaries, plans, reports), set to current user from user-info to exclude collaborators.',
+            'Filter tasks assigned to this user. User ID, name, or email. The current user also includes unassigned tasks.',
         ),
     responsibleUserFiltering: z
         .enum(RESPONSIBLE_USER_FILTERING)
@@ -83,7 +83,7 @@ const OutputSchema = {
 const findTasksByDate = {
     name: ToolNames.FIND_TASKS_BY_DATE,
     description:
-        "Get tasks by date range. startDate='today' includes overdue items. Default responsibleUserFiltering='unassignedOrMe' excludes others' tasks. Person-specific queries (summaries, plans, reports) require responsibleUser.",
+        "Get tasks by date range. startDate='today' includes overdue items. Default responsibleUserFiltering='unassignedOrMe' excludes others' tasks.",
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
@@ -98,6 +98,7 @@ const findTasksByDate = {
         const resolved = await resolveResponsibleUser(client, args.responsibleUser)
         const resolvedAssigneeId = resolved?.userId
         const assigneeEmail = resolved?.email
+        const currentUserId = resolvedAssigneeId ? (await client.getUser()).id : undefined
 
         let query = ''
 
@@ -138,6 +139,7 @@ const findTasksByDate = {
         const responsibleUserFilter = buildResponsibleUserQueryFilter({
             resolvedAssigneeId,
             assigneeEmail,
+            currentUserId,
             responsibleUserFiltering: args.responsibleUserFiltering,
         })
         query = appendToQuery(query, responsibleUserFilter)
