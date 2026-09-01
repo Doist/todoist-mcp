@@ -78,7 +78,7 @@ describe('shared utilities', () => {
             expect(result.duration).toBe(undefined)
         })
 
-        it('should handle task with duration', () => {
+        it('should format minute durations', () => {
             const mockTask = createMockTask({
                 id: '789',
                 content: 'Task with duration',
@@ -88,6 +88,18 @@ describe('shared utilities', () => {
 
             const result = mapTask(mockTask)
             expect(result.duration).toBe('2h30m')
+        })
+
+        it('should format day durations', () => {
+            const mockTask = createMockTask({
+                id: '789',
+                content: 'Task with duration',
+                projectId: 'proj-1',
+                duration: { amount: 4, unit: 'day' },
+            })
+
+            const result = mapTask(mockTask)
+            expect(result.duration).toBe('4d')
         })
 
         it('should preserve markdown links and formatting in content and description', () => {

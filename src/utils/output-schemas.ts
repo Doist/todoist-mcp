@@ -20,7 +20,7 @@ const TaskSchema = z.object({
     sectionId: z.string().optional(),
     parentId: z.string().optional(),
     labels: z.array(z.string()).optional(),
-    duration: z.string().optional().describe('e.g. "2h30m".'),
+    duration: z.string().optional().describe('e.g. "2h30m" or "4d".'),
     responsibleUid: z.string().optional(),
     isUncompletable: z.boolean().optional().describe('An organizational header, not a real task.'),
     assignedByUid: z.string().optional(),

@@ -330,7 +330,11 @@ function mapTask(task: Task) {
         sectionId: task.sectionId ?? undefined,
         parentId: task.parentId ?? undefined,
         labels: task.labels,
-        duration: task.duration ? formatDuration(task.duration.amount) : undefined,
+        duration: task.duration
+            ? task.duration.unit === 'day'
+                ? `${task.duration.amount}d`
+                : formatDuration(task.duration.amount)
+            : undefined,
         responsibleUid: task.responsibleUid ?? undefined,
         assignedByUid: task.assignedByUid ?? undefined,
         checked: task.checked,
