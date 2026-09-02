@@ -1,5 +1,6 @@
 import type { Filter, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
+import { z } from 'zod'
 import { TEST_ERRORS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { addFilters } from './add-filters.js'
@@ -130,6 +131,85 @@ describe(`${ADD_FILTERS} tool`, () => {
             })
 
             expect(result.structuredContent.filters[0]?.isFavorite).toBe(true)
+        })
+    })
+
+    describe('descriptions', () => {
+        function mockCreateEchoingDescription() {
+            mockTodoistApi.sync.mockImplementation(async (request) => {
+                const commands = request.commands ?? []
+                const tempIdMap: Record<string, string> = {}
+                const createdFilters: Filter[] = []
+                for (const cmd of commands) {
+                    if (cmd.type === 'filter_add' && cmd.tempId) {
+                        const newId = 'filter-described'
+                        tempIdMap[cmd.tempId] = newId
+                        createdFilters.push(
+                            createMockFilter({
+                                id: newId,
+                                name: cmd.args.name as string,
+                                query: cmd.args.query as string,
+                                // Echo back whatever the command carried, the way the API would.
+                                description: cmd.args.description as string | undefined,
+                            }),
+                        )
+                    }
+                }
+                return { filters: createdFilters, tempIdMapping: tempIdMap }
+            })
+        }
+
+        it('sends the description and echoes it back', async () => {
+            mockCreateEchoingDescription()
+
+            const result = await addFilters.execute(
+                {
+                    filters: [
+                        {
+                            name: 'Day job',
+                            query: 'today & #Work',
+                            description: 'Everything for the day job',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const syncCall = mockTodoistApi.sync.mock.calls[0]?.[0]
+            expect(syncCall?.commands?.[0]?.args).toMatchObject({
+                description: 'Everything for the day job',
+            })
+            expect(result.structuredContent.filters[0]?.description).toBe(
+                'Everything for the day job',
+            )
+        })
+
+        it('leaves the key out of the command and the output when there is no description', async () => {
+            mockCreateEchoingDescription()
+
+            const result = await addFilters.execute(
+                { filters: [{ name: 'Day job', query: 'today & #Work' }] },
+                mockTodoistApi,
+            )
+
+            const syncCall = mockTodoistApi.sync.mock.calls[0]?.[0]
+            expect(syncCall?.commands?.[0]?.args).not.toHaveProperty('description')
+            expect(result.structuredContent.filters[0]).not.toHaveProperty('description')
+        })
+
+        it('drops an empty description rather than sending one', async () => {
+            mockCreateEchoingDescription()
+
+            // The schema normalizes "" to undefined, so the key never reaches the command.
+            // LLMs send "" for omitted optional fields and the API rejects that.
+            const parsed = z.object(addFilters.parameters).parse({
+                filters: [{ name: 'Day job', query: 'today & #Work', description: '' }],
+            })
+            const result = await addFilters.execute(parsed, mockTodoistApi)
+
+            const syncCall = mockTodoistApi.sync.mock.calls[0]?.[0]
+            expect(syncCall?.commands?.[0]?.args).not.toHaveProperty('description')
+            expect(result.structuredContent.filters[0]).not.toHaveProperty('description')
         })
     })
 

@@ -1,5 +1,6 @@
 import type { Filter, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
+import { z } from 'zod'
 import { TEST_ERRORS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { updateFilters } from './update-filters.js'
@@ -76,6 +77,50 @@ describe(`${UPDATE_FILTERS} tool`, () => {
             })
 
             expect(result.structuredContent.totalCount).toBe(1)
+        })
+
+        it('should update a filter description', async () => {
+            const updatedFilter = createMockFilter({ id: 'filter-1' })
+            mockTodoistApi.sync.mockResolvedValue({ filters: [updatedFilter] })
+
+            await updateFilters.execute(
+                { filters: [{ id: 'filter-1', description: 'Everything due this week' }] },
+                mockTodoistApi,
+            )
+
+            const commandCall = mockTodoistApi.sync.mock.calls[0]?.[0]
+            expect(commandCall?.commands?.[0]?.args).toMatchObject({
+                id: 'filter-1',
+                description: 'Everything due this week',
+            })
+        })
+
+        it('accepts a legacy null as the clear sentinel', () => {
+            // Callers that predate the "remove" sentinel clear optional fields with null.
+            // The schema turns it into the sentinel so those calls keep working, and the
+            // command builder then sends the null the API expects.
+            const parsed = z.object(updateFilters.parameters).parse({
+                filters: [{ id: 'filter-1', description: null }],
+            })
+
+            expect(parsed.filters[0]?.description).toBe('remove')
+        })
+
+        it('should clear a description when passed "remove"', async () => {
+            const updatedFilter = createMockFilter({ id: 'filter-1' })
+            mockTodoistApi.sync.mockResolvedValue({ filters: [updatedFilter] })
+
+            await updateFilters.execute(
+                { filters: [{ id: 'filter-1', description: 'remove' }] },
+                mockTodoistApi,
+            )
+
+            // The sentinel becomes null, which is what the API reads as "clear it".
+            const commandCall = mockTodoistApi.sync.mock.calls[0]?.[0]
+            expect(commandCall?.commands?.[0]?.args).toMatchObject({
+                id: 'filter-1',
+                description: null,
+            })
         })
 
         it('should update isFavorite status', async () => {
