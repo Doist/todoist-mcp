@@ -612,6 +612,35 @@ describe(`${FIND_TASKS_BY_DATE} tool`, () => {
             expect(textContent).toMatchSnapshot()
         })
 
+        it('should include unassigned tasks when responsibleUser resolves to current user', async () => {
+            mockResolveUserNameToId.mockResolvedValue({
+                userId: TEST_IDS.USER_ID,
+                displayName: 'Avery Inboxworthy',
+                email: 'avery.inboxworthy@example.com',
+            })
+
+            mockGetTasksByFilter.mockResolvedValue({ tasks: [], nextCursor: null })
+
+            await findTasksByDate.execute(
+                {
+                    startDate: 'today',
+                    daysCount: 1,
+                    limit: 50,
+                    responsibleUser: 'me',
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockResolveUserNameToId).toHaveBeenCalledWith(mockTodoistApi, 'me')
+
+            expect(mockGetTasksByFilter).toHaveBeenCalledWith({
+                client: mockTodoistApi,
+                query: '(today | overdue) & !assigned to: others',
+                cursor: undefined,
+                limit: 50,
+            })
+        })
+
         it('should throw error when user cannot be resolved', async () => {
             mockResolveUserNameToId.mockResolvedValue(null)
 
