@@ -196,6 +196,39 @@ describe(`${FIND_FILTERS} tool`, () => {
         })
     })
 
+    describe('descriptions', () => {
+        it('returns a description that has one', async () => {
+            mockTodoistApi.sync.mockResolvedValue({
+                filters: [createMockFilter({ description: 'Everything for the day job' })],
+            })
+
+            const result = await findFilters.execute({}, mockTodoistApi)
+
+            expect(result.structuredContent.filters[0]?.description).toBe(
+                'Everything for the day job',
+            )
+        })
+
+        // The column is nullable and the sync view normalizes NULL to "" on the way out, so a
+        // filter with no description arrives as either, and a payload predating the field has
+        // no key at all. All three have to surface as undefined rather than null: structured
+        // content is sanitised with removeNullFields, so a null would be stripped and then
+        // fail validation against the optional output schema.
+        it.each([
+            ['an empty string', ''],
+            ['a null', null],
+            ['no key at all', undefined],
+        ])('surfaces no description for %s', async (_label, description) => {
+            mockTodoistApi.sync.mockResolvedValue({
+                filters: [createMockFilter({ description } as Partial<Filter>)],
+            })
+
+            const result = await findFilters.execute({}, mockTodoistApi)
+
+            expect(result.structuredContent.filters[0]?.description).toBeUndefined()
+        })
+    })
+
     describe('error handling', () => {
         it('should propagate API errors', async () => {
             mockTodoistApi.sync.mockRejectedValue(new Error(TEST_ERRORS.API_UNAUTHORIZED))

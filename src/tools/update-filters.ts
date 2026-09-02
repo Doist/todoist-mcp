@@ -17,11 +17,16 @@ const FilterUpdateSchema = z.object({
             'The new filter query string. Examples: "today & p1", "#Work & overdue", "@email & today".',
         ),
     description: z
-        .string()
-        .optional()
-        .describe(
-            'A markdown description explaining what the filter is for. Use "remove" to clear the description; omit the field to leave it unchanged.',
-        ),
+        .preprocess(
+            // Keep accepting legacy null while exposing a Gemini-compatible string schema.
+            (value) => (value === null ? 'remove' : value),
+            z
+                .string()
+                .describe(
+                    'A markdown description explaining what the filter is for. Use "remove" to clear the description; omit the field to leave it unchanged.',
+                ),
+        )
+        .optional(),
     color: ColorSchema,
     isFavorite: z.boolean().optional().describe('Whether to mark the filter as a favorite.'),
 })

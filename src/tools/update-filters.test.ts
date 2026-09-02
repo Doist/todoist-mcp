@@ -1,5 +1,6 @@
 import type { Filter, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
+import { z } from 'zod'
 import { TEST_ERRORS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { updateFilters } from './update-filters.js'
@@ -92,6 +93,17 @@ describe(`${UPDATE_FILTERS} tool`, () => {
                 id: 'filter-1',
                 description: 'Everything due this week',
             })
+        })
+
+        it('accepts a legacy null as the clear sentinel', () => {
+            // Callers that predate the "remove" sentinel clear optional fields with null.
+            // The schema turns it into the sentinel so those calls keep working, and the
+            // command builder then sends the null the API expects.
+            const parsed = z.object(updateFilters.parameters).parse({
+                filters: [{ id: 'filter-1', description: null }],
+            })
+
+            expect(parsed.filters[0]?.description).toBe('remove')
         })
 
         it('should clear a description when passed "remove"', async () => {

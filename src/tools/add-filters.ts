@@ -2,6 +2,7 @@ import { type ColorKey, createCommand } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { ColorOutputSchema, ColorSchema } from '../utils/colors.js'
+import { optionalString } from '../utils/schema-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { FilterOutputSchema } from './find-filters.js'
 
@@ -14,10 +15,7 @@ const FilterSchema = z.object({
             'The filter query string. Examples: "today & p1", "#Work & overdue", "@email & today", "(p1 | p2) & !assigned". ' +
                 'Operators: | (OR), & (AND), ! (NOT), () grouping, , (multiple queries).',
         ),
-    description: z
-        .string()
-        .optional()
-        .describe('A markdown description explaining what the filter is for.'),
+    description: optionalString('A markdown description explaining what the filter is for.'),
     color: ColorSchema,
     isFavorite: z
         .boolean()
