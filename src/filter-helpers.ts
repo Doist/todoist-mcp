@@ -64,16 +64,14 @@ export function buildResponsibleUserQueryFilter({
     currentUserId?: string
     responsibleUserFiltering?: ResponsibleUserFiltering
 }): string {
-    if (resolvedAssigneeId && assigneeEmail) {
-        if (resolvedAssigneeId !== currentUserId) {
-            return `assigned to: ${assigneeEmail}`
-        }
-        return '!assigned to: others'
+    const isCurrentUser =
+        Boolean(resolvedAssigneeId && assigneeEmail) && resolvedAssigneeId === currentUserId
+
+    if (resolvedAssigneeId && assigneeEmail && !isCurrentUser) {
+        return `assigned to: ${assigneeEmail}`
     }
 
-    // Otherwise use the filtering mode
-    if (responsibleUserFiltering === 'unassignedOrMe') {
-        // Exclude tasks assigned to others (keeps unassigned + assigned to me)
+    if (isCurrentUser || responsibleUserFiltering === 'unassignedOrMe') {
         return '!assigned to: others'
     }
 
@@ -106,16 +104,19 @@ export function filterTasksByResponsibleUser<T extends { responsibleUid?: string
     currentUserId: string
     responsibleUserFiltering?: ResponsibleUserFiltering
 }): T[] {
-    if (resolvedAssigneeId) {
-        if (resolvedAssigneeId !== currentUserId) {
-            return tasks.filter((task) => task.responsibleUid === resolvedAssigneeId)
-        }
-        return tasks.filter((task) => !task.responsibleUid || task.responsibleUid === currentUserId)
-    } else if (responsibleUserFiltering === 'unassignedOrMe') {
-        return tasks.filter((task) => !task.responsibleUid || task.responsibleUid === currentUserId)
-    } else if (responsibleUserFiltering === 'assigned') {
-        return tasks.filter((task) => task.responsibleUid && task.responsibleUid !== currentUserId)
-    } else {
-        return tasks
+    const isCurrentUser = Boolean(resolvedAssigneeId) && resolvedAssigneeId === currentUserId
+
+    if (resolvedAssigneeId && !isCurrentUser) {
+        return tasks.filter((task) => task.responsibleUid === resolvedAssigneeId)
     }
+
+    if (isCurrentUser || responsibleUserFiltering === 'unassignedOrMe') {
+        return tasks.filter((task) => !task.responsibleUid || task.responsibleUid === currentUserId)
+    }
+
+    if (responsibleUserFiltering === 'assigned') {
+        return tasks.filter((task) => task.responsibleUid && task.responsibleUid !== currentUserId)
+    }
+
+    return tasks
 }

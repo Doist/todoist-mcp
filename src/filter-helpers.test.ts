@@ -9,6 +9,7 @@ describe('filter helpers', () => {
                     resolvedAssigneeId: 'current-user',
                     assigneeEmail: 'avery.inboxworthy@example.com',
                     currentUserId: 'current-user',
+                    responsibleUserFiltering: 'all',
                 }),
             ).toBe('!assigned to: others')
         })
@@ -36,6 +37,7 @@ describe('filter helpers', () => {
                     tasks,
                     resolvedAssigneeId: 'current-user',
                     currentUserId: 'current-user',
+                    responsibleUserFiltering: 'all',
                 }),
             ).toEqual([tasks[0], tasks[1]])
         })

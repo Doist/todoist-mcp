@@ -15,6 +15,7 @@ vi.mock('../tool-helpers', async () => {
 
 vi.mock('../utils/user-resolver', () => ({
     resolveUserNameToId: vi.fn(),
+    SELF_USER_KEYWORD: 'me',
 }))
 
 const mockGetTasksByFilter = getTasksByFilter as MockedFunction<typeof getTasksByFilter>

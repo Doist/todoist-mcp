@@ -13,6 +13,7 @@ import { generateLabelsFilter, LabelsSchema } from '../utils/labels.js'
 import { TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import { getDateString, previewTasks, summarizeList } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
+import { SELF_USER_KEYWORD } from '../utils/user-resolver.js'
 
 /**
  * Parse a YYYY-MM-DD string as local midnight (not UTC)
@@ -98,7 +99,12 @@ const findTasksByDate = {
         const resolved = await resolveResponsibleUser(client, args.responsibleUser)
         const resolvedAssigneeId = resolved?.userId
         const assigneeEmail = resolved?.email
-        const currentUserId = resolvedAssigneeId ? (await client.getUser()).id : undefined
+        const isCurrentUserQuery = args.responsibleUser?.trim().toLowerCase() === SELF_USER_KEYWORD
+        const currentUserId = isCurrentUserQuery
+            ? resolvedAssigneeId
+            : resolvedAssigneeId
+              ? (await client.getUser()).id
+              : undefined
 
         let query = ''
 

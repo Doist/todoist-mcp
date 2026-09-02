@@ -18,6 +18,7 @@ vi.mock('../tool-helpers', async () => {
 // Mock user resolver
 vi.mock('../utils/user-resolver', () => ({
     resolveUserNameToId: vi.fn(),
+    SELF_USER_KEYWORD: 'me',
 }))
 
 const mockGetTasksByFilter = getTasksByFilter as MockedFunction<typeof getTasksByFilter>
@@ -599,6 +600,7 @@ describe(`${FIND_TASKS_BY_DATE} tool`, () => {
             )
 
             expect(mockResolveUserNameToId).toHaveBeenCalledWith(mockTodoistApi, 'john@example.com')
+            expect(mockTodoistApi.getUser).toHaveBeenCalledTimes(1)
 
             expect(mockGetTasksByFilter).toHaveBeenCalledWith({
                 client: mockTodoistApi,
@@ -632,6 +634,7 @@ describe(`${FIND_TASKS_BY_DATE} tool`, () => {
             )
 
             expect(mockResolveUserNameToId).toHaveBeenCalledWith(mockTodoistApi, 'me')
+            expect(mockTodoistApi.getUser).not.toHaveBeenCalled()
 
             expect(mockGetTasksByFilter).toHaveBeenCalledWith({
                 client: mockTodoistApi,
