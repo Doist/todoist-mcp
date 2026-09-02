@@ -1,3 +1,9 @@
+## [13.2.0](https://github.com/Doist/todoist-mcp/compare/v13.1.3...v13.2.0) (2026-09-02)
+
+### Features
+
+* **filters:** expose filter descriptions in the filter tools ([#581](https://github.com/Doist/todoist-mcp/issues/581)) ([b7c180b](https://github.com/Doist/todoist-mcp/commit/b7c180bb474e9af739bec12f83687d35766e8400)), closes [Doist/Todoist#29669](https://github.com/Doist/Todoist/issues/29669)
+
 ## [13.1.3](https://github.com/Doist/todoist-mcp/compare/v13.1.2...v13.1.3) (2026-09-02)
 
 ### Bug Fixes
