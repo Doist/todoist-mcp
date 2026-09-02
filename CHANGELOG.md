@@ -1,3 +1,9 @@
+## [13.1.3](https://github.com/Doist/todoist-mcp/compare/v13.1.2...v13.1.3) (2026-09-02)
+
+### Bug Fixes
+
+* include unassigned tasks for current-user queries (Doist/Issues[#21012](https://github.com/Doist/todoist-mcp/issues/21012)) ([#593](https://github.com/Doist/todoist-mcp/issues/593)) ([5043b86](https://github.com/Doist/todoist-mcp/commit/5043b865bb8a27985f36871f0caf5a4690cb6c6b))
+
 ## [13.1.2](https://github.com/Doist/todoist-mcp/compare/v13.1.1...v13.1.2) (2026-08-28)
 
 ### Bug Fixes
