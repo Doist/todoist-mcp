@@ -1011,6 +1011,43 @@ End of test content.`
                 expect(structuredContent.tasks).toHaveLength(1)
                 expect((structuredContent.tasks as MappedTask[])[0]?.id).toBe(TEST_IDS.TASK_1)
             })
+
+            it('should include unassigned tasks for current user in container results', async () => {
+                const mockTasks = [
+                    createMockTask({
+                        id: TEST_IDS.TASK_1,
+                        responsibleUid: TEST_IDS.USER_ID,
+                    }),
+                    createMockTask({
+                        id: TEST_IDS.TASK_2,
+                        responsibleUid: null,
+                    }),
+                    createMockTask({
+                        id: TEST_IDS.TASK_3,
+                        responsibleUid: 'other-user-id',
+                    }),
+                ]
+
+                mockTodoistApi.getTasks.mockResolvedValue(createMockApiResponse(mockTasks))
+
+                mockResolveUserNameToId.mockResolvedValue({
+                    userId: TEST_IDS.USER_ID,
+                    displayName: 'Avery Inboxworthy',
+                    email: 'avery.inboxworthy@example.com',
+                })
+
+                const result = await findTasks.execute(
+                    { projectId: TEST_IDS.PROJECT_WORK, responsibleUser: 'me', limit: 10 },
+                    mockTodoistApi,
+                )
+
+                const structuredContent = result.structuredContent
+
+                expect((structuredContent.tasks as MappedTask[]).map((task) => task.id)).toEqual([
+                    TEST_IDS.TASK_1,
+                    TEST_IDS.TASK_2,
+                ])
+            })
         })
     })
 
@@ -1089,6 +1126,30 @@ End of test content.`
             expect(mockGetTasksByFilter).toHaveBeenCalledWith({
                 client: mockTodoistApi,
                 query: '(##Work) & assigned to: jane@example.com',
+                cursor: undefined,
+                limit: 10,
+            })
+        })
+
+        it('should include unassigned tasks when responsibleUser resolves to current user', async () => {
+            mockResolveUserNameToId.mockResolvedValue({
+                userId: TEST_IDS.USER_ID,
+                displayName: 'Avery Inboxworthy',
+                email: 'avery.inboxworthy@example.com',
+            })
+
+            mockGetTasksByFilter.mockResolvedValue({ tasks: [], nextCursor: null })
+
+            await findTasks.execute(
+                { filter: 'today | overdue', responsibleUser: 'me', limit: 10 },
+                mockTodoistApi,
+            )
+
+            expect(mockResolveUserNameToId).toHaveBeenCalledWith(mockTodoistApi, 'me')
+
+            expect(mockGetTasksByFilter).toHaveBeenCalledWith({
+                client: mockTodoistApi,
+                query: '(today | overdue) & !assigned to: others',
                 cursor: undefined,
                 limit: 10,
             })

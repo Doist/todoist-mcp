@@ -49,26 +49,29 @@ export function appendToQuery(query: string, filterComponent: string): string {
  * Builds a query filter string for responsible user filtering that can be appended to a Todoist filter query.
  * @param resolvedAssigneeId - The resolved assignee ID (if provided)
  * @param assigneeEmail - The assignee email (if provided)
+ * @param currentUserId - The current authenticated user's ID
  * @param responsibleUserFiltering - The filtering mode ('assigned', 'unassignedOrMe', 'all')
  * @returns Query filter string (e.g., "assigned to: email@example.com" or "!assigned to: others")
  */
 export function buildResponsibleUserQueryFilter({
     resolvedAssigneeId,
     assigneeEmail,
+    currentUserId,
     responsibleUserFiltering = 'unassignedOrMe',
 }: {
     resolvedAssigneeId: string | undefined
     assigneeEmail: string | undefined
+    currentUserId?: string
     responsibleUserFiltering?: ResponsibleUserFiltering
 }): string {
-    if (resolvedAssigneeId && assigneeEmail) {
-        // If specific user is provided, filter by that user
+    const isCurrentUser =
+        Boolean(resolvedAssigneeId && assigneeEmail) && resolvedAssigneeId === currentUserId
+
+    if (resolvedAssigneeId && assigneeEmail && !isCurrentUser) {
         return `assigned to: ${assigneeEmail}`
     }
 
-    // Otherwise use the filtering mode
-    if (responsibleUserFiltering === 'unassignedOrMe') {
-        // Exclude tasks assigned to others (keeps unassigned + assigned to me)
+    if (isCurrentUser || responsibleUserFiltering === 'unassignedOrMe') {
         return '!assigned to: others'
     }
 
@@ -83,8 +86,8 @@ export function buildResponsibleUserQueryFilter({
 
 /**
  * Filters tasks based on responsible user logic:
- * - If resolvedAssigneeId is provided: returns only tasks assigned to that user
- * - If no resolvedAssigneeId: returns only unassigned tasks or tasks assigned to current user
+ * - If resolvedAssigneeId is another user: returns only tasks assigned to that user
+ * - Otherwise: returns only unassigned tasks or tasks assigned to current user
  * @param tasks - Array of tasks to filter (must have responsibleUid property)
  * @param resolvedAssigneeId - The resolved assignee ID to filter by (optional)
  * @param currentUserId - The current authenticated user's ID
@@ -101,14 +104,19 @@ export function filterTasksByResponsibleUser<T extends { responsibleUid?: string
     currentUserId: string
     responsibleUserFiltering?: ResponsibleUserFiltering
 }): T[] {
-    if (resolvedAssigneeId) {
-        // If responsibleUser provided, only return tasks assigned to that user
+    const isCurrentUser = Boolean(resolvedAssigneeId) && resolvedAssigneeId === currentUserId
+
+    if (resolvedAssigneeId && !isCurrentUser) {
         return tasks.filter((task) => task.responsibleUid === resolvedAssigneeId)
-    } else if (responsibleUserFiltering === 'unassignedOrMe') {
-        return tasks.filter((task) => !task.responsibleUid || task.responsibleUid === currentUserId)
-    } else if (responsibleUserFiltering === 'assigned') {
-        return tasks.filter((task) => task.responsibleUid && task.responsibleUid !== currentUserId)
-    } else {
-        return tasks
     }
+
+    if (isCurrentUser || responsibleUserFiltering === 'unassignedOrMe') {
+        return tasks.filter((task) => !task.responsibleUid || task.responsibleUid === currentUserId)
+    }
+
+    if (responsibleUserFiltering === 'assigned') {
+        return tasks.filter((task) => task.responsibleUid && task.responsibleUid !== currentUserId)
+    }
+
+    return tasks
 }

@@ -18,6 +18,7 @@ vi.mock('../tool-helpers', async () => {
 // Mock user resolver
 vi.mock('../utils/user-resolver', () => ({
     resolveUserNameToId: vi.fn(),
+    SELF_USER_KEYWORD: 'me',
 }))
 
 const mockGetTasksByFilter = getTasksByFilter as MockedFunction<typeof getTasksByFilter>
@@ -599,6 +600,7 @@ describe(`${FIND_TASKS_BY_DATE} tool`, () => {
             )
 
             expect(mockResolveUserNameToId).toHaveBeenCalledWith(mockTodoistApi, 'john@example.com')
+            expect(mockTodoistApi.getUser).toHaveBeenCalledTimes(1)
 
             expect(mockGetTasksByFilter).toHaveBeenCalledWith({
                 client: mockTodoistApi,
@@ -610,6 +612,36 @@ describe(`${FIND_TASKS_BY_DATE} tool`, () => {
             const textContent = result.textContent
             expect(textContent).toContain('assigned to john@example.com')
             expect(textContent).toMatchSnapshot()
+        })
+
+        it('should include unassigned tasks when responsibleUser resolves to current user', async () => {
+            mockResolveUserNameToId.mockResolvedValue({
+                userId: TEST_IDS.USER_ID,
+                displayName: 'Avery Inboxworthy',
+                email: 'avery.inboxworthy@example.com',
+            })
+
+            mockGetTasksByFilter.mockResolvedValue({ tasks: [], nextCursor: null })
+
+            await findTasksByDate.execute(
+                {
+                    startDate: 'today',
+                    daysCount: 1,
+                    limit: 50,
+                    responsibleUser: 'me',
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockResolveUserNameToId).toHaveBeenCalledWith(mockTodoistApi, 'me')
+            expect(mockTodoistApi.getUser).not.toHaveBeenCalled()
+
+            expect(mockGetTasksByFilter).toHaveBeenCalledWith({
+                client: mockTodoistApi,
+                query: '(today | overdue) & !assigned to: others',
+                cursor: undefined,
+                limit: 50,
+            })
         })
 
         it('should throw error when user cannot be resolved', async () => {
