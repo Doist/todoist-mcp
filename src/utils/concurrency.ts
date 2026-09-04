@@ -6,11 +6,16 @@ import { ConcurrencyLimits } from './constants.js'
  */
 type Limiter = <T>(fn: () => Promise<T>) => Promise<T>
 
+type TrackedLimiter = Limiter & {
+    /** Whether no task is running or waiting for this limiter. */
+    isIdle: () => boolean
+}
+
 type LimiterPair = {
     /** Serialises task-move requests, which contend on server-side tree locks. */
-    moves: Limiter
+    moves: TrackedLimiter
     /** Bounds all other write requests. */
-    writes: Limiter
+    writes: TrackedLimiter
 }
 
 type QueuedTask = {
@@ -36,7 +41,7 @@ type QueuedTask = {
 function createLimiter(
     maxConcurrent: number,
     { queueTimeoutMs = ConcurrencyLimits.QUEUE_WAIT_MS }: { queueTimeoutMs?: number } = {},
-): Limiter {
+): TrackedLimiter {
     if (!Number.isInteger(maxConcurrent) || maxConcurrent < 1) {
         throw new Error(
             `maxConcurrent must be a positive integer, received ${String(maxConcurrent)}`,
@@ -89,7 +94,7 @@ function createLimiter(
         active--
     }
 
-    return async function limit<T>(fn: () => Promise<T>): Promise<T> {
+    const limit = async function limit<T>(fn: () => Promise<T>): Promise<T> {
         await acquire()
         try {
             return await fn()
@@ -98,6 +103,8 @@ function createLimiter(
             release()
         }
     }
+    limit.isIdle = () => active === 0 && queue.length === 0
+    return limit
 }
 
 function createLimiterPair(): LimiterPair {
@@ -115,20 +122,38 @@ function createLimiterPair(): LimiterPair {
  * This map lives in one process, so the limits it enforces are per process rather
  * than per account globally. See the note on `ConcurrencyLimits`.
  */
-const limitersByAccount = new Map<string, LimiterPair>()
+type AccountLimiterEntry = {
+    limiters: LimiterPair
+    lastUsedAt: number
+    leases: number
+}
 
-/** Lets a tool find its account's limiters from the client it was handed. */
-const limitersByClient = new WeakMap<object, LimiterPair>()
+const MAX_ACCOUNT_LIMITERS = 10_000
+const ACCOUNT_LIMITER_IDLE_TTL_MS = 5 * 60_000
+const limitersByAccount = new Map<string, AccountLimiterEntry>()
+let accountLimiterCapacity = MAX_ACCOUNT_LIMITERS
+
+/** Lets a tool resolve its current account entry from the client it was handed. */
+const accountKeysByClient = new WeakMap<object, string>()
+
+/** Keeps an account on overflow until all of its overflow work has finished. */
+const overflowLeasesByAccount = new Map<string, number>()
 
 /**
  * Catches clients built outside `createTodoistClient` (tests, direct SDK use) so
  * every call site is bounded even when nothing registered it.
  */
 let fallbackLimiters: LimiterPair | undefined
+let overflowLimiters: LimiterPair | undefined
 
 function getFallbackLimiters(): LimiterPair {
     fallbackLimiters ??= createLimiterPair()
     return fallbackLimiters
+}
+
+function getOverflowLimiters(): LimiterPair {
+    overflowLimiters ??= createLimiterPair()
+    return overflowLimiters
 }
 
 /**
@@ -139,36 +164,155 @@ function accountKeyFromApiKey(apiKey: string): string {
     return createHash('sha256').update(apiKey).digest('hex')
 }
 
-/**
- * Associates a client with its account's limiters, sharing one pair across every
- * client built for the same account.
- */
-function registerClientLimiters(client: object, apiKey: string): void {
-    const key = accountKeyFromApiKey(apiKey)
-    let limiters = limitersByAccount.get(key)
-    if (!limiters) {
-        limiters = createLimiterPair()
-        limitersByAccount.set(key, limiters)
-    }
-    limitersByClient.set(client, limiters)
+function isLimiterPairIdle({ moves, writes }: LimiterPair): boolean {
+    return moves.isIdle() && writes.isIdle()
 }
 
-function getLimiters(client: object): LimiterPair {
-    return limitersByClient.get(client) ?? getFallbackLimiters()
+function isAccountLimiterEvictable(entry: AccountLimiterEntry): boolean {
+    return entry.leases === 0 && isLimiterPairIdle(entry.limiters)
+}
+
+function refreshAccountLimiter(key: string, entry: AccountLimiterEntry, now: number): void {
+    limitersByAccount.delete(key)
+    entry.lastUsedAt = now
+    limitersByAccount.set(key, entry)
+}
+
+/**
+ * Removes expired idle entries from the oldest end of the insertion-ordered
+ * map. Active entries stay until their work finishes, even after they expire.
+ */
+function pruneIdleAccountLimiters(now: number): void {
+    for (const [key, entry] of limitersByAccount) {
+        if (now - entry.lastUsedAt < ACCOUNT_LIMITER_IDLE_TTL_MS) {
+            break
+        }
+        if (isAccountLimiterEvictable(entry)) {
+            limitersByAccount.delete(key)
+        }
+    }
+}
+
+/** Evicts the least-recently-used entry that has no running or queued work. */
+function evictOldestIdleAccountLimiter(): boolean {
+    for (const [key, entry] of limitersByAccount) {
+        if (isAccountLimiterEvictable(entry)) {
+            limitersByAccount.delete(key)
+            return true
+        }
+    }
+    return false
+}
+
+function getOrCreateAccountLimiterEntry(key: string, now: number): AccountLimiterEntry | undefined {
+    // Do not move an account to a dedicated pair while one of its operations is
+    // still using overflow, or concurrent calls could escape each other's limit.
+    if (overflowLeasesByAccount.has(key)) {
+        return undefined
+    }
+
+    const existing = limitersByAccount.get(key)
+    if (existing) {
+        refreshAccountLimiter(key, existing, now)
+        return existing
+    }
+
+    pruneIdleAccountLimiters(now)
+    if (limitersByAccount.size >= accountLimiterCapacity && !evictOldestIdleAccountLimiter()) {
+        return undefined
+    }
+
+    const entry = { limiters: createLimiterPair(), lastUsedAt: now, leases: 0 }
+    limitersByAccount.set(key, entry)
+    return entry
+}
+
+type LimiterPairLease = {
+    limiters: LimiterPair
+    release: () => void
+}
+
+function acquireAccountLimiterPair(key: string): LimiterPairLease {
+    const overflowLeases = overflowLeasesByAccount.get(key)
+    if (overflowLeases !== undefined) {
+        overflowLeasesByAccount.set(key, overflowLeases + 1)
+        return {
+            limiters: getOverflowLimiters(),
+            release: () => releaseOverflowLease(key),
+        }
+    }
+
+    const entry = getOrCreateAccountLimiterEntry(key, Date.now())
+    if (entry) {
+        entry.leases++
+        return {
+            limiters: entry.limiters,
+            release: () => {
+                entry.leases--
+            },
+        }
+    }
+
+    overflowLeasesByAccount.set(key, 1)
+    return {
+        limiters: getOverflowLimiters(),
+        release: () => releaseOverflowLease(key),
+    }
+}
+
+function releaseOverflowLease(key: string): void {
+    const leases = overflowLeasesByAccount.get(key)
+    if (leases === undefined || leases <= 1) {
+        overflowLeasesByAccount.delete(key)
+        return
+    }
+    overflowLeasesByAccount.set(key, leases - 1)
+}
+
+/** Records the account key so each limited operation can resolve its current pair. */
+function registerClientLimiters(client: object, apiKey: string): void {
+    const key = accountKeyFromApiKey(apiKey)
+    accountKeysByClient.set(client, key)
+}
+
+function getClientLimiter(client: object, lane: keyof LimiterPair): Limiter {
+    const key = accountKeysByClient.get(client)
+    if (!key) {
+        return getFallbackLimiters()[lane]
+    }
+
+    // Populate or refresh the entry when the tool selects its lane. The returned
+    // function resolves it again when work starts, so eviction can never leave a
+    // request holding a stale limiter pair.
+    getOrCreateAccountLimiterEntry(key, Date.now())
+
+    return async <T>(fn: () => Promise<T>): Promise<T> => {
+        const lease = acquireAccountLimiterPair(key)
+        try {
+            return await lease.limiters[lane](fn)
+        } finally {
+            lease.release()
+        }
+    }
 }
 
 function getMoveLimiter(client: object): Limiter {
-    return getLimiters(client).moves
+    return getClientLimiter(client, 'moves')
 }
 
 function getWriteLimiter(client: object): Limiter {
-    return getLimiters(client).writes
+    return getClientLimiter(client, 'writes')
 }
 
 /** Test-only: drops all registered limiters so cases start from a clean slate. */
-function resetLimitersForTesting(): void {
+function resetLimitersForTesting({
+    maxAccountLimiters = MAX_ACCOUNT_LIMITERS,
+}: { maxAccountLimiters?: number } = {}): void {
     limitersByAccount.clear()
+    overflowLeasesByAccount.clear()
     fallbackLimiters = undefined
+    overflowLimiters = undefined
+    accountLimiterCapacity = maxAccountLimiters
 }
 
 export {

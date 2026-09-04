@@ -245,6 +245,193 @@ describe('createLimiter', () => {
 })
 
 describe('per-account limiters', () => {
+    it('should evict idle entries before using overflow', async () => {
+        resetLimitersForTesting({ maxAccountLimiters: 2 })
+
+        for (const token of ['retained-token-1', 'retained-token-2']) {
+            const client = {}
+            registerClientLimiters(client, token)
+            getMoveLimiter(client)
+        }
+
+        const clientA = {}
+        const clientB = {}
+        registerClientLimiters(clientA, 'new-token-1')
+        registerClientLimiters(clientB, 'new-token-2')
+        const limiterA = getMoveLimiter(clientA)
+        const limiterB = getMoveLimiter(clientB)
+
+        const gate = deferred()
+        let active = 0
+        let maxActive = 0
+        const track = async (waitFor: Promise<void>) => {
+            active++
+            maxActive = Math.max(maxActive, active)
+            await waitFor
+            active--
+        }
+
+        const first = limiterA(() => track(gate.promise))
+        const second = limiterB(() => track(Promise.resolve()))
+
+        await flush()
+        expect(maxActive).toBe(2)
+
+        gate.resolve()
+        await Promise.all([first, second])
+    })
+
+    it('should re-resolve a client whose idle entry was evicted', async () => {
+        resetLimitersForTesting({ maxAccountLimiters: 2 })
+
+        const originalClient = {}
+        registerClientLimiters(originalClient, 'token-1')
+        const originalLimiter = getMoveLimiter(originalClient)
+
+        for (const token of ['token-2', 'token-3']) {
+            const client = {}
+            registerClientLimiters(client, token)
+            getMoveLimiter(client)
+        }
+
+        const replacementClient = {}
+        registerClientLimiters(replacementClient, 'token-1')
+        const replacementLimiter = getMoveLimiter(replacementClient)
+
+        const gate = deferred()
+        let active = 0
+        let maxActive = 0
+        const track = async (waitFor: Promise<void>) => {
+            active++
+            maxActive = Math.max(maxActive, active)
+            await waitFor
+            active--
+        }
+
+        const first = originalLimiter(() => track(gate.promise))
+        const second = replacementLimiter(() => track(Promise.resolve()))
+
+        await flush()
+        expect(maxActive).toBe(ConcurrencyLimits.TASK_MOVES)
+
+        gate.resolve()
+        await Promise.all([first, second])
+    })
+
+    it('should use shared overflow limiters when every retained entry is busy', async () => {
+        resetLimitersForTesting({ maxAccountLimiters: 2 })
+
+        const busyGate = deferred()
+        const busyTasks = ['busy-token-1', 'busy-token-2'].map((token) => {
+            const client = {}
+            registerClientLimiters(client, token)
+            return getMoveLimiter(client)(() => busyGate.promise)
+        })
+        await flush()
+
+        const clientA = {}
+        const clientB = {}
+        registerClientLimiters(clientA, 'overflow-token-1')
+        registerClientLimiters(clientB, 'overflow-token-2')
+        const limiterA = getMoveLimiter(clientA)
+        const limiterB = getMoveLimiter(clientB)
+
+        const overflowGate = deferred()
+        let active = 0
+        let maxActive = 0
+        const track = async (waitFor: Promise<void>) => {
+            active++
+            maxActive = Math.max(maxActive, active)
+            await waitFor
+            active--
+        }
+
+        const first = limiterA(() => track(overflowGate.promise))
+        const second = limiterB(() => track(Promise.resolve()))
+
+        await flush()
+        expect(maxActive).toBe(ConcurrencyLimits.TASK_MOVES)
+
+        overflowGate.resolve()
+        await Promise.all([first, second])
+        busyGate.resolve()
+        await Promise.all(busyTasks)
+    })
+
+    it('should keep overflow clients separate from unregistered clients', async () => {
+        resetLimitersForTesting({ maxAccountLimiters: 1 })
+
+        const busyClient = {}
+        registerClientLimiters(busyClient, 'busy-token')
+        const busyGate = deferred()
+        const busyTask = getMoveLimiter(busyClient)(() => busyGate.promise)
+        await flush()
+
+        const overflowClient = {}
+        registerClientLimiters(overflowClient, 'overflow-token')
+
+        const gate = deferred()
+        let active = 0
+        let maxActive = 0
+        const track = async (waitFor: Promise<void>) => {
+            active++
+            maxActive = Math.max(maxActive, active)
+            await waitFor
+            active--
+        }
+
+        const overflowTask = getMoveLimiter(overflowClient)(() => track(gate.promise))
+        const fallbackTask = getMoveLimiter({})(() => track(Promise.resolve()))
+
+        await flush()
+        expect(maxActive).toBe(2)
+
+        gate.resolve()
+        await Promise.all([overflowTask, fallbackTask])
+        busyGate.resolve()
+        await busyTask
+    })
+
+    it('should keep an expired active account on the same limiter', async () => {
+        vi.useFakeTimers()
+        const gate = deferred()
+        try {
+            resetLimitersForTesting({ maxAccountLimiters: 1 })
+
+            let active = 0
+            let maxActive = 0
+            const track = async (waitFor: Promise<void>) => {
+                active++
+                maxActive = Math.max(maxActive, active)
+                await waitFor
+                active--
+            }
+
+            const originalClient = {}
+            registerClientLimiters(originalClient, 'busy-token')
+            const first = getMoveLimiter(originalClient)(() => track(gate.promise))
+            await vi.advanceTimersByTimeAsync(5 * 60_000)
+
+            // Trigger capacity pressure after the active entry's TTL expires.
+            const otherClient = {}
+            registerClientLimiters(otherClient, 'other-token')
+            getMoveLimiter(otherClient)
+
+            const concurrentClient = {}
+            registerClientLimiters(concurrentClient, 'busy-token')
+            const second = getMoveLimiter(concurrentClient)(() => track(Promise.resolve()))
+
+            await vi.advanceTimersByTimeAsync(0)
+            expect(maxActive).toBe(ConcurrencyLimits.TASK_MOVES)
+
+            gate.resolve()
+            await Promise.all([first, second])
+        } finally {
+            gate.resolve()
+            vi.useRealTimers()
+        }
+    })
+
     it('should share limiters across clients registered for the same account', async () => {
         const clientA = {}
         const clientB = {}
