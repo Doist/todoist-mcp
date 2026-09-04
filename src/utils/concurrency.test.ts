@@ -254,6 +254,62 @@ describe('per-account limiters', () => {
         expect(getAccountLimiterCountForTesting()).toBe(10_000)
     })
 
+    it('should share concurrency limits across clients after the registry reaches capacity', async () => {
+        for (let index = 0; index < 10_000; index++) {
+            registerClientLimiters({}, `retained-token-${index}`)
+        }
+        const clientA = {}
+        const clientB = {}
+        registerClientLimiters(clientA, 'overflow-token')
+        registerClientLimiters(clientB, 'overflow-token')
+
+        const gate = deferred()
+        let active = 0
+        let maxActive = 0
+        const track = async (waitFor: Promise<void>) => {
+            active++
+            maxActive = Math.max(maxActive, active)
+            await waitFor
+            active--
+        }
+
+        const first = getMoveLimiter(clientA)(() => track(gate.promise))
+        const second = getMoveLimiter(clientB)(() => track(Promise.resolve()))
+
+        await flush()
+        expect(maxActive).toBe(ConcurrencyLimits.TASK_MOVES)
+
+        gate.resolve()
+        await Promise.all([first, second])
+    })
+
+    it('should keep overflow clients separate from unregistered clients', async () => {
+        for (let index = 0; index < 10_000; index++) {
+            registerClientLimiters({}, `retained-token-${index}`)
+        }
+        const overflowClient = {}
+        registerClientLimiters(overflowClient, 'overflow-token')
+
+        const gate = deferred()
+        let active = 0
+        let maxActive = 0
+        const track = async (waitFor: Promise<void>) => {
+            active++
+            maxActive = Math.max(maxActive, active)
+            await waitFor
+            active--
+        }
+
+        const overflowTask = getMoveLimiter(overflowClient)(() => track(gate.promise))
+        const fallbackTask = getMoveLimiter({})(() => track(Promise.resolve()))
+
+        await flush()
+        expect(maxActive).toBe(2)
+
+        gate.resolve()
+        await Promise.all([overflowTask, fallbackTask])
+    })
+
     it('should remove expired idle account limiters', () => {
         vi.useFakeTimers()
         registerClientLimiters({}, 'old-token')

@@ -138,10 +138,16 @@ const limitersByClient = new WeakMap<object, LimiterPair>()
  * every call site is bounded even when nothing registered it.
  */
 let fallbackLimiters: LimiterPair | undefined
+let overflowLimiters: LimiterPair | undefined
 
 function getFallbackLimiters(): LimiterPair {
     fallbackLimiters ??= createLimiterPair()
     return fallbackLimiters
+}
+
+function getOverflowLimiters(): LimiterPair {
+    overflowLimiters ??= createLimiterPair()
+    return overflowLimiters
 }
 
 /**
@@ -179,23 +185,28 @@ function registerClientLimiters(client: object, apiKey: string): void {
     const key = accountKeyFromApiKey(apiKey)
     const now = Date.now()
     let entry = limitersByAccount.get(key)
+    let limiters: LimiterPair
 
     if (entry) {
         // Refresh insertion order so pruning can stop at the first fresh entry.
         limitersByAccount.delete(key)
         entry.lastUsedAt = now
         limitersByAccount.set(key, entry)
+        limiters = entry.limiters
     } else {
         pruneIdleAccountLimiters(now)
-        entry = { limiters: createLimiterPair(), lastUsedAt: now }
 
-        // Keep the registry bounded. If every slot belongs to a recently used
-        // account, the new client still gets local limits but is not retained.
         if (limitersByAccount.size < MAX_ACCOUNT_LIMITERS) {
+            entry = { limiters: createLimiterPair(), lastUsedAt: now }
             limitersByAccount.set(key, entry)
+            limiters = entry.limiters
+        } else {
+            // Do not retain another account, but keep concurrency bounded across
+            // requests by routing every overflow client through one shared pair.
+            limiters = getOverflowLimiters()
         }
     }
-    limitersByClient.set(client, entry.limiters)
+    limitersByClient.set(client, limiters)
 }
 
 function getLimiters(client: object): LimiterPair {
@@ -214,6 +225,7 @@ function getWriteLimiter(client: object): Limiter {
 function resetLimitersForTesting(): void {
     limitersByAccount.clear()
     fallbackLimiters = undefined
+    overflowLimiters = undefined
 }
 
 /** Test-only: reports retained account entries for bounded-cache assertions. */
