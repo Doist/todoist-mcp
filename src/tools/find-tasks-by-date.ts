@@ -7,7 +7,7 @@ import {
     resolveResponsibleUser,
 } from '../filter-helpers.js'
 import type { TodoistTool } from '../todoist-tool.js'
-import { getTasksByFilter } from '../tool-helpers.js'
+import { getTasksByFilter, normalizePaginationCursor } from '../tool-helpers.js'
 import { ApiLimits } from '../utils/constants.js'
 import { generateLabelsFilter, LabelsSchema } from '../utils/labels.js'
 import { TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
@@ -89,6 +89,8 @@ const findTasksByDate = {
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     async execute(args, client) {
+        const normalizedCursor = normalizePaginationCursor(args.cursor)
+
         if (!args.startDate && args.overdueOption !== 'overdue-only') {
             throw new Error(
                 'Either startDate must be provided or overdueOption must be set to overdue-only',
@@ -153,7 +155,7 @@ const findTasksByDate = {
         const { tasks, nextCursor } = await getTasksByFilter({
             client,
             query,
-            cursor: args.cursor,
+            cursor: normalizedCursor,
             limit: args.limit,
         })
 

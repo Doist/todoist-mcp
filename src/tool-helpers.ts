@@ -425,6 +425,14 @@ const ErrorSchema = z.object({
     }),
 })
 
+/**
+ * Normalize first-page cursor values commonly emitted by schema-driven clients.
+ */
+export function normalizePaginationCursor(cursor: string | undefined): string | undefined {
+    const normalizedCursor = cursor?.trim()
+    return normalizedCursor && normalizedCursor !== '0' ? cursor : undefined
+}
+
 async function getTasksByFilter({
     client,
     query,

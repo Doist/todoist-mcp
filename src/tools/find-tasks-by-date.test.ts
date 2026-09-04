@@ -241,6 +241,19 @@ describe(`${FIND_TASKS_BY_DATE} tool`, () => {
                 limit: expectedLimit,
             })
         })
+
+        it.each(['', '   ', '0'])('should omit first-page cursor sentinel %j', async (cursor) => {
+            mockGetTasksByFilter.mockResolvedValue({ tasks: [], nextCursor: null })
+
+            await findTasksByDate.execute(
+                { startDate: 'today', limit: 10, daysCount: 1, cursor },
+                mockTodoistApi,
+            )
+
+            expect(mockGetTasksByFilter).toHaveBeenCalledWith(
+                expect.objectContaining({ cursor: undefined }),
+            )
+        })
     })
 
     describe('edge cases', () => {

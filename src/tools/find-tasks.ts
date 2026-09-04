@@ -12,6 +12,7 @@ import {
     getTasksByFilter,
     type MappedTask,
     mapTask,
+    normalizePaginationCursor,
     resolveInboxProjectId,
 } from '../tool-helpers.js'
 import { ApiLimits } from '../utils/constants.js'
@@ -105,6 +106,7 @@ const findTasks = {
             filter,
             filterIdOrName,
         } = args
+        const normalizedCursor = normalizePaginationCursor(cursor)
 
         const todoistUser = await client.getUser()
 
@@ -153,7 +155,7 @@ const findTasks = {
         if (projectId || sectionId || parentId) {
             const taskParams: GetTasksArgs = {
                 limit,
-                cursor: cursor ?? null,
+                cursor: normalizedCursor ?? null,
             }
 
             if (projectId) {
@@ -226,7 +228,7 @@ const findTasks = {
                 query: responsibleUserFilter,
                 lang: 'en',
                 limit,
-                cursor: cursor ?? null,
+                cursor: normalizedCursor ?? null,
             })
 
             const mappedTasks = tasks.map(mapTask)
@@ -283,7 +285,7 @@ const findTasks = {
         const { tasks: filteredTasks, nextCursor } = await getTasksByFilter({
             client,
             query,
-            cursor: args.cursor,
+            cursor: normalizedCursor,
             limit: args.limit,
         })
 
