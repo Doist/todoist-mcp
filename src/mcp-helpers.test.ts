@@ -1,5 +1,5 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
-import type { ContentBlock } from '@modelcontextprotocol/server'
+import type { ContentBlock, StandardSchemaWithJSON } from '@modelcontextprotocol/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { registerTool, stripEmailsFromObject, stripEmailsFromText } from './mcp-helpers.js'
@@ -16,15 +16,22 @@ type ToolFixture = RegisterToolArgs['tool']
 function buildToolFixture(overrides: {
     name?: string
     description?: string
+    parameters?: Record<string, unknown>
     outputSchema?: Record<string, unknown>
     execute: ToolFixture['execute']
 }): ToolFixture {
-    const { name = 'test-tool', description = 'Test tool', outputSchema, execute } = overrides
+    const {
+        name = 'test-tool',
+        description = 'Test tool',
+        parameters = {},
+        outputSchema,
+        execute,
+    } = overrides
 
     return {
         name,
         description,
-        parameters: {},
+        parameters,
         ...(outputSchema ? { outputSchema } : {}),
         annotations: {
             readOnlyHint: true,
@@ -115,25 +122,40 @@ describe('registerTool config', () => {
         expect(Object.hasOwn(config, 'outputSchema')).toBe(false)
     })
 
-    it('includes outputSchema when the tool declares one', () => {
+    it('includes cached standard schemas when the tool declares an output', async () => {
         const { mock, server, client } = captureRegisterToolMock()
         const outputSchema = { value: z.string() }
+        const tool = buildToolFixture({
+            name: 'schema-tool',
+            description: 'Tool with output schema',
+            parameters: { limit: z.number().default(10) },
+            outputSchema,
+            execute: async () => ({ textContent: 'ok' }),
+        })
 
         registerTool({
-            tool: buildToolFixture({
-                name: 'schema-tool',
-                description: 'Tool with output schema',
-                outputSchema,
-                execute: async () => ({ textContent: 'ok' }),
-            }),
+            tool,
             server,
             client,
         })
+        registerTool({ tool, server, client })
 
-        const config = mock.mock.calls[0]?.[1] as Record<string, unknown>
-        expect(config.inputSchema).toBeInstanceOf(z.ZodObject)
-        expect(config.outputSchema).toBeInstanceOf(z.ZodObject)
-        expect((config.outputSchema as z.ZodObject).shape).toHaveProperty('value')
+        type SchemaConfig = {
+            inputSchema: StandardSchemaWithJSON<unknown, unknown>
+            outputSchema: StandardSchemaWithJSON<unknown, unknown>
+        }
+        const firstConfig = mock.mock.calls[0]?.[1] as SchemaConfig
+        const secondConfig = mock.mock.calls[1]?.[1] as SchemaConfig
+        expect(firstConfig.inputSchema).toBe(secondConfig.inputSchema)
+        expect(firstConfig.outputSchema).toBe(secondConfig.outputSchema)
+        expect(
+            firstConfig.outputSchema['~standard'].jsonSchema.output({
+                target: 'draft-2020-12',
+            }),
+        ).toMatchObject({ type: 'object', properties: { value: { type: 'string' } } })
+        expect(await firstConfig.inputSchema['~standard'].validate({})).toEqual({
+            value: { limit: 10 },
+        })
     })
 })
 
