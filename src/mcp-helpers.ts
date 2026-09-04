@@ -4,6 +4,7 @@ import type {
     ToolCallback,
     ContentBlock,
     ToolAnnotations,
+    StandardSchemaWithJSON,
 } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { AnyTodoistTool, ExecuteResult } from './todoist-tool.js'
@@ -69,6 +70,51 @@ type AppToolMeta =
  */
 const USE_STRUCTURED_CONTENT =
     process.env.USE_STRUCTURED_CONTENT === 'true' || process.env.NODE_ENV === 'test'
+
+type CachedToolSchemas = {
+    input: StandardSchemaWithJSON<Record<string, unknown>, Record<string, unknown>>
+    output?: StandardSchemaWithJSON<Record<string, unknown>, Record<string, unknown>>
+}
+
+/** Tool schemas are static, so compile their JSON representation once per process. */
+const TOOL_SCHEMAS = new WeakMap<AnyTodoistTool, CachedToolSchemas>()
+
+function withCachedJsonSchema(
+    schema: z.ZodObject<z.ZodRawShape>,
+    io: 'input' | 'output',
+): StandardSchemaWithJSON<Record<string, unknown>, Record<string, unknown>> {
+    const jsonSchema = z.toJSONSchema(schema, { target: 'draft-2020-12', io })
+    const standard = schema['~standard']
+
+    return {
+        '~standard': {
+            ...standard,
+            jsonSchema: {
+                ...standard.jsonSchema,
+                [io]: (options: Parameters<typeof standard.jsonSchema.input>[0]) =>
+                    options.target === 'draft-2020-12' && options.libraryOptions === undefined
+                        ? jsonSchema
+                        : standard.jsonSchema[io](options),
+            },
+        },
+    }
+}
+
+function getToolSchemas(tool: AnyTodoistTool): CachedToolSchemas {
+    const cached = TOOL_SCHEMAS.get(tool)
+    if (cached) {
+        return cached
+    }
+
+    const schemas: CachedToolSchemas = {
+        input: withCachedJsonSchema(z.object(tool.parameters), 'input'),
+        ...(tool.outputSchema
+            ? { output: withCachedJsonSchema(z.object(tool.outputSchema), 'output') }
+            : {}),
+    }
+    TOOL_SCHEMAS.set(tool, schemas)
+    return schemas
+}
 
 /**
  * Get the output payload for a tool, in the correct format expected by MCP client apps.
@@ -280,8 +326,7 @@ function registerTool({
         client: TodoistApi,
     ) => ExecuteResult<z.ZodRawShape>
 
-    const inputSchema = z.object(tool.parameters)
-    const outputSchema = tool.outputSchema ? z.object(tool.outputSchema) : undefined
+    const { input: inputSchema, output: outputSchema } = getToolSchemas(tool)
 
     // `getToolOutput` assembles its result incrementally and so is typed as a
     // plain record, which does not structurally match `CallToolResult` (that
