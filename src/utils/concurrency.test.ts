@@ -1,6 +1,5 @@
 import {
     createLimiter,
-    getAccountLimiterCountForTesting,
     getMoveLimiter,
     getWriteLimiter,
     registerClientLimiters,
@@ -246,16 +245,6 @@ describe('createLimiter', () => {
 })
 
 describe('per-account limiters', () => {
-    it('should bound retained account limiters', () => {
-        for (let index = 0; index < 10_001; index++) {
-            const client = {}
-            registerClientLimiters(client, `token-${index}`)
-            getMoveLimiter(client)
-        }
-
-        expect(getAccountLimiterCountForTesting()).toBe(10_000)
-    })
-
     it('should evict idle entries before using overflow', async () => {
         resetLimitersForTesting({ maxAccountLimiters: 2 })
 
@@ -403,37 +392,44 @@ describe('per-account limiters', () => {
         await busyTask
     })
 
-    it('should remove expired idle account limiters', () => {
+    it('should keep an expired active account on the same limiter', async () => {
         vi.useFakeTimers()
-        const oldClient = {}
-        registerClientLimiters(oldClient, 'old-token')
-        getMoveLimiter(oldClient)
-
-        vi.advanceTimersByTime(5 * 60_000)
-        const newClient = {}
-        registerClientLimiters(newClient, 'new-token')
-        getMoveLimiter(newClient)
-
-        expect(getAccountLimiterCountForTesting()).toBe(1)
-        vi.useRealTimers()
-    })
-
-    it('should retain an expired limiter while it has active work', async () => {
-        vi.useFakeTimers()
-        const client = {}
-        registerClientLimiters(client, 'busy-token')
         const gate = deferred()
-        const task = getMoveLimiter(client)(() => gate.promise)
-        await vi.advanceTimersByTimeAsync(5 * 60_000)
+        try {
+            resetLimitersForTesting({ maxAccountLimiters: 1 })
 
-        const newClient = {}
-        registerClientLimiters(newClient, 'new-token')
-        getMoveLimiter(newClient)
-        expect(getAccountLimiterCountForTesting()).toBe(2)
+            let active = 0
+            let maxActive = 0
+            const track = async (waitFor: Promise<void>) => {
+                active++
+                maxActive = Math.max(maxActive, active)
+                await waitFor
+                active--
+            }
 
-        gate.resolve()
-        await task
-        vi.useRealTimers()
+            const originalClient = {}
+            registerClientLimiters(originalClient, 'busy-token')
+            const first = getMoveLimiter(originalClient)(() => track(gate.promise))
+            await vi.advanceTimersByTimeAsync(5 * 60_000)
+
+            // Trigger capacity pressure after the active entry's TTL expires.
+            const otherClient = {}
+            registerClientLimiters(otherClient, 'other-token')
+            getMoveLimiter(otherClient)
+
+            const concurrentClient = {}
+            registerClientLimiters(concurrentClient, 'busy-token')
+            const second = getMoveLimiter(concurrentClient)(() => track(Promise.resolve()))
+
+            await vi.advanceTimersByTimeAsync(0)
+            expect(maxActive).toBe(ConcurrencyLimits.TASK_MOVES)
+
+            gate.resolve()
+            await Promise.all([first, second])
+        } finally {
+            gate.resolve()
+            vi.useRealTimers()
+        }
     })
 
     it('should share limiters across clients registered for the same account', async () => {

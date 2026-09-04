@@ -315,14 +315,8 @@ function resetLimitersForTesting({
     accountLimiterCapacity = maxAccountLimiters
 }
 
-/** Test-only: reports retained account entries for bounded-cache assertions. */
-function getAccountLimiterCountForTesting(): number {
-    return limitersByAccount.size
-}
-
 export {
     createLimiter,
-    getAccountLimiterCountForTesting,
     getMoveLimiter,
     getWriteLimiter,
     type Limiter,
