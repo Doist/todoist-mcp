@@ -1,7 +1,7 @@
 import type { Comment } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { mapComment, resolveInboxProjectId } from '../tool-helpers.js'
+import { mapComment, normalizePaginationCursor, resolveInboxProjectId } from '../tool-helpers.js'
 import { ApiLimits } from '../utils/constants.js'
 import { CommentSchema as CommentOutputSchema } from '../utils/output-schemas.js'
 import { formatNextSteps } from '../utils/response-builders.js'
@@ -47,6 +47,8 @@ const findComments = {
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     async execute(args, client) {
+        const normalizedCursor = normalizePaginationCursor(args.cursor)
+
         // Validate that exactly one search parameter is provided
         const searchParams = [args.taskId, args.projectId, args.commentId].filter(Boolean)
         if (searchParams.length === 0) {
@@ -76,7 +78,7 @@ const findComments = {
             // Get comments by task
             const response = await client.getComments({
                 taskId: args.taskId,
-                cursor: args.cursor || null,
+                cursor: normalizedCursor ?? null,
                 limit: args.limit || ApiLimits.COMMENTS_DEFAULT,
             })
             rawComments = response.results
@@ -86,7 +88,7 @@ const findComments = {
             // Get comments by project
             const response = await client.getComments({
                 projectId: resolvedProjectId,
-                cursor: args.cursor || null,
+                cursor: normalizedCursor ?? null,
                 limit: args.limit || ApiLimits.COMMENTS_DEFAULT,
             })
             rawComments = response.results

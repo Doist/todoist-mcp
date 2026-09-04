@@ -430,7 +430,7 @@ const ErrorSchema = z.object({
  */
 export function normalizePaginationCursor(cursor: string | undefined): string | undefined {
     const normalizedCursor = cursor?.trim()
-    return normalizedCursor && normalizedCursor !== '0' ? normalizedCursor : undefined
+    return normalizedCursor && normalizedCursor !== '0' ? cursor : undefined
 }
 
 async function getTasksByFilter({

@@ -50,6 +50,7 @@ const mockResolveUserNameToId = resolveUserNameToId as MockedFunction<typeof res
 // Mock the Todoist API
 const mockTodoistApi = {
     getTasks: vi.fn(),
+    getTasksByFilter: vi.fn(),
     getUser: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
@@ -363,6 +364,25 @@ describe(`${FIND_TASKS} tool`, () => {
             const structuredContent = result.structuredContent
             expect(structuredContent.hasMore).toBe(true)
             expect(structuredContent.nextCursor).toBe('next-cursor')
+        })
+
+        it('should omit a first-page cursor sentinel from container queries', async () => {
+            mockTodoistApi.getTasks.mockResolvedValue(createMockApiResponse([]))
+
+            await findTasks.execute(
+                {
+                    projectId: TEST_IDS.PROJECT_TEST,
+                    limit: 10,
+                    cursor: '0',
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getTasks).toHaveBeenCalledWith({
+                limit: 10,
+                cursor: null,
+                projectId: TEST_IDS.PROJECT_TEST,
+            })
         })
     })
 
@@ -955,6 +975,30 @@ End of test content.`
         })
 
         describe('when responsibleUser is provided', () => {
+            it('should omit a first-page cursor sentinel from responsible-user-only queries', async () => {
+                mockResolveUserNameToId.mockResolvedValue({
+                    userId: 'specific-user-id',
+                    displayName: 'John Doe',
+                    email: 'john@example.com',
+                })
+                mockTodoistApi.getTasksByFilter.mockResolvedValue({
+                    results: [],
+                    nextCursor: null,
+                })
+
+                await findTasks.execute(
+                    { responsibleUser: 'John Doe', limit: 10, cursor: '0' },
+                    mockTodoistApi,
+                )
+
+                expect(mockTodoistApi.getTasksByFilter).toHaveBeenCalledWith({
+                    query: 'assigned to: john@example.com',
+                    lang: 'en',
+                    limit: 10,
+                    cursor: null,
+                })
+            })
+
             it('should use server-side assignee filter for text search with specified user', async () => {
                 const mockTasks = [
                     createMappedTask({

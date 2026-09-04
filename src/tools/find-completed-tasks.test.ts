@@ -327,6 +327,28 @@ describe(`${FIND_COMPLETED_TASKS} tool`, () => {
 
             expect(result.textContent).toMatchSnapshot()
         })
+
+        it('should omit a first-page cursor sentinel', async () => {
+            mockTodoistApi.getCompletedTasksByDueDate.mockResolvedValue({
+                items: [],
+                nextCursor: null,
+            })
+
+            await findCompletedTasks.execute(
+                {
+                    getBy: 'due',
+                    limit: 50,
+                    cursor: '0',
+                    labels: [],
+                    labelsOperator: 'or' as const,
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getCompletedTasksByDueDate).toHaveBeenCalledWith(
+                expect.not.objectContaining({ cursor: expect.anything() }),
+            )
+        })
     })
 
     describe('label filtering', () => {

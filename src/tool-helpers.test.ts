@@ -7,6 +7,7 @@ import {
     mapProject,
     mapTask,
     matchesWildcardQuery,
+    normalizePaginationCursor,
     searchAllProjects,
     searchAllSections,
     toWildcardQuery,
@@ -20,6 +21,22 @@ import {
 } from './utils/test-helpers.js'
 
 describe('shared utilities', () => {
+    describe('normalizePaginationCursor', () => {
+        it.each([undefined, '', '   ', '0', ' 0 '])(
+            'should omit first-page cursor sentinel %j',
+            (cursor) => {
+                expect(normalizePaginationCursor(cursor)).toBeUndefined()
+            },
+        )
+
+        it.each(['opaque-cursor', ' opaque-cursor '])(
+            'should preserve valid opaque cursor %j exactly',
+            (cursor) => {
+                expect(normalizePaginationCursor(cursor)).toBe(cursor)
+            },
+        )
+    })
+
     describe('mapTask', () => {
         it('should map a basic task correctly', () => {
             const mockTask = createMockTask({

@@ -113,6 +113,21 @@ describe(`${FIND_COMMENTS} tool`, () => {
                 }),
             )
         })
+
+        it.each(['   ', '0'])('should omit first-page cursor sentinel %j', async (cursor) => {
+            mockTodoistApi.getComments.mockResolvedValue({
+                results: [],
+                nextCursor: null,
+            })
+
+            await findComments.execute({ taskId: 'task123', cursor }, mockTodoistApi)
+
+            expect(mockTodoistApi.getComments).toHaveBeenCalledWith({
+                taskId: 'task123',
+                cursor: null,
+                limit: 10,
+            })
+        })
     })
 
     describe('finding comments by project', () => {
@@ -157,6 +172,21 @@ describe(`${FIND_COMMENTS} tool`, () => {
                     totalCount: 1,
                 }),
             )
+        })
+
+        it.each(['   ', '0'])('should omit first-page cursor sentinel %j', async (cursor) => {
+            mockTodoistApi.getComments.mockResolvedValue({
+                results: [],
+                nextCursor: null,
+            })
+
+            await findComments.execute({ projectId: 'project456', cursor }, mockTodoistApi)
+
+            expect(mockTodoistApi.getComments).toHaveBeenCalledWith({
+                projectId: 'project456',
+                cursor: null,
+                limit: 10,
+            })
         })
     })
 
