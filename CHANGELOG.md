@@ -1,3 +1,9 @@
+## [13.2.1](https://github.com/Doist/todoist-mcp/compare/v13.2.0...v13.2.1) (2026-09-04)
+
+### Bug Fixes
+
+* normalize first-page task cursors ([#595](https://github.com/Doist/todoist-mcp/issues/595)) ([c1e77e7](https://github.com/Doist/todoist-mcp/commit/c1e77e7ed7e9682f2f00cad2a0ab6d61e92c5106)), closes [#594](https://github.com/Doist/todoist-mcp/issues/594)
+
 ## [13.2.0](https://github.com/Doist/todoist-mcp/compare/v13.1.3...v13.2.0) (2026-09-02)
 
 ### Features
