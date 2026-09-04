@@ -1,3 +1,13 @@
+## [13.2.2](https://github.com/Doist/todoist-mcp/compare/v13.2.1...v13.2.2) (2026-09-04)
+
+### Bug Fixes
+
+* bound per-account concurrency limiters ([#598](https://github.com/Doist/todoist-mcp/issues/598)) ([1a1eee0](https://github.com/Doist/todoist-mcp/commit/1a1eee09311960655a1d7cfc340ef2552035eeec)), closes [#596](https://github.com/Doist/todoist-mcp/issues/596)
+
+### Performance Improvements
+
+* cache MCP tool schemas ([#597](https://github.com/Doist/todoist-mcp/issues/597)) ([be85327](https://github.com/Doist/todoist-mcp/commit/be853274a7cca7442d68a95a86b170b6eda1ec1c))
+
 ## [13.2.1](https://github.com/Doist/todoist-mcp/compare/v13.2.0...v13.2.1) (2026-09-04)
 
 ### Bug Fixes
