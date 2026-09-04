@@ -248,20 +248,29 @@ describe('createLimiter', () => {
 describe('per-account limiters', () => {
     it('should bound retained account limiters', () => {
         for (let index = 0; index < 10_001; index++) {
-            registerClientLimiters({}, `token-${index}`)
+            const client = {}
+            registerClientLimiters(client, `token-${index}`)
+            getMoveLimiter(client)
         }
 
         expect(getAccountLimiterCountForTesting()).toBe(10_000)
     })
 
-    it('should share concurrency limits across clients after the registry reaches capacity', async () => {
-        for (let index = 0; index < 10_000; index++) {
-            registerClientLimiters({}, `retained-token-${index}`)
+    it('should evict idle entries before using overflow', async () => {
+        resetLimitersForTesting({ maxAccountLimiters: 2 })
+
+        for (const token of ['retained-token-1', 'retained-token-2']) {
+            const client = {}
+            registerClientLimiters(client, token)
+            getMoveLimiter(client)
         }
+
         const clientA = {}
         const clientB = {}
-        registerClientLimiters(clientA, 'overflow-token')
-        registerClientLimiters(clientB, 'overflow-token')
+        registerClientLimiters(clientA, 'new-token-1')
+        registerClientLimiters(clientB, 'new-token-2')
+        const limiterA = getMoveLimiter(clientA)
+        const limiterB = getMoveLimiter(clientB)
 
         const gate = deferred()
         let active = 0
@@ -273,8 +282,45 @@ describe('per-account limiters', () => {
             active--
         }
 
-        const first = getMoveLimiter(clientA)(() => track(gate.promise))
-        const second = getMoveLimiter(clientB)(() => track(Promise.resolve()))
+        const first = limiterA(() => track(gate.promise))
+        const second = limiterB(() => track(Promise.resolve()))
+
+        await flush()
+        expect(maxActive).toBe(2)
+
+        gate.resolve()
+        await Promise.all([first, second])
+    })
+
+    it('should re-resolve a client whose idle entry was evicted', async () => {
+        resetLimitersForTesting({ maxAccountLimiters: 2 })
+
+        const originalClient = {}
+        registerClientLimiters(originalClient, 'token-1')
+        const originalLimiter = getMoveLimiter(originalClient)
+
+        for (const token of ['token-2', 'token-3']) {
+            const client = {}
+            registerClientLimiters(client, token)
+            getMoveLimiter(client)
+        }
+
+        const replacementClient = {}
+        registerClientLimiters(replacementClient, 'token-1')
+        const replacementLimiter = getMoveLimiter(replacementClient)
+
+        const gate = deferred()
+        let active = 0
+        let maxActive = 0
+        const track = async (waitFor: Promise<void>) => {
+            active++
+            maxActive = Math.max(maxActive, active)
+            await waitFor
+            active--
+        }
+
+        const first = originalLimiter(() => track(gate.promise))
+        const second = replacementLimiter(() => track(Promise.resolve()))
 
         await flush()
         expect(maxActive).toBe(ConcurrencyLimits.TASK_MOVES)
@@ -283,10 +329,55 @@ describe('per-account limiters', () => {
         await Promise.all([first, second])
     })
 
-    it('should keep overflow clients separate from unregistered clients', async () => {
-        for (let index = 0; index < 10_000; index++) {
-            registerClientLimiters({}, `retained-token-${index}`)
+    it('should use shared overflow limiters when every retained entry is busy', async () => {
+        resetLimitersForTesting({ maxAccountLimiters: 2 })
+
+        const busyGate = deferred()
+        const busyTasks = ['busy-token-1', 'busy-token-2'].map((token) => {
+            const client = {}
+            registerClientLimiters(client, token)
+            return getMoveLimiter(client)(() => busyGate.promise)
+        })
+        await flush()
+
+        const clientA = {}
+        const clientB = {}
+        registerClientLimiters(clientA, 'overflow-token-1')
+        registerClientLimiters(clientB, 'overflow-token-2')
+        const limiterA = getMoveLimiter(clientA)
+        const limiterB = getMoveLimiter(clientB)
+
+        const overflowGate = deferred()
+        let active = 0
+        let maxActive = 0
+        const track = async (waitFor: Promise<void>) => {
+            active++
+            maxActive = Math.max(maxActive, active)
+            await waitFor
+            active--
         }
+
+        const first = limiterA(() => track(overflowGate.promise))
+        const second = limiterB(() => track(Promise.resolve()))
+
+        await flush()
+        expect(maxActive).toBe(ConcurrencyLimits.TASK_MOVES)
+
+        overflowGate.resolve()
+        await Promise.all([first, second])
+        busyGate.resolve()
+        await Promise.all(busyTasks)
+    })
+
+    it('should keep overflow clients separate from unregistered clients', async () => {
+        resetLimitersForTesting({ maxAccountLimiters: 1 })
+
+        const busyClient = {}
+        registerClientLimiters(busyClient, 'busy-token')
+        const busyGate = deferred()
+        const busyTask = getMoveLimiter(busyClient)(() => busyGate.promise)
+        await flush()
+
         const overflowClient = {}
         registerClientLimiters(overflowClient, 'overflow-token')
 
@@ -308,14 +399,20 @@ describe('per-account limiters', () => {
 
         gate.resolve()
         await Promise.all([overflowTask, fallbackTask])
+        busyGate.resolve()
+        await busyTask
     })
 
     it('should remove expired idle account limiters', () => {
         vi.useFakeTimers()
-        registerClientLimiters({}, 'old-token')
+        const oldClient = {}
+        registerClientLimiters(oldClient, 'old-token')
+        getMoveLimiter(oldClient)
 
         vi.advanceTimersByTime(5 * 60_000)
-        registerClientLimiters({}, 'new-token')
+        const newClient = {}
+        registerClientLimiters(newClient, 'new-token')
+        getMoveLimiter(newClient)
 
         expect(getAccountLimiterCountForTesting()).toBe(1)
         vi.useRealTimers()
@@ -329,7 +426,9 @@ describe('per-account limiters', () => {
         const task = getMoveLimiter(client)(() => gate.promise)
         await vi.advanceTimersByTimeAsync(5 * 60_000)
 
-        registerClientLimiters({}, 'new-token')
+        const newClient = {}
+        registerClientLimiters(newClient, 'new-token')
+        getMoveLimiter(newClient)
         expect(getAccountLimiterCountForTesting()).toBe(2)
 
         gate.resolve()
