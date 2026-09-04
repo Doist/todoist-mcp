@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { appendToQuery, resolveResponsibleUser } from '../filter-helpers.js'
 import type { TodoistTool } from '../todoist-tool.js'
-import { mapTask, resolveInboxProjectId } from '../tool-helpers.js'
+import { mapTask, normalizePaginationCursor, resolveInboxProjectId } from '../tool-helpers.js'
 import { ApiLimits } from '../utils/constants.js'
 import { getDateInOffset, parseGmtOffsetToMinutes, shiftDateStringByDays } from '../utils/date.js'
 import { generateLabelsFilter, LabelsSchema } from '../utils/labels.js'
@@ -116,13 +116,23 @@ const findCompletedTasks = {
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     async execute(args, client) {
-        const { getBy, labels, labelsOperator, since, until, responsibleUser, projectId, ...rest } =
-            args
+        const {
+            getBy,
+            labels,
+            labelsOperator,
+            since,
+            until,
+            responsibleUser,
+            projectId,
+            cursor,
+            ...rest
+        } = args
+        const normalizedCursor = normalizePaginationCursor(cursor)
 
         // Cursor pagination must keep the exact same date window as page 1.
         // If since/until are omitted, they are recomputed from "today" and can drift
         // after midnight between requests, causing inconsistent pagination.
-        if (args.cursor && (!since || !until)) {
+        if (normalizedCursor && (!since || !until)) {
             throw new Error(
                 'Cursor pagination requires explicit since and until. Reuse structuredContent.appliedFilters.since and structuredContent.appliedFilters.until from the previous page.',
             )
@@ -174,6 +184,7 @@ const findCompletedTasks = {
             getBy === 'completion'
                 ? await client.getCompletedTasksByCompletionDate({
                       ...rest,
+                      ...(normalizedCursor ? { cursor: normalizedCursor } : {}),
                       projectId: resolvedProjectId,
                       since: sinceDateTime,
                       until: untilDateTime,
@@ -181,6 +192,7 @@ const findCompletedTasks = {
                   })
                 : await client.getCompletedTasksByDueDate({
                       ...rest,
+                      ...(normalizedCursor ? { cursor: normalizedCursor } : {}),
                       projectId: resolvedProjectId,
                       since: sinceDateTime,
                       until: untilDateTime,

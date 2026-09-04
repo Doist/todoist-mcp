@@ -19,6 +19,7 @@ vi.mock('../tool-helpers', async () => {
     return {
         getTasksByFilter: vi.fn(),
         mapTask: actual.mapTask,
+        normalizePaginationCursor: actual.normalizePaginationCursor,
         filterTasksByResponsibleUser: actual.filterTasksByResponsibleUser,
         RESPONSIBLE_USER_FILTERING: actual.RESPONSIBLE_USER_FILTERING,
         resolveInboxProjectId: actual.resolveInboxProjectId,
@@ -172,6 +173,22 @@ describe(`${FIND_TASKS} tool`, () => {
                     expect.objectContaining({
                         tasks: expect.any(Array),
                     }),
+                )
+            },
+        )
+
+        it.each(['', '   ', '0'])(
+            'should omit first-page cursor sentinel %j from filter queries',
+            async (cursor) => {
+                mockGetTasksByFilter.mockResolvedValue({ tasks: [], nextCursor: null })
+
+                await findTasks.execute(
+                    { searchText: 'project update', limit: 10, cursor },
+                    mockTodoistApi,
+                )
+
+                expect(mockGetTasksByFilter).toHaveBeenCalledWith(
+                    expect.objectContaining({ cursor: undefined }),
                 )
             },
         )

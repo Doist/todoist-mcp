@@ -123,6 +123,28 @@ describe(`${FIND_COMPLETED_TASKS} tool`, () => {
             expect(result.textContent).toMatchSnapshot()
         })
 
+        it.each(['', '   ', '0'])('should omit first-page cursor sentinel %j', async (cursor) => {
+            mockTodoistApi.getCompletedTasksByCompletionDate.mockResolvedValue({
+                items: [],
+                nextCursor: null,
+            })
+
+            await findCompletedTasks.execute(
+                {
+                    getBy: 'completion',
+                    limit: 50,
+                    cursor,
+                    labels: [],
+                    labelsOperator: 'or' as const,
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getCompletedTasksByCompletionDate).toHaveBeenCalledWith(
+                expect.not.objectContaining({ cursor: expect.anything() }),
+            )
+        })
+
         it('should allow missing since/until and default to the last 7 days', async () => {
             vi.useFakeTimers()
             vi.setSystemTime(new Date('2026-03-03T12:00:00Z'))
