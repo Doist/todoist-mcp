@@ -91,7 +91,10 @@ function withCachedJsonSchema(
             ...standard,
             jsonSchema: {
                 ...standard.jsonSchema,
-                [io]: () => jsonSchema,
+                [io]: (options: Parameters<typeof standard.jsonSchema.input>[0]) =>
+                    options.target === 'draft-2020-12' && options.libraryOptions === undefined
+                        ? jsonSchema
+                        : standard.jsonSchema[io](options),
             },
         },
     }

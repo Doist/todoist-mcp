@@ -191,6 +191,36 @@ describe('registerTool config', () => {
             properties: { date: { format: 'date' } },
         })
     })
+
+    it('delegates conversions that do not match the cached options', () => {
+        const { mock, server, client } = captureRegisterToolMock()
+        const parameters = { tuple: z.tuple([z.string(), z.number()]) }
+        const tool = buildToolFixture({
+            parameters,
+            execute: async () => ({ textContent: 'ok' }),
+        })
+
+        registerTool({ tool, server, client })
+
+        const config = mock.mock.calls[0]?.[1] as {
+            inputSchema: StandardSchemaWithJSON<unknown, unknown>
+        }
+        const converter = config.inputSchema['~standard'].jsonSchema.input
+
+        expect(converter({ target: 'draft-07' })).toEqual(
+            z.toJSONSchema(z.object(parameters), { target: 'draft-07', io: 'input' }),
+        )
+
+        const withLibraryOptions = converter({
+            target: 'draft-2020-12',
+            libraryOptions: {
+                override: (context: { jsonSchema: Record<string, unknown> }) => {
+                    context.jsonSchema.description = 'custom conversion'
+                },
+            },
+        })
+        expect(withLibraryOptions.description).toBe('custom conversion')
+    })
 })
 
 describe('registerTool error path', () => {
