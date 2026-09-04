@@ -1,5 +1,6 @@
 import {
     createLimiter,
+    getAccountLimiterCountForTesting,
     getMoveLimiter,
     getWriteLimiter,
     registerClientLimiters,
@@ -245,6 +246,41 @@ describe('createLimiter', () => {
 })
 
 describe('per-account limiters', () => {
+    it('should bound retained account limiters', () => {
+        for (let index = 0; index < 10_001; index++) {
+            registerClientLimiters({}, `token-${index}`)
+        }
+
+        expect(getAccountLimiterCountForTesting()).toBe(10_000)
+    })
+
+    it('should remove expired idle account limiters', () => {
+        vi.useFakeTimers()
+        registerClientLimiters({}, 'old-token')
+
+        vi.advanceTimersByTime(5 * 60_000)
+        registerClientLimiters({}, 'new-token')
+
+        expect(getAccountLimiterCountForTesting()).toBe(1)
+        vi.useRealTimers()
+    })
+
+    it('should retain an expired limiter while it has active work', async () => {
+        vi.useFakeTimers()
+        const client = {}
+        registerClientLimiters(client, 'busy-token')
+        const gate = deferred()
+        const task = getMoveLimiter(client)(() => gate.promise)
+        await vi.advanceTimersByTimeAsync(5 * 60_000)
+
+        registerClientLimiters({}, 'new-token')
+        expect(getAccountLimiterCountForTesting()).toBe(2)
+
+        gate.resolve()
+        await task
+        vi.useRealTimers()
+    })
+
     it('should share limiters across clients registered for the same account', async () => {
         const clientA = {}
         const clientB = {}

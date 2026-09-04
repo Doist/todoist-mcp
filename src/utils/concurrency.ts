@@ -4,7 +4,11 @@ import { ConcurrencyLimits } from './constants.js'
 /**
  * Wraps a task so it only runs once a slot is free.
  */
-type Limiter = <T>(fn: () => Promise<T>) => Promise<T>
+type Limiter = {
+    <T>(fn: () => Promise<T>): Promise<T>
+    /** Whether no task is running or waiting for this limiter. */
+    isIdle: () => boolean
+}
 
 type LimiterPair = {
     /** Serialises task-move requests, which contend on server-side tree locks. */
@@ -89,7 +93,7 @@ function createLimiter(
         active--
     }
 
-    return async function limit<T>(fn: () => Promise<T>): Promise<T> {
+    const limit = async function limit<T>(fn: () => Promise<T>): Promise<T> {
         await acquire()
         try {
             return await fn()
@@ -98,6 +102,8 @@ function createLimiter(
             release()
         }
     }
+    limit.isIdle = () => active === 0 && queue.length === 0
+    return limit
 }
 
 function createLimiterPair(): LimiterPair {
@@ -115,7 +121,14 @@ function createLimiterPair(): LimiterPair {
  * This map lives in one process, so the limits it enforces are per process rather
  * than per account globally. See the note on `ConcurrencyLimits`.
  */
-const limitersByAccount = new Map<string, LimiterPair>()
+type AccountLimiterEntry = {
+    limiters: LimiterPair
+    lastUsedAt: number
+}
+
+const MAX_ACCOUNT_LIMITERS = 10_000
+const ACCOUNT_LIMITER_IDLE_TTL_MS = 5 * 60_000
+const limitersByAccount = new Map<string, AccountLimiterEntry>()
 
 /** Lets a tool find its account's limiters from the client it was handed. */
 const limitersByClient = new WeakMap<object, LimiterPair>()
@@ -139,18 +152,50 @@ function accountKeyFromApiKey(apiKey: string): string {
     return createHash('sha256').update(apiKey).digest('hex')
 }
 
+function isLimiterPairIdle({ moves, writes }: LimiterPair): boolean {
+    return moves.isIdle() && writes.isIdle()
+}
+
+/**
+ * Removes expired idle entries from the oldest end of the insertion-ordered
+ * map. Active entries stay until their work finishes, even after they expire.
+ */
+function pruneIdleAccountLimiters(now: number): void {
+    for (const [key, entry] of limitersByAccount) {
+        if (now - entry.lastUsedAt < ACCOUNT_LIMITER_IDLE_TTL_MS) {
+            break
+        }
+        if (isLimiterPairIdle(entry.limiters)) {
+            limitersByAccount.delete(key)
+        }
+    }
+}
+
 /**
  * Associates a client with its account's limiters, sharing one pair across every
  * client built for the same account.
  */
 function registerClientLimiters(client: object, apiKey: string): void {
     const key = accountKeyFromApiKey(apiKey)
-    let limiters = limitersByAccount.get(key)
-    if (!limiters) {
-        limiters = createLimiterPair()
-        limitersByAccount.set(key, limiters)
+    const now = Date.now()
+    let entry = limitersByAccount.get(key)
+
+    if (entry) {
+        // Refresh insertion order so pruning can stop at the first fresh entry.
+        limitersByAccount.delete(key)
+        entry.lastUsedAt = now
+        limitersByAccount.set(key, entry)
+    } else {
+        pruneIdleAccountLimiters(now)
+        entry = { limiters: createLimiterPair(), lastUsedAt: now }
+
+        // Keep the registry bounded. If every slot belongs to a recently used
+        // account, the new client still gets local limits but is not retained.
+        if (limitersByAccount.size < MAX_ACCOUNT_LIMITERS) {
+            limitersByAccount.set(key, entry)
+        }
     }
-    limitersByClient.set(client, limiters)
+    limitersByClient.set(client, entry.limiters)
 }
 
 function getLimiters(client: object): LimiterPair {
@@ -171,8 +216,14 @@ function resetLimitersForTesting(): void {
     fallbackLimiters = undefined
 }
 
+/** Test-only: reports retained account entries for bounded-cache assertions. */
+function getAccountLimiterCountForTesting(): number {
+    return limitersByAccount.size
+}
+
 export {
     createLimiter,
+    getAccountLimiterCountForTesting,
     getMoveLimiter,
     getWriteLimiter,
     type Limiter,
