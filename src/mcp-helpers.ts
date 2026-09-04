@@ -88,12 +88,10 @@ function withCachedJsonSchema(
 
     return {
         '~standard': {
-            version: 1,
-            vendor: standard.vendor,
-            validate: (value) => standard.validate(value),
+            ...standard,
             jsonSchema: {
-                input: () => jsonSchema,
-                output: () => jsonSchema,
+                ...standard.jsonSchema,
+                [io]: () => jsonSchema,
             },
         },
     }

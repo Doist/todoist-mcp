@@ -157,6 +157,40 @@ describe('registerTool config', () => {
             value: { limit: 10 },
         })
     })
+
+    it('preserves the uncached side of piped input and output schemas', () => {
+        const { mock, server, client } = captureRegisterToolMock()
+        const pipedDate = z.string().pipe(z.iso.date())
+        const tool = buildToolFixture({
+            name: 'piped-schema-tool',
+            description: 'Tool with different input and output schemas',
+            parameters: { date: pipedDate },
+            outputSchema: { date: pipedDate },
+            execute: async () => ({ textContent: 'ok' }),
+        })
+
+        registerTool({ tool, server, client })
+
+        type SchemaConfig = {
+            inputSchema: StandardSchemaWithJSON<unknown, unknown>
+            outputSchema: StandardSchemaWithJSON<unknown, unknown>
+        }
+        const config = mock.mock.calls[0]?.[1] as SchemaConfig
+        const options = { target: 'draft-2020-12' as const }
+
+        expect(config.inputSchema['~standard'].jsonSchema.input(options)).not.toMatchObject({
+            properties: { date: { format: 'date' } },
+        })
+        expect(config.inputSchema['~standard'].jsonSchema.output(options)).toMatchObject({
+            properties: { date: { format: 'date' } },
+        })
+        expect(config.outputSchema['~standard'].jsonSchema.input(options)).not.toMatchObject({
+            properties: { date: { format: 'date' } },
+        })
+        expect(config.outputSchema['~standard'].jsonSchema.output(options)).toMatchObject({
+            properties: { date: { format: 'date' } },
+        })
+    })
 })
 
 describe('registerTool error path', () => {
