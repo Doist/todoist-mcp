@@ -1,3 +1,9 @@
+## [13.2.3](https://github.com/Doist/todoist-mcp/compare/v13.2.2...v13.2.3) (2026-09-08)
+
+### Bug Fixes
+
+* use paired SDK transport for compressed responses on Node 26 ([#601](https://github.com/Doist/todoist-mcp/issues/601)) ([a4f9d86](https://github.com/Doist/todoist-mcp/commit/a4f9d86c042fb358b1bb4809ccbd44682e346a61)), closes [#599](https://github.com/Doist/todoist-mcp/issues/599)
+
 ## [13.2.2](https://github.com/Doist/todoist-mcp/compare/v13.2.1...v13.2.2) (2026-09-04)
 
 ### Bug Fixes
