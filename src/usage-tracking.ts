@@ -17,11 +17,16 @@ type UsageTrackingConfig = {
     sessionId?: string
 }
 
-type DispatcherModule = {
-    getDefaultDispatcher: () => Promise<unknown | undefined>
+type DefaultTransport = {
+    dispatcher: unknown
+    fetch?: typeof fetch
 }
 
-let defaultDispatcherPromise: Promise<unknown | undefined> | undefined
+type DispatcherModule = {
+    getDefaultTransport: () => Promise<DefaultTransport | undefined>
+}
+
+let defaultTransportPromise: Promise<DefaultTransport | undefined> | undefined
 const defaultDispatcherModuleLoader = async (): Promise<DispatcherModule> => {
     const todoistSdkEntry = require.resolve('@doist/todoist-sdk')
     const dispatcherModulePath = join(dirname(todoistSdkEntry), 'transport', 'http-dispatcher.js')
@@ -137,21 +142,21 @@ function mergeAbortSignals(
     }
 }
 
-async function getSdkDefaultDispatcher(): Promise<unknown | undefined> {
+async function getSdkDefaultTransport(): Promise<DefaultTransport | undefined> {
     if (!isNodeEnvironment()) {
         return undefined
     }
 
-    if (!defaultDispatcherPromise) {
-        defaultDispatcherPromise = dispatcherModuleLoader()
-            .then((dispatcherModule) => dispatcherModule.getDefaultDispatcher())
+    if (!defaultTransportPromise) {
+        defaultTransportPromise = dispatcherModuleLoader()
+            .then((dispatcherModule) => dispatcherModule.getDefaultTransport())
             .catch((error) => {
-                defaultDispatcherPromise = undefined
+                defaultTransportPromise = undefined
                 throw error
             })
     }
 
-    return defaultDispatcherPromise
+    return defaultTransportPromise
 }
 
 function isNodeEnvironment(): boolean {
@@ -159,15 +164,17 @@ function isNodeEnvironment(): boolean {
 }
 
 export async function resetDefaultDispatcherForTests(): Promise<void> {
-    if (!defaultDispatcherPromise) {
+    if (!defaultTransportPromise) {
         return
     }
 
-    const dispatcherPromise = defaultDispatcherPromise
-    defaultDispatcherPromise = undefined
-    await dispatcherPromise.then(
-        (dispatcher) =>
-            (dispatcher as { close?: () => void | Promise<void> } | undefined)?.close?.(),
+    const transportPromise = defaultTransportPromise
+    defaultTransportPromise = undefined
+    await transportPromise.then(
+        (transport) =>
+            (
+                transport?.dispatcher as { close?: () => void | Promise<void> } | undefined
+            )?.close?.(),
         () => undefined,
     )
 }
@@ -180,12 +187,25 @@ export function resetDispatcherModuleLoaderForTests(): void {
     dispatcherModuleLoader = defaultDispatcherModuleLoader
 }
 
-async function attachDispatcher(options: RequestInit): Promise<void> {
-    const dispatcher = await getSdkDefaultDispatcher()
-    if (dispatcher !== undefined) {
-        // @ts-expect-error - dispatcher is a valid option for Node's fetch but not in the TS types
-        options.dispatcher = dispatcher
+async function resolveRequestFetch(
+    baseFetch: typeof fetch,
+    options: RequestInit,
+): Promise<typeof fetch> {
+    if ('dispatcher' in options) {
+        return baseFetch
     }
+
+    const transport = await getSdkDefaultTransport()
+    if (!transport) {
+        return baseFetch
+    }
+
+    // @ts-expect-error - dispatcher is a valid option for Node's fetch but not in the TS types
+    options.dispatcher = transport.dispatcher
+
+    // The SDK's dispatcher decodes compressed response bodies itself. Its
+    // paired fetch must be used to avoid Node's global fetch decoding again.
+    return transport.fetch ?? baseFetch
 }
 
 function toCustomFetchResponse(response: Response): CustomFetchResponse {
@@ -224,11 +244,11 @@ export function createTrackedFetch(
                       ? { headers }
                       : {}),
             }
-            if (useDispatcher) {
-                await attachDispatcher(fetchOptions)
-            }
+            const requestFetch = useDispatcher
+                ? await resolveRequestFetch(baseFetch, fetchOptions)
+                : baseFetch
 
-            const response = await baseFetch(url, fetchOptions)
+            const response = await requestFetch(url, fetchOptions)
             return toCustomFetchResponse(response)
         } finally {
             cleanup()

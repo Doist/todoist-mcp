@@ -9,9 +9,9 @@ import {
     runWithUsageTrackingContext,
 } from './usage-tracking.js'
 
-const getDefaultDispatcherMock = vi.fn<() => Promise<unknown | undefined>>(() =>
-    Promise.resolve(undefined),
-)
+const getDefaultTransportMock = vi.fn<
+    () => Promise<{ dispatcher: unknown; fetch?: typeof fetch } | undefined>
+>(() => Promise.resolve(undefined))
 
 function createJsonResponse(body: unknown = { ok: true }): Response {
     return new Response(JSON.stringify(body), {
@@ -193,39 +193,54 @@ describe('usage tracking', () => {
 
     describe('proxy dispatcher injection', () => {
         afterEach(async () => {
-            getDefaultDispatcherMock.mockReset()
-            getDefaultDispatcherMock.mockResolvedValue(undefined)
+            getDefaultTransportMock.mockReset()
+            getDefaultTransportMock.mockResolvedValue(undefined)
             await resetDefaultDispatcherForTests()
             resetDispatcherModuleLoaderForTests()
         })
 
-        it('attaches the env proxy dispatcher when createTrackedFetch uses native fetch', async () => {
-            const fakeDispatcher = { kind: 'env-http-proxy-agent', close: vi.fn() }
-            getDefaultDispatcherMock.mockResolvedValue(fakeDispatcher)
-            setDispatcherModuleLoaderForTests(async () => ({
-                getDefaultDispatcher: getDefaultDispatcherMock,
-            }))
+        it.each([false, true])(
+            'uses the paired fetch when global fetch is replaced after creation: %s',
+            async (replaceGlobalFetch) => {
+                const fakeDispatcher = { kind: 'env-http-proxy-agent', close: vi.fn() }
+                const pairedFetch = vi.fn(
+                    async (_url: RequestInfo | URL, options?: RequestInit) => {
+                        captured = options
+                        return createJsonResponse()
+                    },
+                )
+                getDefaultTransportMock.mockResolvedValue({
+                    dispatcher: fakeDispatcher,
+                    fetch: pairedFetch as unknown as typeof fetch,
+                })
+                setDispatcherModuleLoaderForTests(async () => ({
+                    getDefaultTransport: getDefaultTransportMock,
+                }))
 
-            let captured: RequestInit | undefined
-            const originalFetch = globalThis.fetch
-            globalThis.fetch = (async (_url: RequestInfo | URL, options?: RequestInit) => {
-                captured = options
-                return createJsonResponse()
-            }) as typeof fetch
+                let captured: RequestInit | undefined
+                const originalFetch = globalThis.fetch
+                const globalFetch = vi.fn<typeof fetch>()
+                globalThis.fetch = globalFetch
 
-            try {
-                const trackedFetch = createTrackedFetch()
-                await trackedFetch('https://api.todoist.com/api/v1/tasks', { method: 'GET' })
-            } finally {
-                globalThis.fetch = originalFetch
-            }
+                try {
+                    const trackedFetch = createTrackedFetch()
+                    if (replaceGlobalFetch) {
+                        globalThis.fetch = vi.fn<typeof fetch>()
+                    }
+                    await trackedFetch('https://api.todoist.com/api/v1/tasks', { method: 'GET' })
+                } finally {
+                    globalThis.fetch = originalFetch
+                }
 
-            expect(getDefaultDispatcherMock).toHaveBeenCalled()
-            expect(captured).toBeTruthy()
-            expect((captured as unknown as { dispatcher?: unknown }).dispatcher).toBe(
-                fakeDispatcher,
-            )
-        })
+                expect(getDefaultTransportMock).toHaveBeenCalled()
+                expect(pairedFetch).toHaveBeenCalled()
+                expect(globalFetch).not.toHaveBeenCalled()
+                expect(captured).toBeTruthy()
+                expect((captured as unknown as { dispatcher?: unknown }).dispatcher).toBe(
+                    fakeDispatcher,
+                )
+            },
+        )
 
         it('does not attach a dispatcher when createTrackedFetch is given a stub', async () => {
             let captured: RequestInit | undefined
@@ -239,9 +254,36 @@ describe('usage tracking', () => {
 
             await trackedFetch('https://api.todoist.com/api/v1/tasks', { method: 'GET' })
 
-            expect(getDefaultDispatcherMock).not.toHaveBeenCalled()
+            expect(getDefaultTransportMock).not.toHaveBeenCalled()
             expect(captured).toBeTruthy()
             expect((captured as unknown as { dispatcher?: unknown }).dispatcher).toBeUndefined()
+        })
+
+        it('keeps a caller-supplied dispatcher on native fetch', async () => {
+            const callerDispatcher = { kind: 'caller-supplied' }
+            let captured: RequestInit | undefined
+            const originalFetch = globalThis.fetch
+            const globalFetch = vi.fn(async (_url: RequestInfo | URL, options?: RequestInit) => {
+                captured = options
+                return createJsonResponse()
+            })
+            globalThis.fetch = globalFetch as typeof fetch
+
+            try {
+                await createTrackedFetch()('https://api.todoist.com/api/v1/tasks', {
+                    method: 'GET',
+                    // dispatcher is a Node fetch extension not present in RequestInit types
+                    dispatcher: callerDispatcher,
+                } as RequestInit)
+            } finally {
+                globalThis.fetch = originalFetch
+            }
+
+            expect(getDefaultTransportMock).not.toHaveBeenCalled()
+            expect(globalFetch).toHaveBeenCalled()
+            expect((captured as unknown as { dispatcher?: unknown }).dispatcher).toBe(
+                callerDispatcher,
+            )
         })
     })
 
@@ -316,8 +358,10 @@ describe('usage tracking', () => {
 // createTodoistClient -> createTrackedFetch -> SDK path so a future SDK bump
 // that loosens the behaviour fails loudly in this repo.
 describe('createTodoistClient viewAttachment safety (Doist/Issues#20430)', () => {
-    afterEach(() => {
+    afterEach(async () => {
         vi.restoreAllMocks()
+        await resetDefaultDispatcherForTests()
+        resetDispatcherModuleLoaderForTests()
     })
 
     it('rejects non-attachment Todoist hosts without making a request', async () => {
@@ -350,6 +394,12 @@ describe('createTodoistClient viewAttachment safety (Doist/Issues#20430)', () =>
                 }),
             )
         vi.spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
+        setDispatcherModuleLoaderForTests(async () => ({
+            getDefaultTransport: async () => ({
+                dispatcher: {},
+                fetch: fetchMock,
+            }),
+        }))
 
         const client = createTodoistClient('test-token')
         await client.viewAttachment('https://files.todoist.com/user_upload/file.png')
