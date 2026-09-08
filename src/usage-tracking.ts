@@ -200,10 +200,8 @@ async function resolveRequestFetch(
         return baseFetch
     }
 
-    if (!('dispatcher' in options)) {
-        // @ts-expect-error - dispatcher is a valid option for Node's fetch but not in the TS types
-        options.dispatcher = transport.dispatcher
-    }
+    // @ts-expect-error - dispatcher is a valid option for Node's fetch but not in the TS types
+    options.dispatcher = transport.dispatcher
 
     // The SDK's dispatcher decodes compressed response bodies itself. Its
     // paired fetch must be used to avoid Node's global fetch decoding again.
