@@ -1,3 +1,9 @@
+## [13.2.4](https://github.com/Doist/todoist-mcp/compare/v13.2.3...v13.2.4) (2026-09-10)
+
+### Bug Fixes
+
+* resolve inbox aliases in project overviews (Doist/Issues[#21069](https://github.com/Doist/todoist-mcp/issues/21069)) ([#602](https://github.com/Doist/todoist-mcp/issues/602)) ([bd48891](https://github.com/Doist/todoist-mcp/commit/bd4889124180e76893c501eb82f68d658f219280))
+
 ## [13.2.3](https://github.com/Doist/todoist-mcp/compare/v13.2.2...v13.2.3) (2026-09-08)
 
 ### Bug Fixes
