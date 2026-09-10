@@ -6,6 +6,7 @@ import {
     createMockProject,
     createMockSection,
     createMockTask,
+    createMockUser,
     createMockWorkspaceProject,
     TEST_ERRORS,
     TEST_IDS,
@@ -19,6 +20,7 @@ const mockTodoistApi = {
     getProject: vi.fn(),
     getSections: vi.fn(),
     getTasks: vi.fn(),
+    getUser: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { GET_OVERVIEW } = ToolNames
@@ -272,6 +274,28 @@ describe(`${GET_OVERVIEW} tool`, () => {
             )
             expect(structuredContent.sections).toHaveLength(2)
             expect(structuredContent.tasks).toHaveLength(3)
+        })
+
+        it('should resolve inbox to the inbox project ID', async () => {
+            mockTodoistApi.getUser.mockResolvedValue(createMockUser())
+            mockTodoistApi.getProject.mockResolvedValue(
+                createMockProject({ id: TEST_IDS.PROJECT_INBOX }),
+            )
+            mockTodoistApi.getSections.mockResolvedValue({ results: [], nextCursor: null })
+            mockTodoistApi.getTasks.mockResolvedValue({ results: [], nextCursor: null })
+
+            await getOverview.execute({ projectId: 'inbox' }, mockTodoistApi)
+
+            expect(mockTodoistApi.getUser).toHaveBeenCalledTimes(1)
+            expect(mockTodoistApi.getProject).toHaveBeenCalledWith(TEST_IDS.PROJECT_INBOX)
+            expect(mockTodoistApi.getSections).toHaveBeenCalledWith({
+                projectId: TEST_IDS.PROJECT_INBOX,
+            })
+            expect(mockTodoistApi.getTasks).toHaveBeenCalledWith({
+                projectId: TEST_IDS.PROJECT_INBOX,
+                limit: 50,
+                cursor: undefined,
+            })
         })
 
         it('should handle project with no tasks', async () => {
