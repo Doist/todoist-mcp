@@ -6,7 +6,7 @@ import {
 } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { mapTask, type Project } from '../tool-helpers.js'
+import { mapTask, type Project, resolveInboxProjectId } from '../tool-helpers.js'
 import { ApiLimits } from '../utils/constants.js'
 import { SectionSchema, type SectionSummary, toSectionSummary } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -17,7 +17,7 @@ const ArgsSchema = {
         .min(1)
         .optional()
         .describe(
-            'Optional project ID. If provided, shows detailed overview of that project. If omitted, shows overview of all projects.',
+            'Optional project ID. Use "inbox" for the Inbox. If provided, shows detailed overview of that project. If omitted, shows overview of all projects.',
         ),
 }
 
@@ -435,8 +435,9 @@ const getOverview = {
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     async execute(args, client) {
-        const result = args.projectId
-            ? await generateProjectOverview(client, args.projectId)
+        const projectId = await resolveInboxProjectId({ projectId: args.projectId, client })
+        const result = projectId
+            ? await generateProjectOverview(client, projectId)
             : await generateAccountOverview(client)
 
         return {
