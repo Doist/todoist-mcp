@@ -330,7 +330,7 @@ async function generateAccountOverview(
     }
     lines.push('')
     lines.push(
-        '_Note: This overview lists projects and sections only; tasks are not included. Call get-overview with a projectId (or "inbox") to see a project\'s tasks._',
+        `_Note: This overview lists projects and sections only; tasks are not included. Call ${ToolNames.GET_OVERVIEW} with a projectId (or "inbox") to see a project's tasks._`,
         '',
     )
     // Add explanation about nesting if there are nested projects
