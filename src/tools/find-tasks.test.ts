@@ -195,9 +195,17 @@ describe(`${FIND_TASKS} tool`, () => {
         )
 
         it.each([
-            { searchText: '@work #urgent "exact phrase"', description: 'special characters' },
-            { searchText: 'nonexistent keyword', description: 'empty results' },
-        ])('should handle search with $description', async ({ searchText }) => {
+            {
+                searchText: '@work #urgent "exact phrase"',
+                description: 'special characters',
+                expectedQuery: 'search: @work #urgent \\"exact phrase\\" & !assigned to: others',
+            },
+            {
+                searchText: 'nonexistent keyword',
+                description: 'empty results',
+                expectedQuery: 'search: nonexistent keyword & !assigned to: others',
+            },
+        ])('should handle search with $description', async ({ searchText, expectedQuery }) => {
             const mockResponse = { tasks: [], nextCursor: null }
             mockGetTasksByFilter.mockResolvedValue(mockResponse)
 
@@ -205,7 +213,7 @@ describe(`${FIND_TASKS} tool`, () => {
 
             expect(mockGetTasksByFilter).toHaveBeenCalledWith({
                 client: mockTodoistApi,
-                query: `search: ${searchText} & !assigned to: others`,
+                query: expectedQuery,
                 cursor: undefined,
                 limit: 10,
             })
@@ -222,6 +230,19 @@ describe(`${FIND_TASKS} tool`, () => {
                 appliedFilters: expect.objectContaining({
                     searchText: searchText,
                 }),
+            })
+        })
+
+        it('should escape task search filter syntax', async () => {
+            mockGetTasksByFilter.mockResolvedValue({ tasks: [], nextCursor: null })
+
+            await findTasks.execute({ searchText: 'meeting & notes', limit: 10 }, mockTodoistApi)
+
+            expect(mockGetTasksByFilter).toHaveBeenCalledWith({
+                client: mockTodoistApi,
+                query: 'search: meeting \\& notes & !assigned to: others',
+                cursor: undefined,
+                limit: 10,
             })
         })
     })

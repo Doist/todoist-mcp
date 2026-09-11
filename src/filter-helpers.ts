@@ -45,6 +45,10 @@ export function appendToQuery(query: string, filterComponent: string): string {
     return `${query} & ${filterComponent}`
 }
 
+export function buildTaskSearchQuery(searchText: string): string {
+    return `search: ${searchText.replaceAll(/[\\,|&!()"]/g, '\\$&')}`
+}
+
 /**
  * Builds a query filter string for responsible user filtering that can be appended to a Todoist filter query.
  * @param resolvedAssigneeId - The resolved assignee ID (if provided)

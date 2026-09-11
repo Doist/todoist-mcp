@@ -1,6 +1,7 @@
 import { getProjectUrl, getTaskUrl } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { buildTaskSearchQuery } from '../filter-helpers.js'
 import { getTasksByFilter, searchAllProjects } from '../tool-helpers.js'
 import { ApiLimits } from '../utils/constants.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -50,7 +51,7 @@ const search = {
         const [tasksResult, projects] = await Promise.all([
             getTasksByFilter({
                 client,
-                query: `search: ${query}`,
+                query: buildTaskSearchQuery(query),
                 limit: ApiLimits.TASKS_MAX,
                 cursor: undefined,
             }),
