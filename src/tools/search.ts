@@ -37,46 +37,46 @@ const OutputSchema = {
 const search = {
     name: ToolNames.SEARCH,
     description:
-        'Search across tasks and projects in Todoist. Returns a list of relevant results with IDs, titles, and URLs.',
+        'Search across active tasks, completed tasks, and projects in Todoist. Returns a list of relevant results with IDs, titles, and URLs. Completed task titles start with "[completed]".',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     async execute(args, client) {
         const { query } = args
 
-        // Search both tasks and projects in parallel
+        // Search active tasks, completed tasks, and projects in parallel
         // Use TASKS_MAX for search since this tool doesn't support pagination
+        // Completed task search returns at most one 50-item page
         // For projects, use server-side search
-        const [tasksResult, projects] = await Promise.all([
+        const [tasksResult, completedTasksResult, projects] = await Promise.all([
             getTasksByFilter({
                 client,
                 query: `search: ${query}`,
                 limit: ApiLimits.TASKS_MAX,
                 cursor: undefined,
             }),
+            client.searchCompletedTasks({ query, limit: ApiLimits.COMPLETED_TASKS_DEFAULT }),
             searchAllProjects(client, query),
         ])
 
-        // Build results array
-        const results: SearchResult[] = []
-
-        // Add task results with composite IDs
-        for (const task of tasksResult.tasks) {
-            results.push({
+        // Build results with composite IDs: active tasks, then completed tasks, then projects
+        const results: SearchResult[] = [
+            ...tasksResult.tasks.map((task) => ({
                 id: `task:${task.id}`,
                 title: task.content,
                 url: getTaskUrl(task.id),
-            })
-        }
-
-        // Add project results with composite IDs
-        for (const project of projects) {
-            results.push({
+            })),
+            ...completedTasksResult.items.map((task) => ({
+                id: `task:${task.id}`,
+                title: `[completed] ${task.content}`,
+                url: getTaskUrl(task.id),
+            })),
+            ...projects.map((project) => ({
                 id: `project:${project.id}`,
                 title: project.name,
                 url: getProjectUrl(project.id),
-            })
-        }
+            })),
+        ]
 
         return {
             textContent: JSON.stringify({ results }),
