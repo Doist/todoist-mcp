@@ -94,6 +94,20 @@ describe(`${SEARCH} tool`, () => {
             })
         })
 
+        it('should escape task search filter syntax', async () => {
+            mockGetTasksByFilter.mockResolvedValue({ tasks: [], nextCursor: null })
+            mockTodoistApi.searchProjects.mockResolvedValue(createMockApiResponse([]))
+
+            await search.execute({ query: 'budget, invoices' }, mockTodoistApi)
+
+            expect(mockGetTasksByFilter).toHaveBeenCalledWith({
+                client: mockTodoistApi,
+                query: 'search: budget\\, invoices',
+                limit: 100,
+                cursor: undefined,
+            })
+        })
+
         it('should return only matching tasks when no projects match', async () => {
             const mockTasks = [
                 createMappedTask({

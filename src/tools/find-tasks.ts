@@ -3,6 +3,7 @@ import { z } from 'zod'
 import {
     appendToQuery,
     buildResponsibleUserQueryFilter,
+    buildTaskSearchQuery,
     filterTasksByResponsibleUser,
     RESPONSIBLE_USER_FILTERING,
     resolveResponsibleUser,
@@ -258,7 +259,7 @@ const findTasks = {
 
         // Add search text component
         if (searchText) {
-            query = appendToQuery(query, `search: ${searchText}`)
+            query = appendToQuery(query, buildTaskSearchQuery(searchText))
         }
 
         // Add labels component

@@ -1,7 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { buildResponsibleUserQueryFilter, filterTasksByResponsibleUser } from './filter-helpers.js'
+import {
+    buildResponsibleUserQueryFilter,
+    buildTaskSearchQuery,
+    filterTasksByResponsibleUser,
+} from './filter-helpers.js'
 
 describe('filter helpers', () => {
+    describe('buildTaskSearchQuery', () => {
+        it.each([
+            ['commas', 'budget, invoices', 'search: budget\\, invoices'],
+            ['AND operators', 'meeting & notes', 'search: meeting \\& notes'],
+            ['OR operators', '|', 'search: \\|'],
+            ['NOT operators', '!', 'search: \\!'],
+            ['parentheses', '(follow up)', 'search: \\(follow up\\)'],
+            ['quotation marks', '"quarterly report"', 'search: \\"quarterly report\\"'],
+            ['backslashes', 'C:\\reports', 'search: C:\\\\reports'],
+        ])('escapes $name', (_name, searchText, expectedQuery) => {
+            expect(buildTaskSearchQuery(searchText)).toBe(expectedQuery)
+        })
+    })
+
     describe('buildResponsibleUserQueryFilter', () => {
         it('includes unassigned tasks when the resolved user is the current user', () => {
             expect(
