@@ -42,7 +42,7 @@ const mockResolveFilter = filterResolver.resolveFilter as MockedFunction<
     typeof filterResolver.resolveFilter
 >
 
-const { FIND_TASKS, FIND_COMPLETED_TASKS } = ToolNames
+const { FIND_TASKS, SEARCH_COMPLETED_TASKS } = ToolNames
 
 const mockGetTasksByFilter = getTasksByFilter as MockedFunction<typeof getTasksByFilter>
 const mockResolveUserNameToId = resolveUserNameToId as MockedFunction<typeof resolveUserNameToId>
@@ -470,7 +470,7 @@ describe(`${FIND_TASKS} tool`, () => {
             const textContent = result.textContent
             expect(textContent).toMatchSnapshot()
             expect(textContent).toContain('Try broader search terms')
-            expect(textContent).toContain(`Check completed tasks with ${FIND_COMPLETED_TASKS}`)
+            expect(textContent).toContain(`Search completed tasks with ${SEARCH_COMPLETED_TASKS}`)
             expect(textContent).toContain('Verify spelling and try partial words')
         })
     })
