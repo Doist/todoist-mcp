@@ -17,7 +17,7 @@ const ArgsSchema = {
         .min(1)
         .optional()
         .describe(
-            'Optional project ID. Use "inbox" for the Inbox. If provided, shows detailed overview of that project. If omitted, shows overview of all projects.',
+            'Optional project ID. Use "inbox" for the Inbox. If provided, returns that project\'s tasks grouped by section. If omitted, returns the project and section structure for the whole account with no tasks.',
         ),
 }
 
@@ -329,6 +329,10 @@ async function generateAccountOverview(
         lines.push('_No projects found._')
     }
     lines.push('')
+    lines.push(
+        '_Note: This overview lists projects and sections only; tasks are not included. Call get-overview with a projectId (or "inbox") to see a project\'s tasks._',
+        '',
+    )
     // Add explanation about nesting if there are nested projects
     const hasNested = (tree as ProjectWithChildren[]).some((p) => p.children.length > 0)
     if (hasNested) {
@@ -430,7 +434,7 @@ async function generateProjectOverview(
 const getOverview = {
     name: ToolNames.GET_OVERVIEW,
     description:
-        'Get a Markdown overview. If no projectId is provided, shows all projects with hierarchy and sections (useful for navigation). If projectId is provided, shows detailed overview of that specific project including all tasks grouped by sections.',
+        'Get a Markdown overview. Called without a projectId, returns the account\'s project and section structure only — no tasks — for navigation. Pass a projectId (or "inbox" for the Inbox) to get that project\'s tasks grouped by section.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
