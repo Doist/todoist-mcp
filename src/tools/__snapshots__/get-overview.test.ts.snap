@@ -6,6 +6,8 @@ exports[`get-overview tool > account overview (no projectId) > should generate a
 - Inbox Project: Inbox (id=inbox-project-id)
 - Project: test-abc123def456-project (id=6cfCcrrCFg2xP94Q)
   - Section: test-section (id=section-123)
+
+_Note: This overview lists projects and sections only; tasks are not included. Call get-overview with a projectId (or "inbox") to see a project's tasks._
 "
 `;
 
@@ -13,6 +15,8 @@ exports[`get-overview tool > account overview (no projectId) > should handle emp
 "# Personal Projects
 
 _No projects found._
+
+_Note: This overview lists projects and sections only; tasks are not included. Call get-overview with a projectId (or "inbox") to see a project's tasks._
 "
 `;
 
