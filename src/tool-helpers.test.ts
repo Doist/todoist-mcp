@@ -82,6 +82,9 @@ describe('shared utilities', () => {
             const result = mapTask(mockTask)
 
             expect(result.isDeleted).toBe(true)
+            // The other half of the contract: a live task omits the field rather
+            // than carrying `isDeleted: false` through every list response.
+            expect(mapTask(createMockTask()).isDeleted).toBeUndefined()
             // Regression guard for Doist/Issues#20642: a deleted task is not a
             // completed one, so `checked` alone cannot be read as "active".
             expect(result.checked).toBe(false)
