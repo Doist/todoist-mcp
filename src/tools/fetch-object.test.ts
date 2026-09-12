@@ -90,6 +90,21 @@ describe(`${FETCH_OBJECT} tool`, () => {
             })
         })
 
+        it('should flag a deleted task', async () => {
+            mockTodoistApi.getTask.mockResolvedValue(
+                createMockTask({ id: 'task123', content: 'Deleted task', isDeleted: true }),
+            )
+
+            const result = await fetchObject.execute(
+                { type: 'task', id: 'task123' },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent?.object).toEqual(
+                expect.objectContaining({ isDeleted: true }),
+            )
+        })
+
         it('should handle task not found', async () => {
             mockTodoistApi.getTask.mockRejectedValue(new Error('Task not found'))
 
