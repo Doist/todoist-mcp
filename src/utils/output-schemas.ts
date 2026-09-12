@@ -24,6 +24,7 @@ const TaskSchema = z.object({
     responsibleUid: z.string().optional(),
     isUncompletable: z.boolean().optional().describe('An organizational header, not a real task.'),
     assignedByUid: z.string().optional(),
+    isDeleted: z.boolean().optional().describe('True when deleted; absent otherwise.'),
     checked: z.boolean().describe('Whether the task is completed.'),
     completedAt: z.string().optional().describe('ISO 8601.'),
     addedAt: z.string().optional().describe('ISO 8601.'),

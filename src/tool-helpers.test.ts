@@ -71,8 +71,20 @@ describe('shared utilities', () => {
                 completedAt: undefined,
                 deadlineDate: undefined,
                 responsibleUid: undefined,
+                isDeleted: undefined,
                 addedAt: '2025-08-13T22:09:56.123Z',
             })
+        })
+
+        it('should flag a deleted task', () => {
+            const mockTask = createMockTask({ id: '321', isDeleted: true })
+
+            const result = mapTask(mockTask)
+
+            expect(result.isDeleted).toBe(true)
+            // Regression guard for Doist/Issues#20642: a deleted task is not a
+            // completed one, so `checked` alone cannot be read as "active".
+            expect(result.checked).toBe(false)
         })
 
         it('should handle recurring tasks', () => {
