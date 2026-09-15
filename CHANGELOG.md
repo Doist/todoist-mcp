@@ -1,3 +1,9 @@
+## [13.2.6](https://github.com/Doist/todoist-mcp/compare/v13.2.5...v13.2.6) (2026-09-15)
+
+### Bug Fixes
+
+* escape task search text with SDK helper ([#604](https://github.com/Doist/todoist-mcp/issues/604)) ([858fd1a](https://github.com/Doist/todoist-mcp/commit/858fd1ab63b060a7594fd2e193483cb8a0efeed9))
+
 ## [13.2.5](https://github.com/Doist/todoist-mcp/compare/v13.2.4...v13.2.5) (2026-09-14)
 
 ### Bug Fixes
