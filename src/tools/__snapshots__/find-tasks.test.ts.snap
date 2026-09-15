@@ -31,7 +31,7 @@ Preview:
 exports[`find-tasks tool > next steps logic > should provide helpful suggestions for empty search results 1`] = `
 "Search results for "nonexistent": 0 (limit 10).
 Filter: matching "nonexistent".
-No results. Try broader search terms; Verify spelling and try partial words; Check completed tasks with find-completed-tasks."
+No results. Try broader search terms; Verify spelling and try partial words; Search completed tasks with search-completed-tasks."
 `;
 
 exports[`find-tasks tool > next steps logic > should suggest different actions when hasOverdue is true 1`] = `
@@ -65,13 +65,13 @@ Preview:
 exports[`find-tasks tool > searching tasks > should handle search with 'empty results' 1`] = `
 "Search results for "nonexistent keyword": 0 (limit 10).
 Filter: matching "nonexistent keyword".
-No results. Try broader search terms; Verify spelling and try partial words; Check completed tasks with find-completed-tasks."
+No results. Try broader search terms; Verify spelling and try partial words; Search completed tasks with search-completed-tasks."
 `;
 
 exports[`find-tasks tool > searching tasks > should handle search with 'special characters' 1`] = `
 "Search results for "@work #urgent "exact phrase"": 0 (limit 10).
 Filter: matching "@work #urgent "exact phrase"".
-No results. Try broader search terms; Verify spelling and try partial words; Check completed tasks with find-completed-tasks."
+No results. Try broader search terms; Verify spelling and try partial words; Search completed tasks with search-completed-tasks."
 `;
 
 exports[`find-tasks tool > searching tasks > should search tasks and return results 1`] = `

@@ -4,7 +4,7 @@ import type { TodoistTool } from '../todoist-tool.js'
 import { mapTask, normalizePaginationCursor, resolveInboxProjectId } from '../tool-helpers.js'
 import { ApiLimits } from '../utils/constants.js'
 import { getDateInOffset, parseGmtOffsetToMinutes, shiftDateStringByDays } from '../utils/date.js'
-import { generateLabelsFilter, LabelsSchema } from '../utils/labels.js'
+import { formatLabelsHint, generateLabelsFilter, LabelsSchema } from '../utils/labels.js'
 import { TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import { previewTasks, summarizeList } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -111,7 +111,7 @@ const OutputSchema = {
 const findCompletedTasks = {
     name: ToolNames.FIND_COMPLETED_TASKS,
     description:
-        'Get completed tasks in a date range. For "what did I complete/get done" questions, use find-activity instead — it reports completion events, including every occurrence of a recurring task, which this tool does not. since/until are optional and default to a 7-day window when omitted. Includes all collaborators by default. Person-specific queries (summaries, plans, reports) require responsibleUser.',
+        'Get completed tasks in a date range. Use search-completed-tasks instead for text searches when the completion date is unknown. For "what did I complete/get done" questions, use find-activity instead — it reports completion events, including every occurrence of a recurring task, which this tool does not. since/until are optional and default to a 7-day window when omitted. Includes all collaborators by default. Person-specific queries (summaries, plans, reports) require responsibleUser.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
@@ -248,10 +248,7 @@ function generateTextContent({
 
     // Add label filter information
     if (args.labels && args.labels.length > 0) {
-        const labelText = args.labels
-            .map((label) => `@${label}`)
-            .join(args.labelsOperator === 'and' ? ' & ' : ' | ')
-        filterHints.push(`labels: ${labelText}`)
+        filterHints.push(`labels: ${formatLabelsHint(args.labels, args.labelsOperator)}`)
     }
 
     // Add responsible user filter information

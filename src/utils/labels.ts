@@ -13,6 +13,13 @@ export const LabelsSchema = {
         ),
 }
 
+/**
+ * Formats labels for human-readable filter hints, e.g. "@work & @urgent".
+ */
+export function formatLabelsHint(labels: string[], labelsOperator: LabelsOperator = 'or') {
+    return labels.map((label) => `@${label}`).join(labelsOperator === 'and' ? ' & ' : ' | ')
+}
+
 export function generateLabelsFilter(labels: string[] = [], labelsOperator: LabelsOperator = 'or') {
     if (labels.length === 0) return ''
     const operator = labelsOperator === 'and' ? ' & ' : ' | '
