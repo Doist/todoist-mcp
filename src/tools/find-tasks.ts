@@ -1,4 +1,4 @@
-import { GetTasksArgs } from '@doist/todoist-sdk'
+import { escapeFilterToken, GetTasksArgs } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import {
     appendToQuery,
@@ -258,7 +258,7 @@ const findTasks = {
 
         // Add search text component
         if (searchText) {
-            query = appendToQuery(query, `search: ${searchText}`)
+            query = appendToQuery(query, `search: ${escapeFilterToken(searchText)}`)
         }
 
         // Add labels component

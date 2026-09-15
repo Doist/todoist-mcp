@@ -224,6 +224,23 @@ describe(`${FIND_TASKS} tool`, () => {
                 }),
             })
         })
+
+        it.each([
+            ['meeting & notes', 'search: meeting \\& notes & !assigned to: others'],
+            ['budget, invoices', 'search: budget\\, invoices & !assigned to: others'],
+            ['C:\\reports\\', 'search: C:\\\\reports\\\\ & !assigned to: others'],
+        ])('should escape search text %j before the assignee filter', async (searchText, query) => {
+            mockGetTasksByFilter.mockResolvedValue({ tasks: [], nextCursor: null })
+
+            await findTasks.execute({ searchText, limit: 10 }, mockTodoistApi)
+
+            expect(mockGetTasksByFilter).toHaveBeenCalledWith({
+                client: mockTodoistApi,
+                query,
+                cursor: undefined,
+                limit: 10,
+            })
+        })
     })
 
     describe('validation', () => {
@@ -1148,6 +1165,27 @@ End of test content.`
             expect(mockGetTasksByFilter).toHaveBeenCalledWith({
                 client: mockTodoistApi,
                 query: '(p1) & search: meeting & !assigned to: others',
+                cursor: undefined,
+                limit: 10,
+            })
+        })
+
+        it('should escape search text without escaping raw filters or label operators', async () => {
+            mockGetTasksByFilter.mockResolvedValue({ tasks: [], nextCursor: null })
+
+            await findTasks.execute(
+                {
+                    filter: 'today | overdue',
+                    searchText: 'meeting & notes',
+                    labels: ['work'],
+                    limit: 10,
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockGetTasksByFilter).toHaveBeenCalledWith({
+                client: mockTodoistApi,
+                query: '(today | overdue) & search: meeting \\& notes & (@work) & !assigned to: others',
                 cursor: undefined,
                 limit: 10,
             })
