@@ -333,6 +333,9 @@ function mapTask(task: Task) {
         duration: task.duration ? formatDuration(task.duration.amount) : undefined,
         responsibleUid: task.responsibleUid ?? undefined,
         assignedByUid: task.assignedByUid ?? undefined,
+        // Only emitted when true: a deleted task is the exception, and every list
+        // response would otherwise carry `isDeleted: false` on every task.
+        isDeleted: task.isDeleted || undefined,
         checked: task.checked,
         completedAt: task.completedAt?.toISOString() ?? undefined,
         addedAt: task.addedAt?.toISOString() ?? undefined,

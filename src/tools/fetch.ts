@@ -62,6 +62,14 @@ const fetch = {
         if (type === 'task') {
             // Fetch task
             const task = await client.getTask(objectId)
+
+            // The API still answers 200 for a soft-deleted task. Returning it as a
+            // document would present a tombstone as live content, so treat it as
+            // absent — the same as any other object this tool cannot produce.
+            if (task.isDeleted) {
+                throw new Error(`Task ${objectId} not found: it has been deleted.`)
+            }
+
             const mappedTask = mapTask(task)
 
             // Build text content
