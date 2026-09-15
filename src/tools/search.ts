@@ -1,4 +1,4 @@
-import { getProjectUrl, getTaskUrl } from '@doist/todoist-sdk'
+import { escapeFilterToken, getProjectUrl, getTaskUrl } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { getTasksByFilter, searchAllProjects } from '../tool-helpers.js'
@@ -50,7 +50,7 @@ const search = {
         const [tasksResult, projects] = await Promise.all([
             getTasksByFilter({
                 client,
-                query: `search: ${query}`,
+                query: `search: ${escapeFilterToken(query)}`,
                 limit: ApiLimits.TASKS_MAX,
                 cursor: undefined,
             }),

@@ -94,6 +94,49 @@ describe(`${SEARCH} tool`, () => {
             })
         })
 
+        it.each([
+            ['budget, invoices', 'search: budget\\, invoices', '*budget, invoices*'],
+            ['meeting & notes', 'search: meeting \\& notes', '*meeting & notes*'],
+            ['(one | two)!', 'search: \\(one \\| two\\)\\!', '*(one | two)!*'],
+            ['C:\\reports\\', 'search: C:\\\\reports\\\\', '*C:\\\\reports\\\\*'],
+            ['budget\\, invoices', 'search: budget\\\\\\, invoices', '*budget\\\\, invoices*'],
+            ['"quarterly report"', 'search: "quarterly report"', '*"quarterly report"*'],
+        ])(
+            'should escape filter operators in task search %j only',
+            async (query, expectedQuery, expectedProjectQuery) => {
+                mockGetTasksByFilter.mockResolvedValue({ tasks: [], nextCursor: null })
+                mockTodoistApi.searchProjects.mockResolvedValue(createMockApiResponse([]))
+
+                await search.execute({ query }, mockTodoistApi)
+
+                expect(mockGetTasksByFilter).toHaveBeenCalledWith({
+                    client: mockTodoistApi,
+                    query: expectedQuery,
+                    limit: 100,
+                    cursor: undefined,
+                })
+                expect(mockTodoistApi.searchProjects).toHaveBeenCalledWith({
+                    query: expectedProjectQuery,
+                    limit: 200,
+                    cursor: null,
+                })
+            },
+        )
+
+        it('should preserve search wildcards', async () => {
+            mockGetTasksByFilter.mockResolvedValue({ tasks: [], nextCursor: null })
+            mockTodoistApi.searchProjects.mockResolvedValue(createMockApiResponse([]))
+
+            await search.execute({ query: 'report*' }, mockTodoistApi)
+
+            expect(mockGetTasksByFilter).toHaveBeenCalledWith(
+                expect.objectContaining({ query: 'search: report*' }),
+            )
+            expect(mockTodoistApi.searchProjects).toHaveBeenCalledWith(
+                expect.objectContaining({ query: 'report*' }),
+            )
+        })
+
         it('should return only matching tasks when no projects match', async () => {
             const mockTasks = [
                 createMappedTask({
