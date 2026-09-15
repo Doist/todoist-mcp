@@ -1,3 +1,9 @@
+## [13.2.7](https://github.com/Doist/todoist-mcp/compare/v13.2.6...v13.2.7) (2026-09-15)
+
+### Bug Fixes
+
+* surface deleted tasks in task outputs (Doist/Issues[#20642](https://github.com/Doist/todoist-mcp/issues/20642)) ([#606](https://github.com/Doist/todoist-mcp/issues/606)) ([4669ab9](https://github.com/Doist/todoist-mcp/commit/4669ab9dada0f1a01108b61b0938382b8a8a678d))
+
 ## [13.2.6](https://github.com/Doist/todoist-mcp/compare/v13.2.5...v13.2.6) (2026-09-15)
 
 ### Bug Fixes
