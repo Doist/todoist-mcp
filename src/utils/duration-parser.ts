@@ -78,10 +78,16 @@ function mixesDaysWithHoursOrMinutes(normalized: string): boolean {
     return wellFormed && /d/.test(normalized) && /[hm]/.test(normalized)
 }
 
+const TOO_LARGE = 'Duration is too large'
+
 function parseDays(durationStr: string, daysStr: string): number {
     const days = Number.parseFloat(daysStr)
     if (Number.isNaN(days) || days < 0) {
         throw new DurationParseError(durationStr, 'Days must be a positive number')
+    }
+    // parseFloat overflows to Infinity on a long enough digit string; the API cannot store that
+    if (!Number.isFinite(days)) {
+        throw new DurationParseError(durationStr, TOO_LARGE)
     }
     if (days % 1 !== 0) {
         throw new DurationParseError(durationStr, 'Days must be a whole number')
@@ -118,6 +124,9 @@ function parseMinutes(durationStr: string, normalized: string): number {
         if (Number.isNaN(minutes) || minutes < 0) {
             throw new DurationParseError(durationStr, 'Minutes must be a positive number')
         }
+        if (!Number.isFinite(minutes)) {
+            throw new DurationParseError(durationStr, TOO_LARGE)
+        }
         // Don't allow decimal minutes
         if (minutes % 1 !== 0) {
             throw new DurationParseError(
@@ -132,6 +141,11 @@ function parseMinutes(durationStr: string, normalized: string): number {
 
     // Round to nearest minute (handles decimal hours)
     totalMinutes = Math.round(totalMinutes)
+
+    // Hours overflow to Infinity on a long enough digit string; the API cannot store that
+    if (!Number.isFinite(totalMinutes)) {
+        throw new DurationParseError(durationStr, TOO_LARGE)
+    }
 
     // Validate minimum duration
     if (totalMinutes === 0) {

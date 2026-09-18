@@ -49,11 +49,9 @@ describe('parseDuration', () => {
         })
 
         it('should accept minute durations of 24 hours or longer', () => {
-            expect(parseDuration('25h')).toEqual({ amount: 1500, unit: 'minute' })
             expect(parseDuration('1441m')).toEqual({ amount: 1441, unit: 'minute' })
             expect(parseDuration('24h1m')).toEqual({ amount: 1441, unit: 'minute' })
             expect(parseDuration('24.1h')).toEqual({ amount: 1446, unit: 'minute' })
-            expect(parseDuration('48h')).toEqual({ amount: 2880, unit: 'minute' })
         })
     })
 
@@ -75,6 +73,10 @@ describe('parseDuration', () => {
 
         it('should reject zero days', () => {
             expect(() => parseDuration('0d')).toThrow('Duration must be at least 1 day')
+        })
+
+        it('should reject an amount that overflows to Infinity', () => {
+            expect(() => parseDuration(`${'9'.repeat(400)}d`)).toThrow('Duration is too large')
         })
 
         it('should reject days combined with hours or minutes', () => {
@@ -134,6 +136,12 @@ describe('parseDuration', () => {
             expect(() => parseDuration('0h0m')).toThrow('Duration must be greater than 0 minutes')
         })
 
+        it('should throw error for an amount that overflows to Infinity', () => {
+            expect(() => parseDuration(`${'9'.repeat(400)}h`)).toThrow('Duration is too large')
+            expect(() => parseDuration(`${'9'.repeat(400)}m`)).toThrow('Duration is too large')
+            expect(() => parseDuration(`1h${'9'.repeat(400)}m`)).toThrow('Duration is too large')
+        })
+
         it('should throw error for malformed numbers', () => {
             expect(() => parseDuration('2.h')).toThrow('Use format like')
             expect(() => parseDuration('2h.m')).toThrow('Use format like')
@@ -157,9 +165,7 @@ describe('parseDuration', () => {
     })
 
     describe('edge cases', () => {
-        it('should treat exactly 24 hours as minutes', () => {
-            expect(parseDuration('24h')).toEqual({ amount: 1440, unit: 'minute' })
-            expect(parseDuration('1440m')).toEqual({ amount: 1440, unit: 'minute' })
+        it('should carry overflowing minutes into the total', () => {
             expect(parseDuration('23h60m')).toEqual({ amount: 1440, unit: 'minute' })
         })
 

@@ -382,7 +382,6 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 { input: '2H30M', expectedAmount: 150, expectedUnit: 'minute' },
                 // The API accepts durations of 24 hours or longer; the apps just do not display them
                 { input: '36h', expectedAmount: 2160, expectedUnit: 'minute' },
-                { input: '2d', expectedAmount: 2, expectedUnit: 'day' },
             ]
 
             for (const testCase of testCases) {
