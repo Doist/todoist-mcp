@@ -375,11 +375,13 @@ describe(`${UPDATE_TASKS} tool`, () => {
 
             // Test different duration formats
             const testCases = [
-                { input: '2h', expectedMinutes: 120 },
-                { input: '90m', expectedMinutes: 90 },
-                { input: '1.5h', expectedMinutes: 90 },
-                { input: ' 2h 30m ', expectedMinutes: 150 },
-                { input: '2H30M', expectedMinutes: 150 },
+                { input: '2h', expectedAmount: 120, expectedUnit: 'minute' },
+                { input: '90m', expectedAmount: 90, expectedUnit: 'minute' },
+                { input: '1.5h', expectedAmount: 90, expectedUnit: 'minute' },
+                { input: ' 2h 30m ', expectedAmount: 150, expectedUnit: 'minute' },
+                { input: '2H30M', expectedAmount: 150, expectedUnit: 'minute' },
+                // The API accepts durations of 24 hours or longer; the apps just do not display them
+                { input: '36h', expectedAmount: 2160, expectedUnit: 'minute' },
             ]
 
             for (const testCase of testCases) {
@@ -400,11 +402,52 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 expect(mockTodoistApi.updateTask).toHaveBeenCalledWith(
                     '8485093754',
                     expect.objectContaining({
-                        duration: testCase.expectedMinutes,
-                        durationUnit: 'minute',
+                        duration: testCase.expectedAmount,
+                        durationUnit: testCase.expectedUnit,
                     }),
                 )
             }
+        })
+
+        it('should update a task to a day-based duration', async () => {
+            mockTodoistApi.updateTask.mockResolvedValue(
+                createMockTask({
+                    id: '8485093758',
+                    content: 'Four day task',
+                    duration: { amount: 4, unit: 'day' },
+                }),
+            )
+
+            const result = await updateTasks.execute(
+                { tasks: [{ id: '8485093758', duration: '4d' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledWith('8485093758', {
+                duration: 4,
+                durationUnit: 'day',
+            })
+            expect(result.structuredContent.tasks[0]?.duration).toBe('4d')
+        })
+
+        it('should leave a stored duration alone when the update does not mention it', async () => {
+            mockTodoistApi.updateTask.mockResolvedValue(
+                createMockTask({
+                    id: '8485093759',
+                    content: 'Renamed',
+                    duration: { amount: 4, unit: 'day' },
+                }),
+            )
+
+            const result = await updateTasks.execute(
+                { tasks: [{ id: '8485093759', content: 'Renamed' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledWith('8485093759', {
+                content: 'Renamed',
+            })
+            expect(result.structuredContent.tasks[0]?.duration).toBe('4d')
         })
 
         it('should update task with duration and move at once', async () => {
@@ -784,10 +827,10 @@ describe(`${UPDATE_TASKS} tool`, () => {
             )
         })
 
-        it('reports duration exceeding 24 hours as a failure', async () => {
+        it('reports days mixed with hours as a failure', async () => {
             await expectSingleFailure(
-                { id: '8485093757', duration: '25h' },
-                'Task 8485093757: Invalid duration format "25h": Duration cannot exceed 24 hours (1440 minutes)',
+                { id: '8485093757', duration: '1d2h' },
+                'Task 8485093757: Invalid duration format "1d2h": Use format like "2h", "30m", "2h30m", "1.5h", or "3d" (days cannot be combined with hours or minutes)',
             )
         })
 

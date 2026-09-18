@@ -32,6 +32,7 @@ What each tool does and how to fill its parameters is in the tool's own descript
 - To move a task to a different date use **reschedule-tasks**, never **update-tasks**. update-tasks replaces the whole due string, which destroys recurrence on recurring tasks.
 - Never send a task's existing projectId, sectionId or parentId back to **update-tasks** — those fields are treated as a move.
 - All dates respect the user's timezone.
+- Todoist apps only display task durations under 24 hours. A longer one ("36h") or a day-based one ("3d") is stored and reported faithfully, but the apps show the task as having no duration — only set one when the user explicitly asks for it.
 
 **Finding things**
 

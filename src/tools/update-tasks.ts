@@ -13,7 +13,11 @@ import { assignmentValidator } from '../utils/assignment-validator.js'
 import { logBatchFailures } from '../utils/batch-failures.js'
 import { getMoveLimiter, getWriteLimiter } from '../utils/concurrency.js'
 import { BatchLimits, DisplayLimits } from '../utils/constants.js'
-import { DurationParseError, parseDuration } from '../utils/duration-parser.js'
+import {
+    DURATION_INPUT_DESCRIPTION,
+    DurationParseError,
+    parseDuration,
+} from '../utils/duration-parser.js'
 import {
     destinationKey,
     isMoveRedundant,
@@ -84,12 +88,7 @@ const TasksUpdateSchema = z.object({
                 ),
         )
         .optional(),
-    duration: z
-        .string()
-        .optional()
-        .describe(
-            'The duration of the task. Use format: "2h" (hours), "90m" (minutes), "2h30m" (combined), or "1.5h" (decimal hours). Max 24h.',
-        ),
+    duration: z.string().optional().describe(DURATION_INPUT_DESCRIPTION),
     responsibleUser: z
         .preprocess(
             // Keep accepting legacy null while exposing a Gemini-compatible string schema.
@@ -732,11 +731,11 @@ async function prepareTaskUpdate({
     // Parse duration if provided
     if (durationStr) {
         try {
-            const { minutes } = parseDuration(durationStr)
+            const { amount, unit } = parseDuration(durationStr)
             updateArgs = {
                 ...updateArgs,
-                duration: minutes,
-                durationUnit: 'minute',
+                duration: amount,
+                durationUnit: unit,
             }
         } catch (error) {
             if (error instanceof DurationParseError) {

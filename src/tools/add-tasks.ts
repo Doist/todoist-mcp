@@ -11,7 +11,11 @@ import { isInboxProjectId, mapTask } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
 import { logBatchFailures } from '../utils/batch-failures.js'
 import { BatchLimits } from '../utils/constants.js'
-import { DurationParseError, parseDuration } from '../utils/duration-parser.js'
+import {
+    DURATION_INPUT_DESCRIPTION,
+    DurationParseError,
+    parseDuration,
+} from '../utils/duration-parser.js'
 import { FailureSchema, TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import {
     convertPriorityToNumber,
@@ -42,9 +46,7 @@ const TaskSchema = z.object({
     deadlineDate: optionalString(
         'The deadline date for the task in ISO 8601 format (YYYY-MM-DD, e.g., "2025-12-31"). Deadlines are immovable constraints shown with a different indicator than due dates.',
     ),
-    duration: optionalString(
-        'The duration of the task. Use format: "2h" (hours), "90m" (minutes), "2h30m" (combined), or "1.5h" (decimal hours). Max 24h.',
-    ),
+    duration: optionalString(DURATION_INPUT_DESCRIPTION),
     labels: z.array(z.string()).optional().describe('The labels to attach to the task.'),
     projectId: optionalString(
         'The project ID to add this task to. Project ID should be an ID string, or the text "inbox", for inbox tasks.',
@@ -250,11 +252,11 @@ async function processTask(
     // Parse duration if provided
     if (durationStr) {
         try {
-            const { minutes } = parseDuration(durationStr)
+            const { amount, unit } = parseDuration(durationStr)
             taskArgs = {
                 ...taskArgs,
-                duration: minutes,
-                durationUnit: 'minute',
+                duration: amount,
+                durationUnit: unit,
             }
         } catch (error) {
             if (error instanceof DurationParseError) {
