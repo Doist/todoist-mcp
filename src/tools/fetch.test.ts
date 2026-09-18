@@ -125,6 +125,21 @@ describe(`${FETCH} tool`, () => {
             expect(jsonResponse.metadata.duration).toBe('1h30m')
         })
 
+        it('should keep the day unit on a day-based duration', async () => {
+            const mockTask = createMockTask({
+                id: TEST_IDS.TASK_1,
+                content: 'Four day task',
+                duration: { amount: 4, unit: 'day' },
+            })
+
+            mockTodoistApi.getTask.mockResolvedValue(mockTask)
+
+            const result = await fetch.execute({ id: `task:${TEST_IDS.TASK_1}` }, mockTodoistApi)
+
+            const jsonResponse = JSON.parse(result.textContent ?? '{}')
+            expect(jsonResponse.metadata.duration).toBe('4d')
+        })
+
         it('should handle tasks with assignments', async () => {
             const mockTask = createMockTask({
                 id: TEST_IDS.TASK_1,

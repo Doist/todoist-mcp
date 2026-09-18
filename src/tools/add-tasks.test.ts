@@ -229,10 +229,13 @@ describe(`${ADD_TASKS} tool`, () => {
 
             // Test different duration formats
             const testCases = [
-                { input: '2h30m', expectedMinutes: 150 },
-                { input: '1.5h', expectedMinutes: 90 },
-                { input: ' 90m ', expectedMinutes: 90 },
-                { input: '2H30M', expectedMinutes: 150 },
+                { input: '2h30m', expectedAmount: 150, expectedUnit: 'minute' },
+                { input: '1.5h', expectedAmount: 90, expectedUnit: 'minute' },
+                { input: ' 90m ', expectedAmount: 90, expectedUnit: 'minute' },
+                { input: '2H30M', expectedAmount: 150, expectedUnit: 'minute' },
+                // The API accepts durations of 24 hours or longer; the apps just do not display them
+                { input: '25h', expectedAmount: 1500, expectedUnit: 'minute' },
+                { input: '4d', expectedAmount: 4, expectedUnit: 'day' },
             ]
 
             for (const testCase of testCases) {
@@ -253,11 +256,35 @@ describe(`${ADD_TASKS} tool`, () => {
 
                 expect(mockTodoistApi.addTask).toHaveBeenCalledWith(
                     expect.objectContaining({
-                        duration: testCase.expectedMinutes,
-                        durationUnit: 'minute',
+                        duration: testCase.expectedAmount,
+                        durationUnit: testCase.expectedUnit,
                     }),
                 )
             }
+        })
+
+        it('should add a task with a day-based duration', async () => {
+            mockTodoistApi.addTask.mockResolvedValue(
+                createMockTask({
+                    id: '8485093755',
+                    content: 'Four day task',
+                    duration: { amount: 4, unit: 'day' },
+                }),
+            )
+
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        { content: 'Four day task', duration: '4d', projectId: '6cfCcrrCFg2xP94Q' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.addTask).toHaveBeenCalledWith(
+                expect.objectContaining({ duration: 4, durationUnit: 'day' }),
+            )
+            expect(result.structuredContent.tasks[0]?.duration).toBe('4d')
         })
 
         it('should add task with deadline', async () => {
@@ -485,25 +512,6 @@ describe(`${ADD_TASKS} tool`, () => {
                 ),
             ).rejects.toThrow(
                 'Task "Task with invalid duration": Invalid duration format "invalid"',
-            )
-        })
-
-        it('should throw error for duration exceeding 24 hours', async () => {
-            await expect(
-                addTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                content: 'Task with too long duration',
-                                duration: '25h',
-                                projectId: '6cfCcrrCFg2xP94Q',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(
-                'Task "Task with too long duration": Invalid duration format "25h": Duration cannot exceed 24 hours (1440 minutes)',
             )
         })
 

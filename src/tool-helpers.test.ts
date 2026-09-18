@@ -122,6 +122,28 @@ describe('shared utilities', () => {
             expect(result.duration).toBe('2h30m')
         })
 
+        it('should keep the day unit on a day-based duration', () => {
+            const mockTask = createMockTask({
+                id: '790',
+                content: 'Four day task',
+                projectId: 'proj-1',
+                duration: { amount: 4, unit: 'day' },
+            })
+
+            expect(mapTask(mockTask).duration).toBe('4d')
+        })
+
+        it('should keep minute durations of 24 hours or longer in hours', () => {
+            const mockTask = createMockTask({
+                id: '791',
+                content: 'Two day task in minutes',
+                projectId: 'proj-1',
+                duration: { amount: 2880, unit: 'minute' },
+            })
+
+            expect(mapTask(mockTask).duration).toBe('48h')
+        })
+
         it('should preserve markdown links and formatting in content and description', () => {
             const mockTask = createMockTask({
                 id: '123',

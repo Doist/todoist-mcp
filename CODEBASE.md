@@ -129,7 +129,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; add
 - `schema-helpers.ts` — Zod builders used across tools
 - `children.ts` — `ChildrenOutputSchema` plus `getTaskChildren`/`getProjectChildren` for returning an object's direct subtasks or sub-projects
 - `priorities.ts` — `"p1"`–`"p4"` ↔ SDK integer conversion (**strings only in tool I/O**)
-- `duration-parser.ts` — `"2h30m"` ↔ ms, plus `formatDuration`
+- `duration-parser.ts` — `"2h30m"` / `"3d"` ↔ `{ amount, unit }` (minutes or days, no 24h cap), plus `formatDuration` and the shared `DURATION_INPUT_DESCRIPTION`
 - `date.ts` — date parsing/formatting (ISO, Todoist strings)
 - `filter-resolver.ts` — resolve saved filter by id/name to raw filter string
 - `labels.ts` — label name normalization
