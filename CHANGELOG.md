@@ -1,3 +1,9 @@
+## [13.3.0](https://github.com/Doist/todoist-mcp/compare/v13.2.7...v13.3.0) (2026-09-18)
+
+### Features
+
+* support day-based and 24h+ task durations (Doist/Issues[#21004](https://github.com/Doist/todoist-mcp/issues/21004)) ([#609](https://github.com/Doist/todoist-mcp/issues/609)) ([ebe5272](https://github.com/Doist/todoist-mcp/commit/ebe52726076f16b87d54e6974d063af85387e952))
+
 ## [13.2.7](https://github.com/Doist/todoist-mcp/compare/v13.2.6...v13.2.7) (2026-09-15)
 
 ### Bug Fixes
