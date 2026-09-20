@@ -111,7 +111,8 @@ const importProjectTemplate = {
               })
             : await client.importTemplateIntoProject({
                   projectId,
-                  file: csvFileContent ?? '',
+                  // The SDK treats strings as filesystem paths, not file content.
+                  file: new Blob([csvFileContent ?? ''], { type: 'text/csv' }),
                   fileName: 'template.csv',
               })
 
