@@ -1,3 +1,9 @@
+## [13.3.1](https://github.com/Doist/todoist-mcp/compare/v13.3.0...v13.3.1) (2026-09-21)
+
+### Bug Fixes
+
+* upload CSV template contents as a Blob ([#610](https://github.com/Doist/todoist-mcp/issues/610)) ([6e294e2](https://github.com/Doist/todoist-mcp/commit/6e294e28c6dd3fe5c19a87ac2259ceeb6e78d08e))
+
 ## [13.3.0](https://github.com/Doist/todoist-mcp/compare/v13.2.7...v13.3.0) (2026-09-18)
 
 ### Features
