@@ -213,9 +213,11 @@ describe(`${IMPORT_PROJECT_TEMPLATE} tool`, () => {
 
             expect(mockTodoistApi.importTemplateIntoProject).toHaveBeenCalledWith({
                 projectId: TEST_IDS.PROJECT_TEST,
-                file: 'TYPE,CONTENT\ntask,Buy milk',
+                file: expect.any(Blob),
                 fileName: 'template.csv',
             })
+            const file = mockTodoistApi.importTemplateIntoProject.mock.calls[0]?.[0].file as Blob
+            expect(await file.text()).toBe('TYPE,CONTENT\ntask,Buy milk')
             expect(mockTodoistApi.importTemplateFromId).not.toHaveBeenCalled()
             expect(result.textContent).toContain('1 task')
             expect(result.structuredContent?.tasks).toEqual([
