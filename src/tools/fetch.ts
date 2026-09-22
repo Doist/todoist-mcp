@@ -41,7 +41,7 @@ const OutputSchema = {
 const fetch = {
     name: ToolNames.FETCH,
     description:
-        'Fetch the full contents of a task or project by its ID. The ID should be in the format "task:{id}" or "project:{id}".',
+        'Fetch the full contents of a task or project by its ID. The ID should be in the format "task:{id}" or "project:{id}". (Comments may exist; use find-comments to retrieve them.)',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
