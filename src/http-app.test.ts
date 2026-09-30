@@ -3,6 +3,12 @@ import type { AddressInfo } from 'node:net'
 import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createHttpApp } from './http-app.js'
+import {
+    taskListFallbackCacheHint,
+    taskListResourceCacheHint,
+    taskListResourceUri,
+} from './mcp-apps/resources.js'
+import { CATALOGUE_CACHE_HINT } from './mcp-server.js'
 import { DEFAULT_ALLOWED_HOSTS } from './middleware/require-trusted-host.js'
 import { clearTokenValidationCache } from './middleware/require-valid-todoist-token.js'
 
@@ -81,13 +87,23 @@ const ENVELOPE_2026 = {
     'io.modelcontextprotocol/clientCapabilities': {},
 }
 
-function modernRequest(id: number, method: string, params: Record<string, unknown> = {}) {
+/**
+ * A 2026-07-28 request. `Mcp-Method` is required on every POST; `Mcp-Name`
+ * must repeat the target's name or URI for methods that address one.
+ */
+function modernRequest(
+    id: number,
+    method: string,
+    params: Record<string, unknown> = {},
+    options: { name?: string } = {},
+) {
     return {
         headers: {
             ...JSON_HEADERS,
             accept: 'application/json, text/event-stream',
             'mcp-protocol-version': PROTOCOL_2026,
             'mcp-method': method,
+            ...(options.name ? { 'mcp-name': options.name } : {}),
         },
         body: JSON.stringify({
             jsonrpc: '2.0',
@@ -230,6 +246,8 @@ describe('createHttpApp protocol revisions', () => {
         const result = firstJsonRpcResult(res.body)
         expect(result.supportedVersions).toContain(PROTOCOL_2026)
         expect(result.resultType).toBe('complete')
+        expect(result.ttlMs).toBe(CATALOGUE_CACHE_HINT.ttlMs)
+        expect(result.cacheScope).toBe(CATALOGUE_CACHE_HINT.cacheScope)
         expect(result._meta).toMatchObject({
             'io.modelcontextprotocol/serverInfo': { name: 'todoist-mcp-server' },
         })
@@ -249,8 +267,65 @@ describe('createHttpApp protocol revisions', () => {
         expect(Array.isArray(result.tools)).toBe(true)
         expect((result.tools as unknown[]).length).toBeGreaterThan(0)
         expect(result.resultType).toBe('complete')
-        expect(typeof result.ttlMs).toBe('number')
-        expect(['public', 'private']).toContain(result.cacheScope)
+        expect(result.ttlMs).toBe(CATALOGUE_CACHE_HINT.ttlMs)
+        expect(result.cacheScope).toBe(CATALOGUE_CACHE_HINT.cacheScope)
+    })
+
+    it('stamps the catalogue cache hint on prompts/list and resources/list', async () => {
+        for (const [id, method] of [
+            [4, 'prompts/list'],
+            [5, 'resources/list'],
+            [6, 'resources/templates/list'],
+        ] as const) {
+            const modern = modernRequest(id, method)
+            const res = await request(port, {
+                method: 'POST',
+                path: '/mcp',
+                headers: { ...modern.headers, host: `127.0.0.1:${port}` },
+                body: modern.body,
+            })
+
+            expect(res.status, method).toBe(200)
+            const result = firstJsonRpcResult(res.body)
+            expect(result.ttlMs, method).toBe(CATALOGUE_CACHE_HINT.ttlMs)
+            expect(result.cacheScope, method).toBe(CATALOGUE_CACHE_HINT.cacheScope)
+        }
+    })
+
+    it('lets shared caches hold the widget HTML resource', async () => {
+        const modern = modernRequest(
+            7,
+            'resources/read',
+            { uri: taskListResourceUri },
+            { name: taskListResourceUri },
+        )
+        const res = await request(port, {
+            method: 'POST',
+            path: '/mcp',
+            headers: { ...modern.headers, host: `127.0.0.1:${port}` },
+            body: modern.body,
+        })
+
+        expect(res.status).toBe(200)
+        const result = firstJsonRpcResult(res.body)
+        expect(result.ttlMs).toBe(taskListResourceCacheHint.ttlMs)
+        expect(result.cacheScope).toBe(taskListResourceCacheHint.cacheScope)
+    })
+
+    it('keeps the hash-template fallback resource private with a short lifetime', async () => {
+        const staleUri = 'ui://todoist/task-list@stalehash'
+        const modern = modernRequest(8, 'resources/read', { uri: staleUri }, { name: staleUri })
+        const res = await request(port, {
+            method: 'POST',
+            path: '/mcp',
+            headers: { ...modern.headers, host: `127.0.0.1:${port}` },
+            body: modern.body,
+        })
+
+        expect(res.status).toBe(200)
+        const result = firstJsonRpcResult(res.body)
+        expect(result.ttlMs).toBe(taskListFallbackCacheHint.ttlMs)
+        expect(result.cacheScope).toBe(taskListFallbackCacheHint.cacheScope)
     })
 
     it('still serves a 2025-era client that opens with initialize', async () => {

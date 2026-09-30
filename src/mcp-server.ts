@@ -77,6 +77,20 @@ Always provide clear, actionable task titles and descriptions. Use the overview 
  * @param features - Features to enable for the server.
  * @returns the MCP server.
  */
+/**
+ * Freshness hint stamped on the catalogue results (`tools/list`, `prompts/list`,
+ * the resource lists and `server/discover`) for clients on protocol revision
+ * 2026-07-28 or later.
+ *
+ * The catalogue only changes when a new version of this server is deployed, so
+ * a client can hold it for an hour without re-fetching; `listChanged`
+ * notifications still cover the rare mid-session change. The scope is private
+ * because the endpoint is authenticated and the tool set can differ per
+ * deployment (`features`), so a shared cache must not serve one client's
+ * catalogue to another.
+ */
+const CATALOGUE_CACHE_HINT = { ttlMs: 60 * 60 * 1000, cacheScope: 'private' } as const
+
 function getMcpServer({
     todoistApiKey,
     baseUrl,
@@ -94,6 +108,13 @@ function getMcpServer({
                 prompts: { listChanged: true },
             },
             instructions,
+            cacheHints: {
+                'server/discover': CATALOGUE_CACHE_HINT,
+                'tools/list': CATALOGUE_CACHE_HINT,
+                'prompts/list': CATALOGUE_CACHE_HINT,
+                'resources/list': CATALOGUE_CACHE_HINT,
+                'resources/templates/list': CATALOGUE_CACHE_HINT,
+            },
         },
     )
 
@@ -131,4 +152,11 @@ function getMcpServer({
     return server
 }
 
-export { FEATURE_NAMES, type Feature, type FeatureName, type Features, getMcpServer }
+export {
+    CATALOGUE_CACHE_HINT,
+    FEATURE_NAMES,
+    type Feature,
+    type FeatureName,
+    type Features,
+    getMcpServer,
+}
