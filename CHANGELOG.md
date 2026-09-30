@@ -1,3 +1,9 @@
+## [13.4.0](https://github.com/Doist/todoist-mcp/compare/v13.3.1...v13.4.0) (2026-09-30)
+
+### Features
+
+* **mcp-apps:** identify task-list tool calls ([#615](https://github.com/Doist/todoist-mcp/issues/615)) ([b754d57](https://github.com/Doist/todoist-mcp/commit/b754d579446368944093e05acc26af7060bac9dd))
+
 ## [13.3.1](https://github.com/Doist/todoist-mcp/compare/v13.3.0...v13.3.1) (2026-09-21)
 
 ### Bug Fixes
