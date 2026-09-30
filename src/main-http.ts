@@ -6,8 +6,10 @@ import { isIP } from 'node:net'
  * Thin bootstrap: reads configuration from the environment, builds the Express
  * app via createHttpApp(), and starts listening. The app itself (and its
  * middleware chain) lives in ./http-app.ts so it can be tested without starting
- * a server. Each request creates a fresh transport and MCP server instance — no
- * session tracking, timeouts, or cleanup required.
+ * a server. Each request is answered by a fresh MCP server instance — no
+ * session tracking, timeouts, or cleanup required. Clients on protocol revision
+ * 2026-07-28 or later are served directly; older clients that open with
+ * `initialize` get stateless serving of that single request.
  *
  * Environment variables:
  * - TODOIST_API_KEY: Required. Your Todoist API key.
@@ -63,9 +65,9 @@ function main() {
     }
 
     const allowedHosts = buildAllowedHosts(HOST, process.env.ALLOWED_HOSTS)
-    const app = createHttpApp({ todoistApiKey, baseUrl, allowedHosts })
+    const { app, close } = createHttpApp({ todoistApiKey, baseUrl, allowedHosts })
 
-    app.listen(PORT, LISTEN_HOST, () => {
+    const server = app.listen(PORT, LISTEN_HOST, () => {
         const displayHost = formatUrlHost(LISTEN_HOST)
         console.error(`Todoist MCP HTTP Server started on ${formatListenHost(LISTEN_HOST)}:${PORT}`)
         console.error(`MCP endpoint: http://${displayHost}:${PORT}/mcp`)
@@ -78,6 +80,26 @@ function main() {
             )
         }
     })
+
+    // Graceful shutdown: end the MCP handler's open notification streams first,
+    // otherwise `server.close()` waits for them to end on their own.
+    let shuttingDown = false
+    const shutdown = (signal: NodeJS.Signals) => {
+        if (shuttingDown) {
+            return
+        }
+        shuttingDown = true
+        console.error(`Received ${signal}, shutting down`)
+        close()
+            .catch((error) => {
+                console.error('Error closing MCP handler:', error)
+            })
+            .finally(() => {
+                server.close(() => process.exit(0))
+            })
+    }
+    process.once('SIGTERM', shutdown)
+    process.once('SIGINT', shutdown)
 }
 
 main()
