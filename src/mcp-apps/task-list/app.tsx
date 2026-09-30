@@ -54,6 +54,7 @@ async function fetchTaskPage(
     const result = await app.callServerTool({
         name: ToolNames.FIND_TASKS_BY_DATE,
         arguments: { ...args, cursor },
+        _meta: { 'todoist.com/ui-source': 'task-list' },
     })
 
     if (result.isError) {
@@ -206,6 +207,7 @@ export function App() {
                 const result = await app.callServerTool({
                     name: ToolNames.COMPLETE_TASKS,
                     arguments: { ids: [taskId] },
+                    _meta: { 'todoist.com/ui-source': 'task-list' },
                 })
 
                 if (result.isError) {
