@@ -17,10 +17,6 @@ The task-list app adds `params._meta['todoist.com/ui-source'] = 'task-list'` to 
 metadata let the server distinguish these app requests from untagged tool calls. The marker
 does not change the tool arguments or permissions and is not proof of the caller's identity.
 
-Pagination runs automatically after the host supplies the first page. The marker identifies
-the source of a tool call, not a click, app render, or unique user. Hosts may omit request
-metadata when they forward calls.
-
 ## Build Pipeline
 
 - App source: `src/mcp-apps/task-list/`
