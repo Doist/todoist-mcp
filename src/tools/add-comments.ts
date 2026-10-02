@@ -9,6 +9,7 @@ import {
     isNoNotifyList,
 } from '../utils/comment-recipients.js'
 import { ApiLimits } from '../utils/constants.js'
+import { isTodoistAttachmentUrl } from '../utils/file-uploads.js'
 import { CommentSchema as CommentOutputSchema } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { resolveUserRefs } from '../utils/user-resolver.js'
@@ -30,6 +31,28 @@ const CommentSchema = z.object({
         .describe(
             `Who to notify about this comment — a user ID, email, full name, or "me" for each person. Set this whenever the comment mentions someone; the text of an @mention notifies nobody on its own. Omit to notify whoever the Todoist apps would (the task's assignee, assigner and creator on a first comment, or the previous comment's participants on a reply). Pass ["${NO_NOTIFY_KEYWORD}"] to notify nobody.`,
         ),
+    attachment: z
+        .object({
+            fileUrl: z.string(),
+            fileName: z.string().optional(),
+            fileType: z.string().optional(),
+            resourceType: z.string().optional(),
+        })
+        .optional()
+        .describe('The `attachment` object returned by a create-file-upload upload, unchanged.'),
+    fileContent: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+            `Text you wrote (report, CSV, markdown) to attach as a file. Requires fileName. Max ${ApiLimits.COMMENT_FILE_CONTENT_MAX_BYTES / 1024 / 1024} MB; never base64.`,
+        ),
+    fileName: z
+        .string()
+        .min(1)
+        .max(255)
+        .optional()
+        .describe('File name for fileContent, with extension.'),
 })
 
 const ArgsSchema = {
@@ -43,12 +66,61 @@ const OutputSchema = {
 }
 
 type CommentInput = z.infer<typeof CommentSchema>
+type CommentAttachment = NonNullable<AddCommentArgs['attachment']>
 type TodoistUser = Awaited<ReturnType<TodoistApi['getUser']>>
+
+function validateAttachmentInput(comment: CommentInput, index: number): void {
+    const label = `Comment ${index + 1}`
+    if (comment.attachment && comment.fileContent) {
+        throw new Error(`${label}: Provide either attachment or fileContent, not both.`)
+    }
+    if (comment.fileContent && !comment.fileName) {
+        throw new Error(`${label}: fileName is required with fileContent.`)
+    }
+    if (comment.fileName && !comment.fileContent) {
+        throw new Error(`${label}: fileName only applies to fileContent.`)
+    }
+    if (
+        comment.fileContent &&
+        Buffer.byteLength(comment.fileContent, 'utf8') > ApiLimits.COMMENT_FILE_CONTENT_MAX_BYTES
+    ) {
+        throw new Error(
+            `${label}: fileContent exceeds ${ApiLimits.COMMENT_FILE_CONTENT_MAX_BYTES} bytes. Upload larger files with create-file-upload.`,
+        )
+    }
+    if (comment.attachment && !isTodoistAttachmentUrl(comment.attachment.fileUrl)) {
+        throw new Error(
+            `${label}: attachment.fileUrl must be a Todoist file URL, as returned by a create-file-upload upload.`,
+        )
+    }
+}
+
+async function resolveAttachment(
+    comment: CommentInput,
+    client: TodoistApi,
+): Promise<CommentAttachment | undefined> {
+    if (comment.attachment) return comment.attachment
+    if (!comment.fileContent || !comment.fileName) return undefined
+
+    const uploaded = await client.uploadFile({
+        file: Buffer.from(comment.fileContent, 'utf8'),
+        fileName: comment.fileName,
+    })
+    if (!uploaded.fileUrl) {
+        throw new Error(`Uploading "${comment.fileName}" returned no file URL.`)
+    }
+    return {
+        fileUrl: uploaded.fileUrl,
+        fileName: uploaded.fileName ?? comment.fileName,
+        ...(uploaded.fileType && { fileType: uploaded.fileType }),
+        resourceType: uploaded.resourceType,
+    }
+}
 
 const addComments = {
     name: ToolNames.ADD_COMMENTS,
     description:
-        'Add multiple comments to tasks or projects, optionally notifying collaborators. Each comment must specify either taskId or projectId.',
+        'Add multiple comments to tasks or projects, optionally notifying collaborators and attaching a file. Each comment must specify either taskId or projectId.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -67,6 +139,7 @@ const addComments = {
                     `Comment ${index + 1}: Cannot provide both taskId and projectId. Choose one.`,
                 )
             }
+            validateAttachmentInput(comment, index)
         }
 
         // Every comment needs the current user, either to resolve "inbox" or to
@@ -98,12 +171,22 @@ const addComments = {
             currentUser: todoistUser,
         })
 
+        // Upload before commenting, so a failed upload never leaves a comment
+        // whose text promises a file that is not there. One at a time, as each
+        // upload carries a whole file.
+        const attachments: (CommentAttachment | undefined)[] = []
+        for (const comment of comments) {
+            attachments.push(await resolveAttachment(comment, client))
+        }
+
         const newComments = await Promise.all(
             comments.map(async ({ content }, index) => {
                 const uidsToNotify = recipients[index] ?? []
+                const attachment = attachments[index]
                 return await client.addComment({
                     content,
                     ...targets[index],
+                    ...(attachment && { attachment }),
                     // Nobody to notify means no recipient field at all,
                     // rather than an empty one.
                     ...(uidsToNotify.length > 0 && { uidsToNotify }),
@@ -178,7 +261,13 @@ function generateTextContent({ comments }: { comments: ReturnType<typeof mapComm
         const commentsLabel = projectComments > 1 ? 'comments' : 'comment'
         parts.push(`${projectComments} project ${commentsLabel}`)
     }
-    const summary = parts.length > 0 ? `Added ${parts.join(' and ')}` : 'No comments added'
+    const withFiles = comments.filter((c) => c.fileAttachment).length
+    const filesNote =
+        withFiles > 0
+            ? ` (${withFiles} with ${withFiles > 1 ? 'attachments' : 'an attachment'})`
+            : ''
+    const summary =
+        parts.length > 0 ? `Added ${parts.join(' and ')}${filesNote}` : 'No comments added'
 
     const notified = new Set(comments.flatMap((c) => c.notifiedUserIds ?? []))
     if (notified.size === 0) {

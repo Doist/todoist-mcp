@@ -7,7 +7,10 @@ import { registeredTools } from './tool-registry.js'
 const JSON_SCHEMA_2020_12 = 'https://json-schema.org/draft/2020-12/schema'
 
 async function listAdvertisedTools() {
-    const server = getMcpServer({ todoistApiKey: 'test-token' })
+    const server = getMcpServer({
+        todoistApiKey: 'test-token',
+        fileUploads: { secret: 'x'.repeat(32), publicUrl: 'https://mcp.example.com' },
+    })
     const client = new Client({ name: 'schema-dialect-test', version: '1.0.0' })
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
 

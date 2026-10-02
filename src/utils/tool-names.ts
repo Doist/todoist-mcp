@@ -40,6 +40,7 @@ export const ToolNames = {
 
     // Attachment tools
     VIEW_ATTACHMENT: 'view-attachment',
+    CREATE_FILE_UPLOAD: 'create-file-upload',
 
     // Assignment and collaboration tools
     FIND_PROJECT_COLLABORATORS: 'find-project-collaborators',
