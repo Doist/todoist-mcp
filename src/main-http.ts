@@ -16,6 +16,10 @@ import { isIP } from 'node:net'
  * - HOST: Optional. Bind host (default: 127.0.0.1). Use non-loopback hosts
  *   only behind trusted network/auth controls because requests run with
  *   TODOIST_API_KEY.
+ * - FILE_UPLOAD_SECRET + PUBLIC_URL: Optional, together. Enable the
+ *   create-file-upload tool and the /uploads/:ticket route its URLs point at.
+ *   PUBLIC_URL is the origin clients reach this server on; the secret (32+
+ *   characters) encrypts upload tickets.
  * - ALLOWED_HOSTS: Optional. Comma-separated hostnames (in addition to the
  *   loopback defaults) trusted in the Host and Origin headers for DNS-rebinding
  *   protection. Required when binding to 0.0.0.0 so LAN clients' hostnames are
@@ -62,8 +66,17 @@ function main() {
         process.exit(1)
     }
 
+    const fileUploadSecret = process.env.FILE_UPLOAD_SECRET
+    const publicUrl = process.env.PUBLIC_URL
+    if (Boolean(fileUploadSecret) !== Boolean(publicUrl)) {
+        console.error('Error: FILE_UPLOAD_SECRET and PUBLIC_URL must be set together')
+        process.exit(1)
+    }
+    const fileUploads =
+        fileUploadSecret && publicUrl ? { secret: fileUploadSecret, publicUrl } : undefined
+
     const allowedHosts = buildAllowedHosts(HOST, process.env.ALLOWED_HOSTS)
-    const app = createHttpApp({ todoistApiKey, baseUrl, allowedHosts })
+    const app = createHttpApp({ todoistApiKey, baseUrl, allowedHosts, fileUploads })
 
     app.listen(PORT, LISTEN_HOST, () => {
         const displayHost = formatUrlHost(LISTEN_HOST)

@@ -31,6 +31,8 @@ export const ApiLimits = {
     COMMENTS_MAX: 10,
     /** Maximum number of users a single comment can notify */
     NOTIFY_USERS_MAX: 25,
+    /** Largest `fileContent` add-comments uploads as a file, in UTF-8 bytes */
+    COMMENT_FILE_CONTENT_MAX_BYTES: 1024 * 1024,
     /** Default limit for activity log listings */
     ACTIVITY_DEFAULT: 20,
     /** Maximum limit for activity log search and list operations */
