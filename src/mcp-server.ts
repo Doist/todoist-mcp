@@ -10,6 +10,12 @@ import {
 import { productivityAnalysis } from './prompts/productivity-analysis.js'
 import { registeredTools } from './tool-registry.js'
 import { TODOIST_MCP_VERSION, createTodoistClient } from './usage-tracking.js'
+import {
+    type FileUploadsConfig,
+    createFileUploadIssuer,
+    setFileUploadIssuer,
+} from './utils/file-uploads.js'
+import { ToolNames } from './utils/tool-names.js'
 
 export const instructions = `
 ## Todoist Task and Project Management Tools
@@ -46,6 +52,7 @@ What each tool does and how to fill its parameters is in the tool's own descript
 
 - Comments notify only the people **add-comments** is handed. When a comment mentions someone, name them in \`notifyUsers\` — writing "@Ana" in the text notifies nobody. Omit \`notifyUsers\` to notify whoever the Todoist apps would, or pass \`["none"]\` to stay silent.
 - Notification cannot be sent when editing a comment, only when adding one.
+- Never base64-encode a file into a tool argument. Attach text you wrote via \`fileContent\` on **add-comments**; attach an existing file via **create-file-upload**.
 
 **Deleting and archiving**
 
@@ -75,16 +82,20 @@ Always provide clear, actionable task titles and descriptions. Use the overview 
  * @param todoistApiKey - The API key for the todoist account.
  * @param baseUrl - The base URL for the todoist API.
  * @param features - Features to enable for the server.
+ * @param fileUploads - Enables `create-file-upload`. The server must also serve
+ *   `createFileUploadHandler` at `/uploads/:ticket` on `fileUploads.publicUrl`.
  * @returns the MCP server.
  */
 function getMcpServer({
     todoistApiKey,
     baseUrl,
     features = [],
+    fileUploads,
 }: {
     todoistApiKey: string
     baseUrl?: string
     features?: Features
+    fileUploads?: FileUploadsConfig
 }) {
     const server = new McpServer(
         { name: 'todoist-mcp-server', version: TODOIST_MCP_VERSION },
@@ -98,6 +109,9 @@ function getMcpServer({
     )
 
     const todoist = createTodoistClient(todoistApiKey, { baseUrl })
+    if (fileUploads) {
+        setFileUploadIssuer(todoist, createFileUploadIssuer(fileUploads, todoistApiKey))
+    }
 
     /**
      * MCP Apps
@@ -112,6 +126,9 @@ function getMcpServer({
     const toolArgs = { server, client: todoist, features }
 
     for (const tool of registeredTools) {
+        // Upload URLs need a public route to point at, which only a configured
+        // HTTP deployment has. Elsewhere the tool would only ever fail.
+        if (tool.name === ToolNames.CREATE_FILE_UPLOAD && !fileUploads) continue
         registerTool({ tool, ...toolArgs })
     }
 

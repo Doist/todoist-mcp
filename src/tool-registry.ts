@@ -9,6 +9,7 @@ import { addSections } from './tools/add-sections.js'
 import { addTasks } from './tools/add-tasks.js'
 import { analyzeProjectHealth } from './tools/analyze-project-health.js'
 import { completeTasks } from './tools/complete-tasks.js'
+import { createFileUpload } from './tools/create-file-upload.js'
 import { deleteObject } from './tools/delete-object.js'
 import { exportProjectTemplate } from './tools/export-project-template.js'
 import { fetchObject } from './tools/fetch-object.js'
@@ -109,6 +110,7 @@ const toolRegistry = {
 
     // Attachment tools
     viewAttachment,
+    createFileUpload,
 
     // Label management tools
     addLabels,
