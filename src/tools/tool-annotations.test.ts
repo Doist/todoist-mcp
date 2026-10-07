@@ -74,6 +74,13 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
         idempotentHint: true,
     },
     {
+        name: ToolNames.SEARCH_COMPLETED_TASKS,
+        title: 'Todoist: Search Completed Tasks',
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+    },
+    {
         name: ToolNames.ADD_PROJECTS,
         title: 'Todoist: Add Projects',
         readOnlyHint: false,
