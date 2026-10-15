@@ -1,3 +1,4 @@
+import { ACTIVITY_EVENT_TYPES, ACTIVITY_OBJECT_TYPES } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { mapActivityEvent } from '../tool-helpers.js'
@@ -14,30 +15,14 @@ function optionalIsoDateOrDateTime(description: string) {
 }
 
 const ArgsSchema = {
-    objectType: z
-        .enum(['task', 'project', 'comment'])
-        .optional()
-        .describe('Type of object to filter by.'),
+    objectType: z.enum(ACTIVITY_OBJECT_TYPES).optional().describe('Type of object to filter by.'),
 
     objectId: z
         .string()
         .optional()
         .describe('Filter by specific object ID (task, project, or comment).'),
 
-    eventType: z
-        .enum([
-            'added',
-            'updated',
-            'deleted',
-            'completed',
-            'uncompleted',
-            'archived',
-            'unarchived',
-            'shared',
-            'left',
-        ])
-        .optional()
-        .describe('Type of event to filter by.'),
+    eventType: z.enum(ACTIVITY_EVENT_TYPES).optional().describe('Type of event to filter by.'),
 
     projectId: z.string().optional().describe('Filter events by parent project ID.'),
 
