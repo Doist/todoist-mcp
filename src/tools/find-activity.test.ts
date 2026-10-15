@@ -1,4 +1,4 @@
-import type { ActivityEvent, TodoistApi } from '@doist/todoist-sdk'
+import type { ACTIVITY_EVENT_TYPES, ActivityEvent, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
 import { ToolNames } from '../utils/tool-names.js'
@@ -110,6 +110,12 @@ describe(`${FIND_ACTIVITY} tool`, () => {
             expect(result.success).toBe(false)
         })
 
+        it('should accept moved as an event type', () => {
+            const result = z.object(findActivity.parameters).safeParse({ eventType: 'moved' })
+
+            expect(result.success).toBe(true)
+        })
+
         it('should normalize empty date filters to undefined', () => {
             const parsed = z.object(findActivity.parameters).parse({ dateFrom: '', dateTo: '' })
 
@@ -188,6 +194,7 @@ describe(`${FIND_ACTIVITY} tool`, () => {
             ['completed', 'task-2'],
             ['updated', 'task-3'],
             ['deleted', 'task-4'],
+            ['moved', 'task-5'],
         ])('should filter by event type: %s', async (eventType, objectId) => {
             const mockEvents: ActivityEvent[] = [
                 createMockActivityEvent({
@@ -203,16 +210,7 @@ describe(`${FIND_ACTIVITY} tool`, () => {
 
             const result = await findActivity.execute(
                 {
-                    eventType: eventType as
-                        | 'added'
-                        | 'updated'
-                        | 'deleted'
-                        | 'completed'
-                        | 'uncompleted'
-                        | 'archived'
-                        | 'unarchived'
-                        | 'shared'
-                        | 'left',
+                    eventType: eventType as (typeof ACTIVITY_EVENT_TYPES)[number],
                     limit: 20,
                 },
                 mockTodoistApi,
