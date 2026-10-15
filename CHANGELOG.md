@@ -1,3 +1,9 @@
+## [13.5.0](https://github.com/Doist/todoist-mcp/compare/v13.4.1...v13.5.0) (2026-10-15)
+
+### Features
+
+* accept moved events in find-activity ([#623](https://github.com/Doist/todoist-mcp/issues/623)) ([6566133](https://github.com/Doist/todoist-mcp/commit/6566133f81fcf2873455690f2ad39ae352eb4129)), closes [Doist/todoist-sdk-typescript#710](https://github.com/Doist/todoist-sdk-typescript/issues/710)
+
 ## [13.4.1](https://github.com/Doist/todoist-mcp/compare/v13.4.0...v13.4.1) (2026-10-05)
 
 ### Bug Fixes
