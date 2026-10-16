@@ -3,12 +3,7 @@ import type { AddressInfo } from 'node:net'
 import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createHttpApp } from './http-app.js'
-import {
-    taskListFallbackCacheHint,
-    taskListResourceCacheHint,
-    taskListResourceUri,
-} from './mcp-apps/resources.js'
-import { CATALOGUE_CACHE_HINT } from './mcp-server.js'
+import { taskListResourceUri } from './mcp-apps/resources.js'
 import { DEFAULT_ALLOWED_HOSTS } from './middleware/require-trusted-host.js'
 import { clearTokenValidationCache } from './middleware/require-valid-todoist-token.js'
 
@@ -79,6 +74,16 @@ const INIT_BODY = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', 
 
 const PROTOCOL_2026 = '2026-07-28'
 const PROTOCOL_2025 = '2025-11-25'
+
+/**
+ * The cache hints the server commits to on the wire, pinned as literals so a
+ * change to the configured values fails here rather than passing unnoticed.
+ * The public/private split is what keeps per-deployment catalogues and the
+ * hash-template fallback out of shared caches.
+ */
+const CATALOGUE_HINT = { ttlMs: 3_600_000, cacheScope: 'private' }
+const WIDGET_HINT = { ttlMs: 31_536_000_000, cacheScope: 'public' }
+const WIDGET_FALLBACK_HINT = { ttlMs: 3_600_000, cacheScope: 'private' }
 
 /** The per-request envelope a 2026-07-28 client puts in `params._meta`. */
 const ENVELOPE_2026 = {
@@ -246,8 +251,7 @@ describe('createHttpApp protocol revisions', () => {
         const result = firstJsonRpcResult(res.body)
         expect(result.supportedVersions).toContain(PROTOCOL_2026)
         expect(result.resultType).toBe('complete')
-        expect(result.ttlMs).toBe(CATALOGUE_CACHE_HINT.ttlMs)
-        expect(result.cacheScope).toBe(CATALOGUE_CACHE_HINT.cacheScope)
+        expect(result).toMatchObject(CATALOGUE_HINT)
         expect(result._meta).toMatchObject({
             'io.modelcontextprotocol/serverInfo': { name: 'todoist-mcp-server' },
         })
@@ -267,8 +271,7 @@ describe('createHttpApp protocol revisions', () => {
         expect(Array.isArray(result.tools)).toBe(true)
         expect((result.tools as unknown[]).length).toBeGreaterThan(0)
         expect(result.resultType).toBe('complete')
-        expect(result.ttlMs).toBe(CATALOGUE_CACHE_HINT.ttlMs)
-        expect(result.cacheScope).toBe(CATALOGUE_CACHE_HINT.cacheScope)
+        expect(result).toMatchObject(CATALOGUE_HINT)
     })
 
     it('stamps the catalogue cache hint on prompts/list and resources/list', async () => {
@@ -287,8 +290,7 @@ describe('createHttpApp protocol revisions', () => {
 
             expect(res.status, method).toBe(200)
             const result = firstJsonRpcResult(res.body)
-            expect(result.ttlMs, method).toBe(CATALOGUE_CACHE_HINT.ttlMs)
-            expect(result.cacheScope, method).toBe(CATALOGUE_CACHE_HINT.cacheScope)
+            expect(result, method).toMatchObject(CATALOGUE_HINT)
         }
     })
 
@@ -308,8 +310,7 @@ describe('createHttpApp protocol revisions', () => {
 
         expect(res.status).toBe(200)
         const result = firstJsonRpcResult(res.body)
-        expect(result.ttlMs).toBe(taskListResourceCacheHint.ttlMs)
-        expect(result.cacheScope).toBe(taskListResourceCacheHint.cacheScope)
+        expect(result).toMatchObject(WIDGET_HINT)
     })
 
     it('keeps the hash-template fallback resource private with a short lifetime', async () => {
@@ -324,8 +325,7 @@ describe('createHttpApp protocol revisions', () => {
 
         expect(res.status).toBe(200)
         const result = firstJsonRpcResult(res.body)
-        expect(result.ttlMs).toBe(taskListFallbackCacheHint.ttlMs)
-        expect(result.cacheScope).toBe(taskListFallbackCacheHint.cacheScope)
+        expect(result).toMatchObject(WIDGET_FALLBACK_HINT)
     })
 
     it('still serves a 2025-era client that opens with initialize', async () => {

@@ -5,6 +5,12 @@
  * to improve maintainability and provide a single source of truth.
  */
 
+// Durations
+/** One hour in milliseconds. */
+export const ONE_HOUR_MS = 60 * 60 * 1000
+/** One year (365 days) in milliseconds. */
+export const ONE_YEAR_MS = 365 * 24 * ONE_HOUR_MS
+
 // API Pagination Limits
 export const ApiLimits = {
     /** Default limit for task listings */

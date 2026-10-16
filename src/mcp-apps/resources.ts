@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server'
 import { ResourceTemplate } from '@modelcontextprotocol/server'
 import type { McpServer } from '@modelcontextprotocol/server'
+import { ONE_HOUR_MS, ONE_YEAR_MS } from '../utils/constants.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const TASK_LIST_HTML_PATHS = [
@@ -69,8 +70,6 @@ const taskListResourceMeta = {
  * Marking it public would let a client fill a shared cache with one full copy
  * of the widget per made-up hash.
  */
-const ONE_HOUR_MS = 60 * 60 * 1000
-const ONE_YEAR_MS = 365 * 24 * ONE_HOUR_MS
 const taskListResourceCacheHint = { ttlMs: ONE_YEAR_MS, cacheScope: 'public' } as const
 const taskListFallbackCacheHint = { ttlMs: ONE_HOUR_MS, cacheScope: 'private' } as const
 
@@ -116,9 +115,4 @@ function registerTaskListApp(server: McpServer) {
     )
 }
 
-export {
-    registerTaskListApp,
-    taskListFallbackCacheHint,
-    taskListResourceCacheHint,
-    taskListResourceUri,
-}
+export { registerTaskListApp, taskListResourceUri }
