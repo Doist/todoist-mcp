@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import dotenv from 'dotenv'
 import { getMcpServer } from './mcp-server.js'
 
@@ -10,18 +10,17 @@ function main() {
         throw new Error('TODOIST_API_KEY is not set')
     }
 
-    const server = getMcpServer({ todoistApiKey, baseUrl })
-    const transport = new StdioServerTransport()
-    server
-        .connect(transport)
-        .then(() => {
+    // `serveStdio` owns the protocol-revision decision for the connection: a
+    // client that opens with the per-request `_meta` envelope (revision
+    // 2026-07-28 and later) and one that opens with `initialize` are both served
+    // from the same factory, so the tools are defined once.
+    serveStdio(() => getMcpServer({ todoistApiKey, baseUrl }), {
+        onerror: (error) => {
             // We use console.error because standard I/O is being used for the MCP server communication.
-            console.error('Server started')
-        })
-        .catch((error) => {
-            console.error('Error starting the Todoist MCP server:', error)
-            process.exit(1)
-        })
+            console.error('Todoist MCP server error:', error)
+        },
+    })
+    console.error('Server started')
 }
 
 dotenv.config({ quiet: true })

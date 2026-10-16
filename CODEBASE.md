@@ -35,9 +35,9 @@ TypeScript · ESM-only · Node >=24 · npm >=11 · `zod` v4 for schemas · MCP S
 
 ```
 src/
-├─ main.ts                    # stdio entry: dotenv → getMcpServer() → StdioServerTransport
+├─ main.ts                    # stdio entry: dotenv → serveStdio(() => getMcpServer()) — serves both the 2026-07-28 envelope era and the older initialize handshake from one factory
 ├─ main-http.ts               # Express entry: thin bootstrap — reads env, builds the app, listen()
-├─ http-app.ts                # createHttpApp(): the Express app + middleware chain (Host/Origin guard scoped to /mcp). Pure/side-effect-free so it's testable
+├─ http-app.ts                # createHttpApp(): returns { app, close } — the Express app + middleware chain (Host/Origin guard scoped to /mcp) in front of createMcpHandler()/toNodeHandler(), and the handler's close() for graceful shutdown. Pure/side-effect-free so it's testable
 ├─ index.ts                   # Public package exports — a curated subset of tools + helpers + types. NOT the full registry.
 ├─ mcp-server.ts              # getMcpServer() factory. Iterates `registeredTools`, registers the productivity-analysis prompt, contains the giant `instructions` string shown to the LLM
 ├─ tool-registry.ts           # **Authoritative tool registry** — the ordered list of every registered tool. mcp-server, index.ts, run-tool.ts, validate-schemas.ts and the token-footprint test all derive from it
