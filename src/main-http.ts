@@ -82,7 +82,9 @@ function main() {
     })
 
     // Graceful shutdown: end the MCP handler's open notification streams first,
-    // otherwise `server.close()` waits for them to end on their own.
+    // otherwise `server.close()` waits for them to end on their own. Idle
+    // keep-alive sockets, which MCP clients commonly hold open, would also keep
+    // `server.close()` waiting, so they are closed explicitly.
     let shuttingDown = false
     const shutdown = (signal: NodeJS.Signals) => {
         if (shuttingDown) {
@@ -96,6 +98,7 @@ function main() {
             })
             .finally(() => {
                 server.close(() => process.exit(0))
+                server.closeIdleConnections()
             })
     }
     process.once('SIGTERM', shutdown)

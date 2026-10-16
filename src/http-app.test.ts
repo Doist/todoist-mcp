@@ -34,7 +34,9 @@ function startApp(): Promise<number> {
 
 async function stopApp() {
     await closeApp?.()
-    server?.close()
+    if (server) {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
 }
 
 function request(
@@ -93,6 +95,18 @@ function modernRequest(id: number, method: string, params: Record<string, unknow
             method,
             params: { ...params, _meta: ENVELOPE_2026 },
         }),
+    }
+}
+
+/** A 2025-era request: no envelope, the revision travels in the header only. */
+function legacyRequest(id: number, method: string, params: Record<string, unknown> = {}) {
+    return {
+        headers: {
+            ...JSON_HEADERS,
+            accept: 'application/json, text/event-stream',
+            'mcp-protocol-version': PROTOCOL_2025,
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
     }
 }
 
@@ -240,25 +254,16 @@ describe('createHttpApp protocol revisions', () => {
     })
 
     it('still serves a 2025-era client that opens with initialize', async () => {
+        const legacy = legacyRequest(3, 'initialize', {
+            protocolVersion: PROTOCOL_2025,
+            capabilities: {},
+            clientInfo: { name: 'test-client', version: '0.0.0' },
+        })
         const res = await request(port, {
             method: 'POST',
             path: '/mcp',
-            headers: {
-                ...JSON_HEADERS,
-                accept: 'application/json, text/event-stream',
-                'mcp-protocol-version': PROTOCOL_2025,
-                host: `127.0.0.1:${port}`,
-            },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 3,
-                method: 'initialize',
-                params: {
-                    protocolVersion: PROTOCOL_2025,
-                    capabilities: {},
-                    clientInfo: { name: 'test-client', version: '0.0.0' },
-                },
-            }),
+            headers: { ...legacy.headers, host: `127.0.0.1:${port}` },
+            body: legacy.body,
         })
 
         expect(res.status).toBe(200)
@@ -268,16 +273,12 @@ describe('createHttpApp protocol revisions', () => {
     })
 
     it('serves tools/list to a 2025-era client without a session', async () => {
+        const legacy = legacyRequest(4, 'tools/list')
         const res = await request(port, {
             method: 'POST',
             path: '/mcp',
-            headers: {
-                ...JSON_HEADERS,
-                accept: 'application/json, text/event-stream',
-                'mcp-protocol-version': PROTOCOL_2025,
-                host: `127.0.0.1:${port}`,
-            },
-            body: JSON.stringify({ jsonrpc: '2.0', id: 4, method: 'tools/list', params: {} }),
+            headers: { ...legacy.headers, host: `127.0.0.1:${port}` },
+            body: legacy.body,
         })
 
         expect(res.status).toBe(200)
