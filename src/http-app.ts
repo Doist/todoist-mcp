@@ -1,14 +1,18 @@
 import { NodeStreamableHTTPServerTransport } from '@modelcontextprotocol/node'
 import express, { type Express, type Request, type Response } from 'express'
+import { createFileUploadHandler } from './file-upload-route.js'
 import { getMcpServer } from './mcp-server.js'
 import { requireTrustedHost } from './middleware/require-trusted-host.js'
 import { requireValidTodoistToken } from './middleware/require-valid-todoist-token.js'
+import type { FileUploadsConfig } from './utils/file-uploads.js'
 
 type CreateHttpAppOptions = {
     todoistApiKey: string
     baseUrl?: string
     /** Hostnames trusted in the Host/Origin headers (DNS-rebinding protection). */
     allowedHosts: string[]
+    /** Enables `create-file-upload` and the `/uploads/:ticket` route its URLs point at. */
+    fileUploads?: FileUploadsConfig
 }
 
 /**
@@ -20,7 +24,12 @@ type CreateHttpAppOptions = {
  * target's private IP in the Host header — keep working; it exposes no account
  * data.
  */
-function createHttpApp({ todoistApiKey, baseUrl, allowedHosts }: CreateHttpAppOptions): Express {
+function createHttpApp({
+    todoistApiKey,
+    baseUrl,
+    allowedHosts,
+    fileUploads,
+}: CreateHttpAppOptions): Express {
     const app = express()
     const trustedHost = requireTrustedHost({ allowedHosts })
 
@@ -45,7 +54,7 @@ function createHttpApp({ todoistApiKey, baseUrl, allowedHosts }: CreateHttpAppOp
                     sessionIdGenerator: undefined,
                 })
 
-                const server = getMcpServer({ todoistApiKey, baseUrl })
+                const server = getMcpServer({ todoistApiKey, baseUrl, fileUploads })
                 await server.connect(transport)
                 await transport.handleRequest(req, res, req.body)
             } catch (error) {
@@ -61,6 +70,15 @@ function createHttpApp({ todoistApiKey, baseUrl, allowedHosts }: CreateHttpAppOp
             }
         },
     )
+
+    // File upload endpoint for URLs minted by `create-file-upload`. No Host/Origin
+    // guard and no token middleware: the encrypted ticket in the path is the
+    // credential, and the body must stay an unparsed stream.
+    if (fileUploads) {
+        const uploadHandler = createFileUploadHandler({ secret: fileUploads.secret, baseUrl })
+        app.post('/uploads/:ticket', uploadHandler)
+        app.put('/uploads/:ticket', uploadHandler)
+    }
 
     // MCP endpoint - GET returns 405 (needed for MCP client compatibility).
     app.get('/mcp', trustedHost, (_req: Request, res: Response) => {

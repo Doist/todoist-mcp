@@ -312,6 +312,13 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
         idempotentHint: true,
     },
     {
+        name: ToolNames.CREATE_FILE_UPLOAD,
+        title: 'Todoist: Create File Upload',
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+    },
+    {
         name: ToolNames.LIST_WORKSPACES,
         title: 'Todoist: List Workspaces',
         readOnlyHint: true,
@@ -353,7 +360,10 @@ describe('Tool annotations', () => {
 
     beforeAll(() => {
         const registerToolSpy = vi.spyOn(McpServer.prototype, 'registerTool')
-        getMcpServer({ todoistApiKey: 'test-token' })
+        getMcpServer({
+            todoistApiKey: 'test-token',
+            fileUploads: { secret: 'x'.repeat(32), publicUrl: 'https://mcp.example.com' },
+        })
 
         const calls = registerToolSpy.mock.calls as unknown as Array<[unknown, unknown]>
         for (const call of calls) {

@@ -37,6 +37,7 @@ TypeScript · ESM-only · Node >=24 · npm >=11 · `zod` v4 for schemas · MCP S
 src/
 ├─ main.ts                    # stdio entry: dotenv → getMcpServer() → StdioServerTransport
 ├─ main-http.ts               # Express entry: thin bootstrap — reads env, builds the app, listen()
+├─ file-upload-route.ts       # createFileUploadHandler(): POST|PUT /uploads/:ticket — streams raw bytes to Todoist for URLs minted by create-file-upload
 ├─ http-app.ts                # createHttpApp(): the Express app + middleware chain (Host/Origin guard scoped to /mcp). Pure/side-effect-free so it's testable
 ├─ index.ts                   # Public package exports — a curated subset of tools + helpers + types. NOT the full registry.
 ├─ mcp-server.ts              # getMcpServer() factory. Iterates `registeredTools`, registers the productivity-analysis prompt, contains the giant `instructions` string shown to the LLM
@@ -144,6 +145,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; add
 - `move-planner.ts` — `planMove`/`isMoveRedundant`/`destinationKey`: decides whether a requested container change is a real move, and groups tasks bound for the same destination so they can share one request
 - `sanitize-data.ts` — HTML sanitization (dompurify) for comment content
 - `validate-todoist-token.ts` — token validation for HTTP middleware
+- `file-uploads.ts` — upload tickets (create/read), the per-client upload issuer, `isTodoistAttachmentUrl`
 - `test-helpers.ts` — `createMockTask`, `createMockProject`, `createMockSection`, `TEST_IDS`, `TODAY`
 
 ## Todoist SDK + auth
@@ -151,6 +153,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; add
 - Client: `new TodoistApi(apiKey, baseUrl?)` — created once per server in `mcp-server.ts`, passed into every `execute()`.
 - Auth: `TODOIST_API_KEY` env var, validated at startup. Both stdio and HTTP use this; the HTTP server passes it through `requireValidTodoistToken({ type: 'static', apiKey })` middleware (`src/middleware/require-valid-todoist-token.ts`). The middleware _also_ supports a per-request bearer-token mode, but `main-http.ts` does not wire that up today.
 - HTTP request guard: `requireTrustedHost` (`src/middleware/require-trusted-host.ts`) is scoped to the `/mcp` routes, running ahead of `express.json()` and `requireValidTodoistToken`, validating the `Host` and `Origin` headers against a trusted-hostname allowlist (loopback defaults + `ALLOWED_HOSTS` + a concrete non-loopback `HOST`). This is DNS-rebinding protection: it blocks malicious websites from reaching the loopback server with the operator's token. `/health` is intentionally unguarded so deployment probes (which use the target's private IP in the Host header) stay reachable. The allowlist is built by `buildAllowedHosts(HOST, ALLOWED_HOSTS)` in the same module; shared host helpers live in `src/utils/host.ts`. The app is assembled by `createHttpApp()` in `src/http-app.ts` (a pure module, no side effects, so the middleware chain is testable); `src/main-http.ts` is a thin bootstrap that reads env and calls `listen()`.
+- File uploads (opt-in): `getMcpServer({ fileUploads })` / `createHttpApp({ fileUploads })` (env `FILE_UPLOAD_SECRET` + `PUBLIC_URL` in `main-http.ts`) registers `create-file-upload` and mounts `/uploads/:ticket`. The tool mints an AES-GCM ticket carrying the user's token (`src/utils/file-uploads.ts`); the route decrypts it and streams the body to `/api/v1/uploads`. The ticket is the route's only credential, so the route sits outside the `/mcp` host guard and token middleware. Without the config the tool is not registered (stdio never has it).
 - Optional `TODOIST_BASE_URL` for staging/dev APIs.
 - Errors: wrap SDK throws in `ToolExecutionError` (classify user vs system) — `registerTool` handles this automatically.
 

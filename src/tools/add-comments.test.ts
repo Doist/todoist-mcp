@@ -18,6 +18,7 @@ const mockTodoistApi = {
     getUser: vi.fn(),
     getComments: vi.fn(),
     getTask: vi.fn(),
+    uploadFile: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { ADD_COMMENTS } = ToolNames
@@ -580,6 +581,145 @@ describe(`${ADD_COMMENTS} tool`, () => {
             await expect(
                 addComments.execute({ comments: [comment] }, mockTodoistApi),
             ).rejects.toThrow('Comment 1: Cannot provide both taskId and projectId. Choose one.')
+        })
+    })
+
+    describe('attachments', () => {
+        const ATTACHMENT = {
+            fileUrl: 'https://files.todoist.com/abc/report.pdf',
+            fileName: 'report.pdf',
+            fileType: 'application/pdf',
+            resourceType: 'file',
+        }
+
+        it('attaches an uploaded file unchanged', async () => {
+            mockTodoistApi.addComment.mockResolvedValue(
+                createMockComment({
+                    fileAttachment: { ...ATTACHMENT, resourceType: 'file' },
+                }),
+            )
+
+            const result = await addComments.execute(
+                {
+                    comments: [
+                        { taskId: 'task123', content: 'Quarterly report', attachment: ATTACHMENT },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.uploadFile).not.toHaveBeenCalled()
+            expect(mockTodoistApi.addComment).toHaveBeenCalledWith(
+                expect.objectContaining({ taskId: 'task123', attachment: ATTACHMENT }),
+            )
+            expect(result.textContent).toContain('Added 1 task comment (1 with an attachment)')
+        })
+
+        it('uploads fileContent as a file before commenting', async () => {
+            const order: string[] = []
+            mockTodoistApi.uploadFile.mockImplementation(async () => {
+                order.push('upload')
+                return {
+                    fileUrl: 'https://files.todoist.com/abc/notes.md',
+                    fileName: 'notes.md',
+                    fileType: 'text/markdown',
+                    resourceType: 'file',
+                } as Awaited<ReturnType<TodoistApi['uploadFile']>>
+            })
+            mockTodoistApi.addComment.mockImplementation(async () => {
+                order.push('comment')
+                return createMockComment()
+            })
+
+            await addComments.execute(
+                {
+                    comments: [
+                        {
+                            taskId: 'task123',
+                            content: 'Plan attached',
+                            fileContent: '# Plan\n\nShip it.',
+                            fileName: 'notes.md',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const [uploadArgs] = mockTodoistApi.uploadFile.mock.calls[0] ?? []
+            expect(uploadArgs?.fileName).toBe('notes.md')
+            expect(String(uploadArgs?.file)).toBe('# Plan\n\nShip it.')
+            expect(mockTodoistApi.addComment).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    attachment: {
+                        fileUrl: 'https://files.todoist.com/abc/notes.md',
+                        fileName: 'notes.md',
+                        fileType: 'text/markdown',
+                        resourceType: 'file',
+                    },
+                }),
+            )
+            expect(order).toEqual(['upload', 'comment'])
+        })
+
+        it('posts no comment when the upload fails', async () => {
+            mockTodoistApi.uploadFile.mockRejectedValue(new Error('upload failed'))
+
+            await expect(
+                addComments.execute(
+                    {
+                        comments: [
+                            {
+                                taskId: 'task123',
+                                content: 'Plan attached',
+                                fileContent: 'text',
+                                fileName: 'notes.md',
+                            },
+                        ],
+                    },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow('upload failed')
+            expect(mockTodoistApi.addComment).not.toHaveBeenCalled()
+        })
+
+        it.each([
+            [
+                'attachment and fileContent together',
+                { attachment: ATTACHMENT, fileContent: 'x', fileName: 'a.txt' },
+                'Provide either attachment or fileContent, not both.',
+            ],
+            [
+                'fileContent without fileName',
+                { fileContent: 'x' },
+                'fileName is required with fileContent.',
+            ],
+            [
+                'fileName without fileContent',
+                { fileName: 'a.txt' },
+                'fileName only applies to fileContent.',
+            ],
+            [
+                'an attachment URL off Todoist',
+                { attachment: { ...ATTACHMENT, fileUrl: 'https://evil.example/report.pdf' } },
+                'attachment.fileUrl must be a Todoist file URL',
+            ],
+            [
+                'fileContent over the size limit',
+                {
+                    fileContent: 'a'.repeat(ApiLimits.COMMENT_FILE_CONTENT_MAX_BYTES + 1),
+                    fileName: 'big.txt',
+                },
+                'fileContent exceeds',
+            ],
+        ])('rejects %s', async (_label, fields, message) => {
+            await expect(
+                addComments.execute(
+                    { comments: [{ taskId: 'task123', content: 'c', ...fields }] },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow(message)
+            expect(mockTodoistApi.uploadFile).not.toHaveBeenCalled()
+            expect(mockTodoistApi.addComment).not.toHaveBeenCalled()
         })
     })
 })

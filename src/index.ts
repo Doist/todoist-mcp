@@ -1,3 +1,4 @@
+import { createFileUploadHandler, type FileUploadHandlerOptions } from './file-upload-route.js'
 import { FEATURE_NAMES, type Feature, type FeatureName, type Features } from './mcp-helpers.js'
 import { getMcpServer } from './mcp-server.js'
 import {
@@ -21,6 +22,7 @@ import { addSections } from './tools/add-sections.js'
 import { addTasks } from './tools/add-tasks.js'
 import { analyzeProjectHealth } from './tools/analyze-project-health.js'
 import { completeTasks } from './tools/complete-tasks.js'
+import { createFileUpload } from './tools/create-file-upload.js'
 // General tools
 import { deleteObject } from './tools/delete-object.js'
 import { exportProjectTemplate } from './tools/export-project-template.js'
@@ -62,6 +64,7 @@ import { updateSections } from './tools/update-sections.js'
 import { updateTasks } from './tools/update-tasks.js'
 import { userInfo } from './tools/user-info.js'
 import { viewAttachment } from './tools/view-attachment.js'
+import { type FileUploadsConfig } from './utils/file-uploads.js'
 import { validateTodoistToken } from './utils/validate-todoist-token.js'
 
 /**
@@ -119,6 +122,7 @@ export {
     listWorkspaces,
     // Attachment tools
     viewAttachment,
+    createFileUpload,
     // General tools
     deleteObject,
     fetchObject,
@@ -147,4 +151,8 @@ export {
     type RequireValidTodoistTokenOptions,
     // Token validation utility
     validateTodoistToken,
+    // File uploads (create-file-upload + the route its URLs point at)
+    createFileUploadHandler,
+    type FileUploadHandlerOptions,
+    type FileUploadsConfig,
 }
