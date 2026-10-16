@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net'
 import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createHttpApp } from './http-app.js'
+import { taskListResourceUri } from './mcp-apps/resources.js'
 import { DEFAULT_ALLOWED_HOSTS } from './middleware/require-trusted-host.js'
 import { clearTokenValidationCache } from './middleware/require-valid-todoist-token.js'
 
@@ -74,6 +75,16 @@ const INIT_BODY = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', 
 const PROTOCOL_2026 = '2026-07-28'
 const PROTOCOL_2025 = '2025-11-25'
 
+/**
+ * The cache hints the server commits to on the wire, pinned as literals so a
+ * change to the configured values fails here rather than passing unnoticed.
+ * The public/private split is what keeps per-deployment catalogues and the
+ * hash-template fallback out of shared caches.
+ */
+const CATALOGUE_HINT = { ttlMs: 3_600_000, cacheScope: 'private' }
+const WIDGET_HINT = { ttlMs: 31_536_000_000, cacheScope: 'public' }
+const WIDGET_FALLBACK_HINT = { ttlMs: 3_600_000, cacheScope: 'private' }
+
 /** The per-request envelope a 2026-07-28 client puts in `params._meta`. */
 const ENVELOPE_2026 = {
     'io.modelcontextprotocol/protocolVersion': PROTOCOL_2026,
@@ -81,13 +92,23 @@ const ENVELOPE_2026 = {
     'io.modelcontextprotocol/clientCapabilities': {},
 }
 
-function modernRequest(id: number, method: string, params: Record<string, unknown> = {}) {
+/**
+ * A 2026-07-28 request. `Mcp-Method` is required on every POST; `Mcp-Name`
+ * must repeat the target's name or URI for methods that address one.
+ */
+function modernRequest(
+    id: number,
+    method: string,
+    params: Record<string, unknown> = {},
+    options: { name?: string } = {},
+) {
     return {
         headers: {
             ...JSON_HEADERS,
             accept: 'application/json, text/event-stream',
             'mcp-protocol-version': PROTOCOL_2026,
             'mcp-method': method,
+            ...(options.name ? { 'mcp-name': options.name } : {}),
         },
         body: JSON.stringify({
             jsonrpc: '2.0',
@@ -230,6 +251,7 @@ describe('createHttpApp protocol revisions', () => {
         const result = firstJsonRpcResult(res.body)
         expect(result.supportedVersions).toContain(PROTOCOL_2026)
         expect(result.resultType).toBe('complete')
+        expect(result).toMatchObject(CATALOGUE_HINT)
         expect(result._meta).toMatchObject({
             'io.modelcontextprotocol/serverInfo': { name: 'todoist-mcp-server' },
         })
@@ -249,8 +271,61 @@ describe('createHttpApp protocol revisions', () => {
         expect(Array.isArray(result.tools)).toBe(true)
         expect((result.tools as unknown[]).length).toBeGreaterThan(0)
         expect(result.resultType).toBe('complete')
-        expect(typeof result.ttlMs).toBe('number')
-        expect(['public', 'private']).toContain(result.cacheScope)
+        expect(result).toMatchObject(CATALOGUE_HINT)
+    })
+
+    it('stamps the catalogue cache hint on prompts/list and resources/list', async () => {
+        for (const [id, method] of [
+            [4, 'prompts/list'],
+            [5, 'resources/list'],
+            [6, 'resources/templates/list'],
+        ] as const) {
+            const modern = modernRequest(id, method)
+            const res = await request(port, {
+                method: 'POST',
+                path: '/mcp',
+                headers: { ...modern.headers, host: `127.0.0.1:${port}` },
+                body: modern.body,
+            })
+
+            expect(res.status, method).toBe(200)
+            const result = firstJsonRpcResult(res.body)
+            expect(result, method).toMatchObject(CATALOGUE_HINT)
+        }
+    })
+
+    it('lets shared caches hold the widget HTML resource', async () => {
+        const modern = modernRequest(
+            7,
+            'resources/read',
+            { uri: taskListResourceUri },
+            { name: taskListResourceUri },
+        )
+        const res = await request(port, {
+            method: 'POST',
+            path: '/mcp',
+            headers: { ...modern.headers, host: `127.0.0.1:${port}` },
+            body: modern.body,
+        })
+
+        expect(res.status).toBe(200)
+        const result = firstJsonRpcResult(res.body)
+        expect(result).toMatchObject(WIDGET_HINT)
+    })
+
+    it('keeps the hash-template fallback resource private with a short lifetime', async () => {
+        const staleUri = 'ui://todoist/task-list@stalehash'
+        const modern = modernRequest(8, 'resources/read', { uri: staleUri }, { name: staleUri })
+        const res = await request(port, {
+            method: 'POST',
+            path: '/mcp',
+            headers: { ...modern.headers, host: `127.0.0.1:${port}` },
+            body: modern.body,
+        })
+
+        expect(res.status).toBe(200)
+        const result = firstJsonRpcResult(res.body)
+        expect(result).toMatchObject(WIDGET_FALLBACK_HINT)
     })
 
     it('still serves a 2025-era client that opens with initialize', async () => {

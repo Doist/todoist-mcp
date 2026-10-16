@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server'
 import { ResourceTemplate } from '@modelcontextprotocol/server'
 import type { McpServer } from '@modelcontextprotocol/server'
+import { ONE_HOUR_MS, ONE_YEAR_MS } from '../utils/constants.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const TASK_LIST_HTML_PATHS = [
@@ -58,6 +59,20 @@ const taskListResourceMeta = {
     'openai/widgetDomain': taskListWidgetDomain,
 }
 
+/**
+ * Freshness hints for the widget HTML, read by clients on protocol revision
+ * 2026-07-28 or later.
+ *
+ * The canonical URI embeds a hash of the content, so what it resolves to never
+ * changes: the HTML carries no account data, so shared caches may keep it for a
+ * year. The hash template fallback serves whatever HTML the running server has
+ * for any hash a client asks for, so it stays private with a short lifetime.
+ * Marking it public would let a client fill a shared cache with one full copy
+ * of the widget per made-up hash.
+ */
+const taskListResourceCacheHint = { ttlMs: ONE_YEAR_MS, cacheScope: 'public' } as const
+const taskListFallbackCacheHint = { ttlMs: ONE_HOUR_MS, cacheScope: 'private' } as const
+
 function createTaskListResourceResult(uri: string) {
     return {
         contents: [
@@ -82,6 +97,7 @@ function registerTaskListApp(server: McpServer) {
             description: taskListResourceDescription,
             mimeType: RESOURCE_MIME_TYPE,
             _meta: taskListResourceMeta,
+            cacheHint: taskListResourceCacheHint,
         },
         async () => createTaskListResourceResult(taskListResourceUri),
     )
@@ -93,6 +109,7 @@ function registerTaskListApp(server: McpServer) {
             description: `${taskListResourceDescription} compatibility fallback`,
             mimeType: RESOURCE_MIME_TYPE,
             _meta: taskListResourceMeta,
+            cacheHint: taskListFallbackCacheHint,
         },
         async (uri) => createTaskListResourceResult(uri.toString()),
     )
