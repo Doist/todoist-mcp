@@ -1,3 +1,10 @@
+## [13.6.0](https://github.com/Doist/todoist-mcp/compare/v13.5.0...v13.6.0) (2026-10-16)
+
+### Features
+
+* serve MCP protocol revision 2026-07-28 over HTTP and stdio ([#625](https://github.com/Doist/todoist-mcp/issues/625)) ([58c46a3](https://github.com/Doist/todoist-mcp/commit/58c46a36e5c9c056c0402f437fd3562a0c4daf8b))
+* stamp cache hints on catalogue and widget resource results ([#626](https://github.com/Doist/todoist-mcp/issues/626)) ([066ba6d](https://github.com/Doist/todoist-mcp/commit/066ba6d72c9edebceebc006d9d31cabc295cfc07)), closes [#625](https://github.com/Doist/todoist-mcp/issues/625)
+
 ## [13.5.0](https://github.com/Doist/todoist-mcp/compare/v13.4.1...v13.5.0) (2026-10-15)
 
 ### Features
