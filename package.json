@@ -91,7 +91,7 @@
         "@types/react": "19.2.18",
         "@types/react-dom": "19.2.7",
         "@vitejs/plugin-react": "5.2.0",
-        "concurrently": "9.2.4",
+        "concurrently": "9.2.5",
         "conventional-changelog-conventionalcommits": "9.3.1",
         "gpt-tokenizer": "3.4.0",
         "husky": "9.1.7",
