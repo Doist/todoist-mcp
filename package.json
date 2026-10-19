@@ -65,7 +65,7 @@
         "prepare": "husky"
     },
     "dependencies": {
-        "@doist/todoist-sdk": "15.4.0",
+        "@doist/todoist-sdk": "15.5.0",
         "@modelcontextprotocol/ext-apps": "2.0.3",
         "date-fns": "4.1.0",
         "dompurify": "3.3.3",
