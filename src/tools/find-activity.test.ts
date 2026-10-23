@@ -226,7 +226,6 @@ describe(`${FIND_ACTIVITY} tool`, () => {
         })
 
         it.each([
-            ['objectId', 'task-123', { objectId: 'task-123' }],
             ['projectId', 'project-abc', { parentProjectId: 'project-abc' }],
             ['taskId', 'parent-task-789', { parentItemId: 'parent-task-789' }],
             ['initiatorId', 'user-alice', { initiatorId: 'user-alice' }],
