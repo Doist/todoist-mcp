@@ -1,3 +1,9 @@
+## [13.6.2](https://github.com/Doist/todoist-mcp/compare/v13.6.1...v13.6.2) (2026-10-23)
+
+### Bug Fixes
+
+* delete filters through the REST endpoint ([#634](https://github.com/Doist/todoist-mcp/issues/634)) ([37c62b5](https://github.com/Doist/todoist-mcp/commit/37c62b5b81aa3072d0c5ef685ab85c248ea2b3dd))
+
 ## [13.6.1](https://github.com/Doist/todoist-mcp/compare/v13.6.0...v13.6.1) (2026-10-19)
 
 ### Bug Fixes
