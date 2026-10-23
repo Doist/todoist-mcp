@@ -17,12 +17,12 @@ import {
 } from '../tool-helpers.js'
 import { ApiLimits } from '../utils/constants.js'
 import { filterResolver } from '../utils/filter-resolver.js'
-import { generateLabelsFilter, LabelsSchema } from '../utils/labels.js'
+import { formatLabelsHint, generateLabelsFilter, LabelsSchema } from '../utils/labels.js'
 import { TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import { previewTasks, summarizeList } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
 
-const { FIND_COMPLETED_TASKS, ADD_TASKS } = ToolNames
+const { FIND_COMPLETED_TASKS, SEARCH_COMPLETED_TASKS, ADD_TASKS } = ToolNames
 
 const ArgsSchema = {
     searchText: z.string().optional().describe('The text to search for in tasks.'),
@@ -388,10 +388,7 @@ function generateTextContent({
 
         // Add label filter information
         if (args.labels && args.labels.length > 0) {
-            const labelText = args.labels
-                .map((label) => `@${label}`)
-                .join(args.labelsOperator === 'and' ? ' & ' : ' | ')
-            filterHints.push(`labels: ${labelText}`)
+            filterHints.push(`labels: ${formatLabelsHint(args.labels, args.labelsOperator)}`)
         }
 
         // Container-specific zero result hints
@@ -414,10 +411,7 @@ function generateTextContent({
             subjectParts.push(`assigned to ${email}`)
         }
         if (args.labels && args.labels.length > 0) {
-            const labelText = args.labels
-                .map((label) => `@${label}`)
-                .join(args.labelsOperator === 'and' ? ' & ' : ' | ')
-            subjectParts.push(`with labels: ${labelText}`)
+            subjectParts.push(`with labels: ${formatLabelsHint(args.labels, args.labelsOperator)}`)
         }
 
         if (args.filter && !args.searchText && !args.responsibleUser && !args.labels?.length) {
@@ -431,10 +425,7 @@ function generateTextContent({
             subject = `Tasks assigned to ${email}`
             if (args.filter) filterHints.push(`filter: ${args.filter}`)
         } else if (args.labels && args.labels.length > 0 && !args.responsibleUser) {
-            const labelText = args.labels
-                .map((label) => `@${label}`)
-                .join(args.labelsOperator === 'and' ? ' & ' : ' | ')
-            subject = `Tasks with labels: ${labelText}`
+            subject = `Tasks with labels: ${formatLabelsHint(args.labels, args.labelsOperator)}`
             if (args.filter) filterHints.push(`filter: ${args.filter}`)
         } else {
             subject = `Tasks ${subjectParts.join(' ')}`
@@ -445,10 +436,7 @@ function generateTextContent({
             filterHints.push(`assigned to ${email}`)
         }
         if (args.labels && args.labels.length > 0) {
-            const labelText = args.labels
-                .map((label) => `@${label}`)
-                .join(args.labelsOperator === 'and' ? ' & ' : ' | ')
-            filterHints.push(`labels: ${labelText}`)
+            filterHints.push(`labels: ${formatLabelsHint(args.labels, args.labelsOperator)}`)
         }
 
         if (tasks.length === 0) {
@@ -456,13 +444,17 @@ function generateTextContent({
                 const email = assigneeEmail || args.responsibleUser
                 zeroReasonHints.push(`No tasks assigned to ${email}`)
                 zeroReasonHints.push('Check if the user name is correct')
-                zeroReasonHints.push(`Check completed tasks with ${FIND_COMPLETED_TASKS}`)
+                zeroReasonHints.push(
+                    args.searchText
+                        ? `Search completed tasks with ${SEARCH_COMPLETED_TASKS}`
+                        : `Check completed tasks with ${FIND_COMPLETED_TASKS}`,
+                )
             }
             if (args.searchText) {
                 zeroReasonHints.push('Try broader search terms')
                 zeroReasonHints.push('Verify spelling and try partial words')
                 if (!args.responsibleUser) {
-                    zeroReasonHints.push(`Check completed tasks with ${FIND_COMPLETED_TASKS}`)
+                    zeroReasonHints.push(`Search completed tasks with ${SEARCH_COMPLETED_TASKS}`)
                 }
             }
         }
