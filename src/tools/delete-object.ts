@@ -1,4 +1,4 @@
-import { createCommand, isWorkspaceProject } from '@doist/todoist-sdk'
+import { isWorkspaceProject } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -61,9 +61,7 @@ const deleteObject = {
                 await client.deleteLabel(args.id)
                 break
             case 'filter':
-                await client.sync({
-                    commands: [createCommand('filter_delete', { id: args.id })],
-                })
+                await client.deleteFilter(args.id)
                 break
             case 'reminder':
                 await client.deleteReminder(args.id)

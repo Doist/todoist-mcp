@@ -14,7 +14,7 @@ const mockTodoistApi = {
     deleteLabel: vi.fn(),
     deleteReminder: vi.fn(),
     deleteLocationReminder: vi.fn(),
-    sync: vi.fn(),
+    deleteFilter: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { DELETE_OBJECT } = ToolNames
@@ -232,21 +232,15 @@ describe(`${DELETE_OBJECT} tool`, () => {
     })
 
     describe('deleting filters', () => {
-        it('should delete a filter by ID using sync API', async () => {
-            mockTodoistApi.sync.mockResolvedValue({
-                syncStatus: { 'some-uuid': 'ok' },
-            })
+        it('should delete a filter by ID', async () => {
+            mockTodoistApi.deleteFilter.mockResolvedValue(true)
 
             const result = await deleteObject.execute(
                 { type: 'filter', id: 'filter-123' },
                 mockTodoistApi,
             )
 
-            expect(mockTodoistApi.sync).toHaveBeenCalledOnce()
-            const syncCall = mockTodoistApi.sync.mock.calls[0]?.[0]
-            expect(syncCall?.commands).toHaveLength(1)
-            expect(syncCall?.commands?.[0]?.type).toBe('filter_delete')
-            expect(syncCall?.commands?.[0]?.args).toEqual({ id: 'filter-123' })
+            expect(mockTodoistApi.deleteFilter).toHaveBeenCalledWith('filter-123')
 
             const textContent = result.textContent
             expect(textContent).toContain('Deleted filter: id=filter-123')
@@ -257,7 +251,7 @@ describe(`${DELETE_OBJECT} tool`, () => {
         })
 
         it('should propagate filter deletion errors', async () => {
-            mockTodoistApi.sync.mockRejectedValue(new Error('API Error: Filter not found'))
+            mockTodoistApi.deleteFilter.mockRejectedValue(new Error('API Error: Filter not found'))
 
             await expect(
                 deleteObject.execute({ type: 'filter', id: 'non-existent-filter' }, mockTodoistApi),
@@ -335,7 +329,7 @@ describe(`${DELETE_OBJECT} tool`, () => {
             mockTodoistApi.deleteTask.mockResolvedValue(true)
             mockTodoistApi.deleteComment.mockResolvedValue(true)
             mockTodoistApi.deleteLabel.mockResolvedValue(true)
-            mockTodoistApi.sync.mockResolvedValue({})
+            mockTodoistApi.deleteFilter.mockResolvedValue(true)
 
             await deleteObject.execute({ type: 'project', id: 'proj-1' }, mockTodoistApi)
             expect(mockTodoistApi.deleteProject).toHaveBeenCalledWith('proj-1')
@@ -353,13 +347,14 @@ describe(`${DELETE_OBJECT} tool`, () => {
             expect(mockTodoistApi.deleteLabel).toHaveBeenCalledWith('label-1')
 
             await deleteObject.execute({ type: 'filter', id: 'filter-1' }, mockTodoistApi)
-            expect(mockTodoistApi.sync).toHaveBeenCalled()
+            expect(mockTodoistApi.deleteFilter).toHaveBeenCalledWith('filter-1')
 
             expect(mockTodoistApi.deleteProject).toHaveBeenCalledTimes(1)
             expect(mockTodoistApi.deleteSection).toHaveBeenCalledTimes(1)
             expect(mockTodoistApi.deleteTask).toHaveBeenCalledTimes(1)
             expect(mockTodoistApi.deleteComment).toHaveBeenCalledTimes(1)
             expect(mockTodoistApi.deleteLabel).toHaveBeenCalledTimes(1)
+            expect(mockTodoistApi.deleteFilter).toHaveBeenCalledTimes(1)
         })
     })
 })
