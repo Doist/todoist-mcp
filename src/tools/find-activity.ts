@@ -20,7 +20,7 @@ const ArgsSchema = {
     objectId: z
         .string()
         .optional()
-        .describe('Filter by specific object ID (task, project, or comment).'),
+        .describe('Filter by specific object ID (task, project, or comment). Requires objectType.'),
 
     eventType: z.enum(ACTIVITY_EVENT_TYPES).optional().describe('Type of event to filter by.'),
 
@@ -85,6 +85,13 @@ const findActivity = {
             limit,
             cursor,
         } = args
+
+        // The API can only filter by objectId when it knows the object's type.
+        if (objectId && objectId !== 'remove' && !objectType) {
+            throw new Error(
+                `objectId requires objectType, one of: ${ACTIVITY_OBJECT_TYPES.join(', ')}.`,
+            )
+        }
 
         // Build API arguments
         const apiArgs: Parameters<typeof client.getActivityLogs>[0] = {
