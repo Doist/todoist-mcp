@@ -197,12 +197,12 @@ describe('WorkspaceResolver', () => {
                 workspaceId: '333',
                 workspaceName: 'Engineering',
             })
-            await expect(
-                resolver.resolveWorkspace(mockTodoistApi, 'Engineering'),
-            ).resolves.toEqual({
-                workspaceId: '111',
-                workspaceName: 'Engineering',
-            })
+            await expect(resolver.resolveWorkspace(mockTodoistApi, 'Engineering')).resolves.toEqual(
+                {
+                    workspaceId: '111',
+                    workspaceName: 'Engineering',
+                },
+            )
 
             expect(mockTodoistApi.getWorkspaces).toHaveBeenCalledTimes(1)
             expect(otherClient.getWorkspaces).toHaveBeenCalledTimes(1)
@@ -231,12 +231,12 @@ describe('WorkspaceResolver', () => {
                 workspaceId: '444',
                 workspaceName: 'Engineering',
             })
-            await expect(
-                resolver.resolveWorkspace(mockTodoistApi, 'Engineering'),
-            ).resolves.toEqual({
-                workspaceId: '111',
-                workspaceName: 'Engineering',
-            })
+            await expect(resolver.resolveWorkspace(mockTodoistApi, 'Engineering')).resolves.toEqual(
+                {
+                    workspaceId: '111',
+                    workspaceName: 'Engineering',
+                },
+            )
             expect(otherClient.getWorkspaces).toHaveBeenCalledTimes(3)
             expect(mockTodoistApi.getWorkspaces).toHaveBeenCalledTimes(1)
         })
@@ -291,12 +291,12 @@ describe('WorkspaceResolver', () => {
                     workspaceName: 'Engineering',
                 })
             }
-            await expect(
-                resolver.resolveWorkspace(mockTodoistApi, 'Engineering'),
-            ).resolves.toEqual({
-                workspaceId: '333',
-                workspaceName: 'Engineering',
-            })
+            await expect(resolver.resolveWorkspace(mockTodoistApi, 'Engineering')).resolves.toEqual(
+                {
+                    workspaceId: '333',
+                    workspaceName: 'Engineering',
+                },
+            )
             expect(mockTodoistApi.getWorkspaces).toHaveBeenCalledTimes(2)
         })
     })
