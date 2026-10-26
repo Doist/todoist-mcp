@@ -7,6 +7,11 @@ export type ResolvedWorkspace = {
 
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
+type WorkspaceResolverState = {
+    cache: { workspaces: Workspace[]; timestamp: number } | null
+    inFlightWorkspaces: Promise<Workspace[]> | null
+}
+
 /**
  * Check if a string looks like a workspace ID (purely numeric).
  */
@@ -15,30 +20,37 @@ export function looksLikeWorkspaceId(ref: string): boolean {
 }
 
 export class WorkspaceResolver {
-    private cache: { workspaces: Workspace[]; timestamp: number } | null = null
-    private inFlightWorkspaces: Promise<Workspace[]> | null = null
+    // Cached data and pending requests share only the authenticated client's lifetime.
+    private stateByClient = new WeakMap<TodoistApi, WorkspaceResolverState>()
 
     private async getWorkspaces(client: TodoistApi): Promise<Workspace[]> {
-        if (this.cache && Date.now() - this.cache.timestamp < CACHE_TTL) {
-            return this.cache.workspaces
+        let state = this.stateByClient.get(client)
+        if (!state) {
+            state = { cache: null, inFlightWorkspaces: null }
+            this.stateByClient.set(client, state)
         }
 
-        if (this.inFlightWorkspaces) {
-            return this.inFlightWorkspaces
+        if (state.cache && Date.now() - state.cache.timestamp < CACHE_TTL) {
+            return state.cache.workspaces
         }
 
+        if (state.inFlightWorkspaces) {
+            return state.inFlightWorkspaces
+        }
+
+        // Mutate only this captured state, even if clearCache replaces the map.
         const request = client
             .getWorkspaces()
             .then((workspaces) => {
-                this.cache = { workspaces, timestamp: Date.now() }
+                state.cache = { workspaces, timestamp: Date.now() }
                 return workspaces
             })
             .finally(() => {
-                if (this.inFlightWorkspaces === request) {
-                    this.inFlightWorkspaces = null
+                if (state.inFlightWorkspaces === request) {
+                    state.inFlightWorkspaces = null
                 }
             })
-        this.inFlightWorkspaces = request
+        state.inFlightWorkspaces = request
         return request
     }
 
@@ -108,10 +120,10 @@ export class WorkspaceResolver {
     }
 
     /**
-     * Clear the workspace cache — useful for testing.
+     * Clear all client caches and detach pending requests — useful for testing.
      */
     clearCache(): void {
-        this.cache = null
+        this.stateByClient = new WeakMap()
     }
 }
 

@@ -2,9 +2,13 @@ import type { TodoistApi, Workspace } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { looksLikeWorkspaceId, WorkspaceResolver } from './workspace-resolver.js'
 
-const mockTodoistApi = {
-    getWorkspaces: vi.fn(),
-} as unknown as Mocked<TodoistApi>
+function createMockClient(workspaces: Workspace[] = []): Mocked<TodoistApi> {
+    return {
+        getWorkspaces: vi.fn().mockResolvedValue(workspaces),
+    } as unknown as Mocked<TodoistApi>
+}
+
+const mockTodoistApi = createMockClient()
 
 function createMockWorkspace(overrides: Partial<Workspace> = {}): Workspace {
     return {
@@ -45,6 +49,10 @@ describe('WorkspaceResolver', () => {
     beforeEach(() => {
         vi.clearAllMocks()
         resolver = new WorkspaceResolver()
+    })
+
+    afterEach(() => {
+        vi.restoreAllMocks()
     })
 
     describe('resolveWorkspace', () => {
@@ -134,23 +142,37 @@ describe('WorkspaceResolver', () => {
     })
 
     describe('caching', () => {
-        it('shares an in-flight workspace request across concurrent resolutions', async () => {
+        it('shares in-flight requests only within the same client', async () => {
             const workspaces = [
                 createMockWorkspace({ id: '111', name: 'Engineering' }),
                 createMockWorkspace({ id: '222', name: 'Marketing' }),
             ]
+            const otherClient = createMockClient()
             let resolveWorkspaces: (value: Workspace[]) => void = () => undefined
+            let resolveOtherWorkspaces: (value: Workspace[]) => void = () => undefined
             mockTodoistApi.getWorkspaces.mockReturnValue(
                 new Promise<Workspace[]>((resolve) => {
                     resolveWorkspaces = resolve
                 }),
             )
+            otherClient.getWorkspaces.mockReturnValue(
+                new Promise<Workspace[]>((resolve) => {
+                    resolveOtherWorkspaces = resolve
+                }),
+            )
 
             const engineering = resolver.resolveWorkspace(mockTodoistApi, 'Engineering')
             const marketing = resolver.resolveWorkspace(mockTodoistApi, 'Marketing')
+            const otherEngineering = resolver.resolveWorkspace(otherClient, 'Engineering')
 
             expect(mockTodoistApi.getWorkspaces).toHaveBeenCalledTimes(1)
+            expect(otherClient.getWorkspaces).toHaveBeenCalledTimes(1)
 
+            resolveOtherWorkspaces([createMockWorkspace({ id: '333', name: 'Engineering' })])
+            await expect(otherEngineering).resolves.toEqual({
+                workspaceId: '333',
+                workspaceName: 'Engineering',
+            })
             resolveWorkspaces(workspaces)
             await expect(engineering).resolves.toEqual({
                 workspaceId: '111',
@@ -162,24 +184,119 @@ describe('WorkspaceResolver', () => {
             })
         })
 
-        it('should not re-fetch workspaces on second call', async () => {
-            const workspaces = [createMockWorkspace({ id: '111', name: 'Engineering' })]
-            mockTodoistApi.getWorkspaces.mockResolvedValue(workspaces)
+        it('should isolate cached workspaces by client without re-fetching', async () => {
+            mockTodoistApi.getWorkspaces.mockResolvedValue([
+                createMockWorkspace({ id: '111', name: 'Engineering' }),
+            ])
+            const otherClient = createMockClient([
+                createMockWorkspace({ id: '333', name: 'Engineering' }),
+            ])
 
             await resolver.resolveWorkspace(mockTodoistApi, 'Engineering')
+            await expect(resolver.resolveWorkspace(otherClient, 'Engineering')).resolves.toEqual({
+                workspaceId: '333',
+                workspaceName: 'Engineering',
+            })
+            await expect(
+                resolver.resolveWorkspace(mockTodoistApi, 'Engineering'),
+            ).resolves.toEqual({
+                workspaceId: '111',
+                workspaceName: 'Engineering',
+            })
+
+            expect(mockTodoistApi.getWorkspaces).toHaveBeenCalledTimes(1)
+            expect(otherClient.getWorkspaces).toHaveBeenCalledTimes(1)
+        })
+
+        it('should expire clients independently and retry a failed refresh', async () => {
+            const now = vi.spyOn(Date, 'now').mockReturnValue(0)
+            const otherClient = createMockClient()
+            otherClient.getWorkspaces
+                .mockResolvedValueOnce([createMockWorkspace({ id: '333', name: 'Engineering' })])
+                .mockRejectedValueOnce(new Error('Workspace fetch failed'))
+                .mockResolvedValue([createMockWorkspace({ id: '444', name: 'Engineering' })])
+            mockTodoistApi.getWorkspaces.mockResolvedValue([
+                createMockWorkspace({ id: '111', name: 'Engineering' }),
+            ])
+
+            await resolver.resolveWorkspace(otherClient, 'Engineering')
+            now.mockReturnValue(60_000)
             await resolver.resolveWorkspace(mockTodoistApi, 'Engineering')
 
+            now.mockReturnValue(5 * 60 * 1000)
+            await expect(resolver.resolveWorkspace(otherClient, 'Engineering')).rejects.toThrow(
+                'Workspace fetch failed',
+            )
+            await expect(resolver.resolveWorkspace(otherClient, 'Engineering')).resolves.toEqual({
+                workspaceId: '444',
+                workspaceName: 'Engineering',
+            })
+            await expect(
+                resolver.resolveWorkspace(mockTodoistApi, 'Engineering'),
+            ).resolves.toEqual({
+                workspaceId: '111',
+                workspaceName: 'Engineering',
+            })
+            expect(otherClient.getWorkspaces).toHaveBeenCalledTimes(3)
             expect(mockTodoistApi.getWorkspaces).toHaveBeenCalledTimes(1)
         })
 
-        it('should re-fetch after clearCache', async () => {
-            const workspaces = [createMockWorkspace({ id: '111', name: 'Engineering' })]
-            mockTodoistApi.getWorkspaces.mockResolvedValue(workspaces)
+        it('should re-fetch all clients after clearCache', async () => {
+            mockTodoistApi.getWorkspaces.mockResolvedValue([
+                createMockWorkspace({ id: '111', name: 'Engineering' }),
+            ])
+            const otherClient = createMockClient([
+                createMockWorkspace({ id: '333', name: 'Marketing' }),
+            ])
 
             await resolver.resolveWorkspace(mockTodoistApi, 'Engineering')
+            await resolver.resolveWorkspace(otherClient, 'Marketing')
             resolver.clearCache()
             await resolver.resolveWorkspace(mockTodoistApi, 'Engineering')
+            await resolver.resolveWorkspace(otherClient, 'Marketing')
 
+            expect(mockTodoistApi.getWorkspaces).toHaveBeenCalledTimes(2)
+            expect(otherClient.getWorkspaces).toHaveBeenCalledTimes(2)
+        })
+
+        it('should detach pre-clear requests from new cache and in-flight state', async () => {
+            let resolveOldWorkspaces: (value: Workspace[]) => void = () => undefined
+            let resolveNewWorkspaces: (value: Workspace[]) => void = () => undefined
+            mockTodoistApi.getWorkspaces
+                .mockReturnValueOnce(
+                    new Promise<Workspace[]>((resolve) => {
+                        resolveOldWorkspaces = resolve
+                    }),
+                )
+                .mockReturnValueOnce(
+                    new Promise<Workspace[]>((resolve) => {
+                        resolveNewWorkspaces = resolve
+                    }),
+                )
+
+            const oldRequest = resolver.resolveWorkspace(mockTodoistApi, 'Engineering')
+            resolver.clearCache()
+            const newRequest = resolver.resolveWorkspace(mockTodoistApi, 'Engineering')
+            expect(mockTodoistApi.getWorkspaces).toHaveBeenCalledTimes(2)
+
+            resolveOldWorkspaces([createMockWorkspace({ id: '111', name: 'Engineering' })])
+            await oldRequest
+            const concurrentRequest = resolver.resolveWorkspace(mockTodoistApi, 'Engineering')
+            expect(mockTodoistApi.getWorkspaces).toHaveBeenCalledTimes(2)
+
+            resolveNewWorkspaces([createMockWorkspace({ id: '333', name: 'Engineering' })])
+            for (const request of [newRequest, concurrentRequest]) {
+                await expect(request).resolves.toEqual({
+                    workspaceId: '333',
+                    workspaceName: 'Engineering',
+                })
+            }
+            await expect(
+                resolver.resolveWorkspace(mockTodoistApi, 'Engineering'),
+            ).resolves.toEqual({
+                workspaceId: '333',
+                workspaceName: 'Engineering',
+            })
             expect(mockTodoistApi.getWorkspaces).toHaveBeenCalledTimes(2)
         })
     })

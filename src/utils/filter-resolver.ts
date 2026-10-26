@@ -8,12 +8,18 @@ export type ResolvedFilter = {
 
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
+type FilterCacheEntry = { filters: Filter[]; timestamp: number }
+
 export class FilterResolver {
-    private cache: { filters: Filter[]; timestamp: number } | null = null
+    // Cache only for the lifetime of each authenticated client, never across clients.
+    private cacheByClient = new WeakMap<TodoistApi, FilterCacheEntry>()
 
     private async getFilters(client: TodoistApi): Promise<Filter[]> {
-        if (this.cache && Date.now() - this.cache.timestamp < CACHE_TTL) {
-            return this.cache.filters
+        // Capture the map so a pre-clear sync cannot populate the replacement cache.
+        const cacheByClient = this.cacheByClient
+        const cached = cacheByClient.get(client)
+        if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+            return cached.filters
         }
 
         const syncResponse = await client.sync({
@@ -21,7 +27,7 @@ export class FilterResolver {
             syncToken: '*',
         })
         const filters = (syncResponse.filters ?? []).filter((f) => !f.isDeleted)
-        this.cache = { filters, timestamp: Date.now() }
+        cacheByClient.set(client, { filters, timestamp: Date.now() })
         return filters
     }
 
@@ -91,10 +97,10 @@ export class FilterResolver {
     }
 
     /**
-     * Clear the filter cache — useful for testing.
+     * Clear all client caches and detach pending syncs — useful for testing.
      */
     clearCache(): void {
-        this.cache = null
+        this.cacheByClient = new WeakMap()
     }
 }
 

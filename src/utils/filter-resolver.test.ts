@@ -1,24 +1,15 @@
 import type { Filter, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { FilterResolver } from './filter-resolver.js'
+import { createMockFilter } from './test-helpers.js'
 
-const mockTodoistApi = {
-    sync: vi.fn(),
-} as unknown as Mocked<TodoistApi>
-
-function createMockFilter(overrides: Partial<Filter> = {}): Filter {
+function createMockClient(filters: Filter[] = []): Mocked<TodoistApi> {
     return {
-        id: 'filter-1',
-        name: 'Test Filter',
-        query: 'today',
-        color: 'charcoal',
-        isDeleted: false,
-        isFavorite: false,
-        isFrozen: false,
-        itemOrder: 0,
-        ...overrides,
-    }
+        sync: vi.fn().mockResolvedValue({ filters }),
+    } as unknown as Mocked<TodoistApi>
 }
+
+const mockTodoistApi = createMockClient()
 
 describe('FilterResolver', () => {
     let resolver: FilterResolver
@@ -26,6 +17,10 @@ describe('FilterResolver', () => {
     beforeEach(() => {
         vi.clearAllMocks()
         resolver = new FilterResolver()
+    })
+
+    afterEach(() => {
+        vi.restoreAllMocks()
     })
 
     describe('resolveFilter', () => {
@@ -147,26 +142,129 @@ describe('FilterResolver', () => {
     })
 
     describe('caching', () => {
-        it('should not re-fetch filters on second call', async () => {
+        it('should isolate filters and reuse cached data per client', async () => {
             mockTodoistApi.sync.mockResolvedValue({
-                filters: [createMockFilter({ id: 'f1', name: 'Work', query: '##Work' })],
+                filters: [
+                    createMockFilter({ id: '101', name: 'Focus', query: '@alpha-only' }),
+                    createMockFilter({ id: '102', name: 'Alpha Private' }),
+                ],
+            })
+            const otherClient = createMockClient([
+                createMockFilter({ id: '201', name: 'Focus', query: '@beta-only' }),
+            ])
+
+            await resolver.resolveFilter(mockTodoistApi, '101')
+            await expect(resolver.resolveFilter(otherClient, '201')).resolves.toMatchObject({
+                filterQuery: '@beta-only',
+            })
+            await expect(resolver.resolveFilter(mockTodoistApi, 'Focus')).resolves.toMatchObject({
+                filterQuery: '@alpha-only',
+            })
+            await expect(resolver.resolveFilter(otherClient, 'Focus')).resolves.toMatchObject({
+                filterQuery: '@beta-only',
+            })
+            for (const reference of ['102', 'Alpha Private']) {
+                await expect(resolver.resolveFilter(otherClient, reference)).rejects.toThrow(
+                    `Filter "${reference}" not found.`,
+                )
+            }
+
+            expect(mockTodoistApi.sync).toHaveBeenCalledTimes(1)
+            expect(otherClient.sync).toHaveBeenCalledTimes(1)
+        })
+
+        it('should include only caller-owned matches in ambiguous errors', async () => {
+            mockTodoistApi.sync.mockResolvedValue({
+                filters: [
+                    createMockFilter({ id: '101', name: 'Board Alpha One' }),
+                    createMockFilter({ id: '102', name: 'Board Alpha Two' }),
+                ],
+            })
+            const otherClient = createMockClient([
+                createMockFilter({ id: '201', name: 'Board Beta One' }),
+                createMockFilter({ id: '202', name: 'Board Beta Two' }),
+            ])
+
+            await resolver.resolveFilter(mockTodoistApi, '101')
+            await expect(resolver.resolveFilter(otherClient, 'Board')).rejects.toThrow(
+                new Error(
+                    'Ambiguous filter reference "Board". Multiple filters match:\n' +
+                        '  - "Board Beta One" (id: 201)\n' +
+                        '  - "Board Beta Two" (id: 202)',
+                ),
+            )
+        })
+
+        it('should expire clients independently and retry a failed refresh', async () => {
+            const now = vi.spyOn(Date, 'now').mockReturnValue(0)
+            const otherClient = createMockClient()
+            otherClient.sync
+                .mockResolvedValueOnce({
+                    filters: [createMockFilter({ name: 'Focus', query: '@beta-only' })],
+                })
+                .mockRejectedValueOnce(new Error('Sync failed'))
+                .mockResolvedValue({
+                    filters: [createMockFilter({ name: 'Focus', query: '@beta-updated' })],
+                })
+            mockTodoistApi.sync.mockResolvedValue({
+                filters: [createMockFilter({ name: 'Focus', query: '@alpha-only' })],
             })
 
-            await resolver.resolveFilter(mockTodoistApi, 'Work')
-            await resolver.resolveFilter(mockTodoistApi, 'Work')
+            await resolver.resolveFilter(otherClient, 'Focus')
+            now.mockReturnValue(60_000)
+            await resolver.resolveFilter(mockTodoistApi, 'Focus')
 
+            now.mockReturnValue(5 * 60 * 1000)
+            await expect(resolver.resolveFilter(otherClient, 'Focus')).rejects.toThrow(
+                'Sync failed',
+            )
+            await expect(resolver.resolveFilter(otherClient, 'Focus')).resolves.toMatchObject({
+                filterQuery: '@beta-updated',
+            })
+            await expect(resolver.resolveFilter(mockTodoistApi, 'Focus')).resolves.toMatchObject({
+                filterQuery: '@alpha-only',
+            })
+            expect(otherClient.sync).toHaveBeenCalledTimes(3)
             expect(mockTodoistApi.sync).toHaveBeenCalledTimes(1)
         })
 
-        it('should re-fetch after clearCache', async () => {
+        it('should re-fetch all clients after clearCache', async () => {
             mockTodoistApi.sync.mockResolvedValue({
                 filters: [createMockFilter({ id: 'f1', name: 'Work', query: '##Work' })],
             })
+            const otherClient = createMockClient([createMockFilter({ id: 'f2', name: 'Personal' })])
 
             await resolver.resolveFilter(mockTodoistApi, 'Work')
+            await resolver.resolveFilter(otherClient, 'Personal')
             resolver.clearCache()
             await resolver.resolveFilter(mockTodoistApi, 'Work')
+            await resolver.resolveFilter(otherClient, 'Personal')
 
+            expect(mockTodoistApi.sync).toHaveBeenCalledTimes(2)
+            expect(otherClient.sync).toHaveBeenCalledTimes(2)
+        })
+
+        it('should not let a pre-clear sync overwrite the new cache', async () => {
+            let resolveSync: (value: { filters: Filter[] }) => void = () => undefined
+            mockTodoistApi.sync
+                .mockReturnValueOnce(
+                    new Promise<{ filters: Filter[] }>((resolve) => {
+                        resolveSync = resolve
+                    }),
+                )
+                .mockResolvedValue({
+                    filters: [createMockFilter({ name: 'Focus', query: '@updated' })],
+                })
+
+            const pending = resolver.resolveFilter(mockTodoistApi, 'Focus')
+            resolver.clearCache()
+            await resolver.resolveFilter(mockTodoistApi, 'Focus')
+
+            resolveSync({ filters: [createMockFilter({ name: 'Focus', query: '@old' })] })
+            await expect(pending).resolves.toMatchObject({ filterQuery: '@old' })
+            await expect(resolver.resolveFilter(mockTodoistApi, 'Focus')).resolves.toMatchObject({
+                filterQuery: '@updated',
+            })
             expect(mockTodoistApi.sync).toHaveBeenCalledTimes(2)
         })
     })
