@@ -1,3 +1,9 @@
+## [13.6.3](https://github.com/Doist/todoist-mcp/compare/v13.6.2...v13.6.3) (2026-10-26)
+
+### Bug Fixes
+
+* isolate filter and workspace resolver state by client (Doist/Issues[#21435](https://github.com/Doist/todoist-mcp/issues/21435)) ([#638](https://github.com/Doist/todoist-mcp/issues/638)) ([740785a](https://github.com/Doist/todoist-mcp/commit/740785aa2d94bc4be15b6d943284e228d1d8eff5))
+
 ## [13.6.2](https://github.com/Doist/todoist-mcp/compare/v13.6.1...v13.6.2) (2026-10-23)
 
 ### Bug Fixes
