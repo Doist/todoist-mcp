@@ -1,5 +1,6 @@
 import type {
     CurrentUser,
+    Filter,
     Label,
     PersonalProject,
     Section,
@@ -150,6 +151,23 @@ export function createMockLabel(overrides: Partial<Label> = {}): Label {
         color: 'red',
         order: 1,
         isFavorite: false,
+        ...overrides,
+    }
+}
+
+/**
+ * Creates a mock Filter with all required properties and sensible defaults.
+ */
+export function createMockFilter(overrides: Partial<Filter> = {}): Filter {
+    return {
+        id: 'filter-1',
+        name: 'Test Filter',
+        query: 'today',
+        color: 'charcoal',
+        isDeleted: false,
+        isFavorite: false,
+        isFrozen: false,
+        itemOrder: 0,
         ...overrides,
     }
 }
