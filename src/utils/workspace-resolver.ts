@@ -20,7 +20,9 @@ export function looksLikeWorkspaceId(ref: string): boolean {
 }
 
 export class WorkspaceResolver {
-    // Cached data and pending requests share only the authenticated client's lifetime.
+    // Cached data and pending requests are scoped to the client, never shared across
+    // clients. The HTTP transport builds a client per request, so there this only
+    // deduplicates within one request; the TTL matters for long-lived stdio clients.
     private stateByClient = new WeakMap<TodoistApi, WorkspaceResolverState>()
 
     private async getWorkspaces(client: TodoistApi): Promise<Workspace[]> {

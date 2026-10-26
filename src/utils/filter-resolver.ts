@@ -11,7 +11,11 @@ const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 type FilterCacheEntry = { filters: Filter[]; timestamp: number }
 
 export class FilterResolver {
-    // Cache only for the lifetime of each authenticated client, never across clients.
+    // Scoped to the client, never shared across clients. The HTTP transport builds
+    // a client per request, so there this only spans one request; the TTL matters
+    // for long-lived stdio clients. Keying by account would restore cross-request
+    // reuse, but filter writes don't invalidate this cache, so a filter created
+    // moments earlier would fail to resolve for up to the TTL.
     private cacheByClient = new WeakMap<TodoistApi, FilterCacheEntry>()
 
     private async getFilters(client: TodoistApi): Promise<Filter[]> {
