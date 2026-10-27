@@ -249,6 +249,10 @@ describe('batch tools log the items they could not act on', () => {
             updateReminder: vi.fn(),
             sync: vi.fn(),
             getProject: vi.fn().mockResolvedValue(createMockProject()),
+            getProjects: vi.fn().mockResolvedValue({ results: [], nextCursor: null }),
+            sync: vi.fn().mockResolvedValue({
+                userPlanLimits: { current: { maxProjects: 5 }, next: null },
+            }),
             getWorkspaces: vi.fn().mockResolvedValue([]),
             getUser: vi.fn().mockResolvedValue(createMockUser()),
         } as unknown as Mocked<TodoistApi>

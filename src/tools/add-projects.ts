@@ -1,10 +1,11 @@
-import type { PersonalProject, WorkspaceProject } from '@doist/todoist-sdk'
+import type { PersonalProject, TodoistApi, WorkspaceProject } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
-import { mapProject } from '../tool-helpers.js'
+import { fetchAllActiveProjects, isPersonalProject, mapProject } from '../tool-helpers.js'
 import { logBatchFailures } from '../utils/batch-failures.js'
 import { ColorSchema } from '../utils/colors.js'
+import { createLimiter } from '../utils/concurrency.js'
 import { FailureSchema, ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
 import { appendFailureSummary } from '../utils/response-builders.js'
 import { executeCreateWithRetry, executeWithRetry } from '../utils/retry.js'
@@ -56,6 +57,8 @@ const OutputSchema = {
     failureCount: z.number(),
 }
 
+const PersonalProjectLimitSchema = z.number().int().nonnegative()
+
 const addProjects = {
     name: ToolNames.ADD_PROJECTS,
     description: 'Add one or more new projects.',
@@ -64,6 +67,8 @@ const addProjects = {
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     async execute({ projects }, client) {
         const workspaceResolutions = new Map<string, Promise<string>>()
+        const limitPersonalCreation = createLimiter(1)
+        let personalCapacity: ReturnType<typeof loadPersonalProjectCapacity> | undefined
 
         const resolveWorkspaceId = (workspace: string | undefined) => {
             if (!workspace) {
@@ -89,9 +94,31 @@ const addProjects = {
         const settled = await Promise.allSettled(
             projects.map(async ({ workspace, ...rest }) => {
                 const workspaceId = await resolveWorkspaceId(workspace)
-                return await executeCreateWithRetry(() =>
-                    client.addProject({ ...rest, ...(workspaceId ? { workspaceId } : {}) }),
-                )
+                const createProject = () =>
+                    executeCreateWithRetry(() =>
+                        client.addProject({ ...rest, ...(workspaceId ? { workspaceId } : {}) }),
+                    )
+
+                if (workspace) {
+                    return await createProject()
+                }
+
+                // The quota snapshot and successful writes share one lane within this
+                // batch. Other tool executions and clients can still change capacity.
+                return await limitPersonalCreation(async () => {
+                    personalCapacity ??= loadPersonalProjectCapacity(client)
+                    const capacity = await personalCapacity
+                    if (capacity.activeCount >= capacity.maxProjects) {
+                        throw new Error(
+                            `Your account has reached its limit of ${capacity.maxProjects} active personal projects. ` +
+                                'This project was not created. Archive or delete a personal project, or upgrade to a plan with a higher limit, then retry this item.',
+                        )
+                    }
+
+                    const project = await createProject()
+                    capacity.activeCount++
+                    return project
+                })
             }),
         )
 
@@ -127,6 +154,34 @@ const addProjects = {
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
+
+async function loadPersonalProjectCapacity(client: TodoistApi) {
+    try {
+        const [limits, projects] = await Promise.all([
+            executeWithRetry(() =>
+                client.sync({ resourceTypes: ['user_plan_limits'], syncToken: '*' }),
+            ),
+            executeWithRetry(() => fetchAllActiveProjects(client)),
+        ])
+        // The SDK preserves this field via a loose schema, so validate it before use.
+        const maxProjects = PersonalProjectLimitSchema.parse(
+            limits.userPlanLimits?.current?.maxProjects,
+        )
+        const activeCount = projects.filter(
+            (project) =>
+                isPersonalProject(project) &&
+                !project.inboxProject &&
+                !project.isArchived &&
+                !project.isDeleted,
+        ).length
+
+        return { maxProjects, activeCount }
+    } catch {
+        throw new Error(
+            'Could not verify your personal project limit. This project was not created. Retry this item later.',
+        )
+    }
+}
 
 function generateTextContent({
     projects,
