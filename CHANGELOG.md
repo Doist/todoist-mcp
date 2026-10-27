@@ -1,3 +1,9 @@
+## [13.7.0](https://github.com/Doist/todoist-mcp/compare/v13.6.4...v13.7.0) (2026-10-27)
+
+### Features
+
+* let reminders notify another collaborator ([#641](https://github.com/Doist/todoist-mcp/issues/641)) ([eafac9a](https://github.com/Doist/todoist-mcp/commit/eafac9a10035fc60fc16621e290237edac98d1c3))
+
 ## [13.6.4](https://github.com/Doist/todoist-mcp/compare/v13.6.3...v13.6.4) (2026-10-27)
 
 ### Bug Fixes
