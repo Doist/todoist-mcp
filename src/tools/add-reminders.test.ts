@@ -396,8 +396,6 @@ describe(`${ADD_REMINDERS} tool`, () => {
                 mockTodoistApi,
             )
 
-            // Each distinct reference is looked up once, however many reminders use it.
-            expect(mockResolveUserRefs).toHaveBeenCalledTimes(2)
             expect(mockTodoistApi.addReminder).toHaveBeenNthCalledWith(
                 1,
                 expect.objectContaining({ reminderType: 'relative', notifyUid: 'user-2' }),

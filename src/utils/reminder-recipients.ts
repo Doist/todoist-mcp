@@ -13,17 +13,28 @@ export async function resolveReminderRecipients(
     client: TodoistApi,
     notifyUsers: (string | undefined)[],
 ): Promise<(string | undefined)[]> {
-    const userIds = new Map<string, string>()
+    // References that differ only in case or padding are the same person, as in
+    // `resolveUserRefs`, but the first spelling is what gets resolved, since a
+    // user ID is not safe to lower-case.
+    const refsByKey = new Map<string, string>()
+    for (const ref of notifyUsers) {
+        const trimmed = ref?.trim()
+        if (trimmed && !refsByKey.has(toKey(trimmed))) refsByKey.set(toKey(trimmed), trimmed)
+    }
 
     // Resolved one at a time on purpose: the first lookup populates the
     // collaborator cache that the rest read.
-    for (const ref of new Set(notifyUsers.map((ref) => ref?.trim()))) {
-        if (!ref) continue
+    const userIds = new Map<string, string>()
+    for (const [key, ref] of refsByKey) {
         const [user] = await resolveUserRefs(client, [ref])
-        if (user) userIds.set(ref, user.userId)
+        if (user) userIds.set(key, user.userId)
     }
 
-    return notifyUsers.map((ref) => (ref ? userIds.get(ref.trim()) : undefined))
+    return notifyUsers.map((ref) => (ref?.trim() ? userIds.get(toKey(ref)) : undefined))
+}
+
+function toKey(ref: string): string {
+    return ref.trim().toLowerCase()
 }
 
 /**

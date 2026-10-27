@@ -11,7 +11,7 @@ import {
     MAX_REMINDERS_PER_OPERATION,
     ReminderDueInputSchema,
     ReminderIsUrgentSchema,
-    ReminderNotifyUserSchema,
+    ReminderNotifyUserUpdateSchema,
     ReminderServiceSchema,
 } from '../utils/reminder-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -27,7 +27,7 @@ const RelativeReminderUpdateSchema = z.object({
         .describe('New minute offset before task due time.'),
     service: ReminderServiceSchema.optional().describe('New delivery method: "email" or "push".'),
     isUrgent: ReminderIsUrgentSchema,
-    notifyUser: ReminderNotifyUserSchema,
+    notifyUser: ReminderNotifyUserUpdateSchema,
 })
 
 const AbsoluteReminderUpdateSchema = z.object({
@@ -36,7 +36,7 @@ const AbsoluteReminderUpdateSchema = z.object({
     due: ReminderDueInputSchema.optional().describe('New due date/time for the reminder.'),
     service: ReminderServiceSchema.optional().describe('New delivery method: "email" or "push".'),
     isUrgent: ReminderIsUrgentSchema,
-    notifyUser: ReminderNotifyUserSchema,
+    notifyUser: ReminderNotifyUserUpdateSchema,
 })
 
 const LocationReminderUpdateSchema = z.object({
@@ -49,7 +49,7 @@ const LocationReminderUpdateSchema = z.object({
         'New trigger condition: "on_enter" or "on_leave".',
     ),
     radius: z.number().int().optional().describe('New radius in meters.'),
-    notifyUser: ReminderNotifyUserSchema,
+    notifyUser: ReminderNotifyUserUpdateSchema,
 })
 
 const ReminderUpdateSchema = z.discriminatedUnion('type', [
@@ -96,13 +96,14 @@ const updateReminders = {
 
         const updatePromises = reminders.map(async (reminder, index) => {
             const notifyUid = notifyUids[index]
+            const recipient = notifyUid !== undefined ? { notifyUid } : {}
             switch (reminder.type) {
                 case 'relative': {
                     const { id, type: _, notifyUser: __, ...updateArgs } = reminder
                     return await client.updateReminder(id, {
                         reminderType: 'relative',
                         ...updateArgs,
-                        notifyUid,
+                        ...recipient,
                     })
                 }
                 case 'absolute': {
@@ -110,12 +111,12 @@ const updateReminders = {
                     return await client.updateReminder(id, {
                         reminderType: 'absolute',
                         ...updateArgs,
-                        notifyUid,
+                        ...recipient,
                     })
                 }
                 case 'location': {
                     const { id, type: _, notifyUser: __, ...updateArgs } = reminder
-                    return await client.updateLocationReminder(id, { ...updateArgs, notifyUid })
+                    return await client.updateLocationReminder(id, { ...updateArgs, ...recipient })
                 }
             }
         })
