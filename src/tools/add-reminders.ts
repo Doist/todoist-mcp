@@ -4,10 +4,15 @@ import type { TodoistTool } from '../todoist-tool.js'
 import { countRemindersByType, mapReminder } from '../tool-helpers.js'
 import { ReminderSchema as ReminderOutputSchema } from '../utils/output-schemas.js'
 import {
+    describeRecipientMismatches,
+    resolveReminderRecipients,
+} from '../utils/reminder-recipients.js'
+import {
     LocationTriggerSchema,
     MAX_REMINDERS_PER_OPERATION,
     ReminderDueInputSchema,
     ReminderIsUrgentSchema,
+    ReminderNotifyUserSchema,
     ReminderServiceSchema,
 } from '../utils/reminder-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -26,6 +31,7 @@ const RelativeReminderInputSchema = z.object({
         'Delivery method: "email" or "push" notification. Defaults to push.',
     ),
     isUrgent: ReminderIsUrgentSchema,
+    notifyUser: ReminderNotifyUserSchema,
 })
 
 const AbsoluteReminderInputSchema = z.object({
@@ -36,6 +42,7 @@ const AbsoluteReminderInputSchema = z.object({
         'Delivery method: "email" or "push" notification. Defaults to push.',
     ),
     isUrgent: ReminderIsUrgentSchema,
+    notifyUser: ReminderNotifyUserSchema,
 })
 
 const LocationReminderInputSchema = z.object({
@@ -52,6 +59,7 @@ const LocationReminderInputSchema = z.object({
         .int()
         .optional()
         .describe('Radius in meters for the geofence. Defaults to server default.'),
+    notifyUser: ReminderNotifyUserSchema,
 })
 
 const ReminderInputSchema = z.discriminatedUnion('type', [
@@ -79,14 +87,25 @@ const OutputSchema = {
 const addReminders = {
     name: ToolNames.ADD_REMINDERS,
     description:
-        'Add reminders to tasks. Supports three types: "relative" (minutes before due), "absolute" (specific date/time), or "location" (geofence-triggered). Each reminder must specify a taskId.',
+        'Add reminders to tasks. Supports three types: "relative" (minutes before due), "absolute" (specific date/time), or "location" (geofence-triggered). Each reminder must specify a taskId. Reminders notify their creator unless notifyUser says otherwise.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+    },
     async execute(args, client) {
         const { reminders } = args
 
-        const addReminderPromises = reminders.map(async (reminder) => {
+        const notifyUids = await resolveReminderRecipients(
+            client,
+            reminders.map((reminder) => reminder.notifyUser),
+        )
+
+        const addReminderPromises = reminders.map(async (reminder, index) => {
+            const notifyUid = notifyUids[index]
             switch (reminder.type) {
                 case 'relative':
                     return await client.addReminder({
@@ -95,6 +114,7 @@ const addReminders = {
                         minuteOffset: reminder.minuteOffset,
                         service: reminder.service,
                         isUrgent: reminder.isUrgent,
+                        notifyUid,
                     } as AddReminderArgs)
                 case 'absolute':
                     return await client.addReminder({
@@ -103,6 +123,7 @@ const addReminders = {
                         due: reminder.due,
                         service: reminder.service,
                         isUrgent: reminder.isUrgent,
+                        notifyUid,
                     } as AddReminderArgs)
                 case 'location':
                     return await client.addLocationReminder({
@@ -112,13 +133,17 @@ const addReminders = {
                         locLong: reminder.locLong,
                         locTrigger: reminder.locTrigger,
                         radius: reminder.radius,
+                        notifyUid,
                     })
             }
         })
 
         const newReminders = await Promise.all(addReminderPromises)
         const mappedReminders = newReminders.map(mapReminder)
-        const textContent = generateTextContent(mappedReminders)
+        const textContent = [
+            generateTextContent(mappedReminders),
+            ...describeRecipientMismatches(mappedReminders, notifyUids),
+        ].join('\n')
 
         return {
             textContent,

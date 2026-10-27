@@ -79,6 +79,7 @@ describe(`${FIND_REMINDERS} tool`, () => {
                             id: 'reminder-1',
                             taskId: 'task-1',
                             type: 'relative',
+                            notifyUid: 'user-1',
                             minuteOffset: 30,
                         }),
                     ],

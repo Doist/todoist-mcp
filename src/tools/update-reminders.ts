@@ -3,10 +3,15 @@ import type { TodoistTool } from '../todoist-tool.js'
 import { mapReminder } from '../tool-helpers.js'
 import { ReminderSchema as ReminderOutputSchema } from '../utils/output-schemas.js'
 import {
+    describeRecipientMismatches,
+    resolveReminderRecipients,
+} from '../utils/reminder-recipients.js'
+import {
     LocationTriggerSchema,
     MAX_REMINDERS_PER_OPERATION,
     ReminderDueInputSchema,
     ReminderIsUrgentSchema,
+    ReminderNotifyUserUpdateSchema,
     ReminderServiceSchema,
 } from '../utils/reminder-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -22,6 +27,7 @@ const RelativeReminderUpdateSchema = z.object({
         .describe('New minute offset before task due time.'),
     service: ReminderServiceSchema.optional().describe('New delivery method: "email" or "push".'),
     isUrgent: ReminderIsUrgentSchema,
+    notifyUser: ReminderNotifyUserUpdateSchema,
 })
 
 const AbsoluteReminderUpdateSchema = z.object({
@@ -30,6 +36,7 @@ const AbsoluteReminderUpdateSchema = z.object({
     due: ReminderDueInputSchema.optional().describe('New due date/time for the reminder.'),
     service: ReminderServiceSchema.optional().describe('New delivery method: "email" or "push".'),
     isUrgent: ReminderIsUrgentSchema,
+    notifyUser: ReminderNotifyUserUpdateSchema,
 })
 
 const LocationReminderUpdateSchema = z.object({
@@ -42,6 +49,7 @@ const LocationReminderUpdateSchema = z.object({
         'New trigger condition: "on_enter" or "on_leave".',
     ),
     radius: z.number().int().optional().describe('New radius in meters.'),
+    notifyUser: ReminderNotifyUserUpdateSchema,
 })
 
 const ReminderUpdateSchema = z.discriminatedUnion('type', [
@@ -72,29 +80,43 @@ const updateReminders = {
         'Update existing reminders. Each reminder must specify its type ("relative", "absolute", or "location") and ID. Only include fields that need to change.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: true,
+    },
     async execute(args, client) {
         const { reminders } = args
 
-        const updatePromises = reminders.map(async (reminder) => {
+        const notifyUids = await resolveReminderRecipients(
+            client,
+            reminders.map((reminder) => reminder.notifyUser),
+        )
+
+        const updatePromises = reminders.map(async (reminder, index) => {
+            const notifyUid = notifyUids[index]
+            const recipient = notifyUid !== undefined ? { notifyUid } : {}
             switch (reminder.type) {
                 case 'relative': {
-                    const { id, type: _, ...updateArgs } = reminder
+                    const { id, type: _, notifyUser: __, ...updateArgs } = reminder
                     return await client.updateReminder(id, {
                         reminderType: 'relative',
                         ...updateArgs,
+                        ...recipient,
                     })
                 }
                 case 'absolute': {
-                    const { id, type: _, ...updateArgs } = reminder
+                    const { id, type: _, notifyUser: __, ...updateArgs } = reminder
                     return await client.updateReminder(id, {
                         reminderType: 'absolute',
                         ...updateArgs,
+                        ...recipient,
                     })
                 }
                 case 'location': {
-                    const { id, type: _, ...updateArgs } = reminder
-                    return await client.updateLocationReminder(id, updateArgs)
+                    const { id, type: _, notifyUser: __, ...updateArgs } = reminder
+                    return await client.updateLocationReminder(id, { ...updateArgs, ...recipient })
                 }
             }
         })
@@ -103,7 +125,10 @@ const updateReminders = {
         const mappedReminders = updatedReminders.map(mapReminder)
 
         const label = mappedReminders.length === 1 ? 'reminder' : 'reminders'
-        const textContent = `Updated ${mappedReminders.length} ${label}`
+        const textContent = [
+            `Updated ${mappedReminders.length} ${label}`,
+            ...describeRecipientMismatches(mappedReminders, notifyUids),
+        ].join('\n')
 
         return {
             textContent,

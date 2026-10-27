@@ -1,7 +1,27 @@
 import type { Reminder, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { ToolNames } from '../utils/tool-names.js'
+import { resolveUserRefs } from '../utils/user-resolver.js'
 import { addReminders } from './add-reminders.js'
+
+vi.mock('../utils/user-resolver.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../utils/user-resolver.js')>()
+    return { ...actual, resolveUserRefs: vi.fn() }
+})
+
+const mockResolveUserRefs = vi.mocked(resolveUserRefs)
+
+const USER_IDS: Record<string, string> = { me: 'user-1', 'ana@example.com': 'user-2' }
+
+function mockUserLookup() {
+    mockResolveUserRefs.mockImplementation(async (_client, refs) =>
+        refs.map((ref) => {
+            const userId = USER_IDS[ref]
+            if (!userId) throw new Error(`Could not find user(s): "${ref}".`)
+            return { userId, displayName: ref, email: ref }
+        }),
+    )
+}
 
 const mockTodoistApi = {
     addReminder: vi.fn(),
@@ -317,6 +337,128 @@ describe(`${ADD_REMINDERS} tool`, () => {
             expect(result.textContent).toBe('Added 2 time-based reminders and 1 location reminder')
             expect(result.structuredContent.totalCount).toBe(3)
             expect(result.structuredContent.addedReminderIds).toEqual(['r-1', 'r-2', 'r-3'])
+        })
+    })
+
+    describe('choosing who is notified', () => {
+        it('should leave the recipient to Todoist when notifyUser is omitted', async () => {
+            mockTodoistApi.addReminder.mockResolvedValue(createMockRelativeReminder())
+
+            const result = await addReminders.execute(
+                { reminders: [{ type: 'relative', taskId: 'task-1', minuteOffset: 30 }] },
+                mockTodoistApi,
+            )
+
+            expect(mockResolveUserRefs).not.toHaveBeenCalled()
+            expect(mockTodoistApi.addReminder.mock.calls[0]?.[0]?.notifyUid).toBeUndefined()
+            expect(result.structuredContent.reminders[0]?.notifyUid).toBe('user-1')
+        })
+
+        it('should resolve notifyUser for every reminder type', async () => {
+            mockUserLookup()
+            mockTodoistApi.addReminder
+                .mockResolvedValueOnce(
+                    createMockRelativeReminder({ id: 'r-1', notifyUid: 'user-2' }),
+                )
+                .mockResolvedValueOnce(
+                    createMockAbsoluteReminder({ id: 'r-2', notifyUid: 'user-2' }),
+                )
+            mockTodoistApi.addLocationReminder.mockResolvedValue(
+                createMockLocationReminder({ id: 'r-3', notifyUid: 'user-1' }),
+            )
+
+            const result = await addReminders.execute(
+                {
+                    reminders: [
+                        {
+                            type: 'relative',
+                            taskId: 'task-1',
+                            minuteOffset: 15,
+                            notifyUser: 'ana@example.com',
+                        },
+                        {
+                            type: 'absolute',
+                            taskId: 'task-1',
+                            due: { date: '2025-12-31' },
+                            notifyUser: 'ana@example.com',
+                        },
+                        {
+                            type: 'location',
+                            taskId: 'task-1',
+                            name: 'Home',
+                            locLat: '40.7128',
+                            locLong: '-74.0060',
+                            locTrigger: 'on_enter',
+                            notifyUser: 'me',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.addReminder).toHaveBeenNthCalledWith(
+                1,
+                expect.objectContaining({ reminderType: 'relative', notifyUid: 'user-2' }),
+            )
+            expect(mockTodoistApi.addReminder).toHaveBeenNthCalledWith(
+                2,
+                expect.objectContaining({ reminderType: 'absolute', notifyUid: 'user-2' }),
+            )
+            expect(mockTodoistApi.addLocationReminder).toHaveBeenCalledWith(
+                expect.objectContaining({ name: 'Home', notifyUid: 'user-1' }),
+            )
+            expect(result.structuredContent.reminders.map((r) => r.notifyUid)).toEqual([
+                'user-2',
+                'user-2',
+                'user-1',
+            ])
+            expect(result.textContent).toBe('Added 2 time-based reminders and 1 location reminder')
+        })
+
+        it('should not create any reminder when a notifyUser cannot be resolved', async () => {
+            mockUserLookup()
+
+            await expect(
+                addReminders.execute(
+                    {
+                        reminders: [
+                            {
+                                type: 'relative',
+                                taskId: 'task-1',
+                                minuteOffset: 15,
+                                notifyUser: 'nobody@example.com',
+                            },
+                        ],
+                    },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow('Could not find user(s): "nobody@example.com".')
+            expect(mockTodoistApi.addReminder).not.toHaveBeenCalled()
+        })
+
+        it('should warn when the reminder does not notify the requested user', async () => {
+            mockUserLookup()
+            mockTodoistApi.addReminder.mockResolvedValue(
+                createMockRelativeReminder({ id: 'r-1', notifyUid: 'user-1' }),
+            )
+
+            const result = await addReminders.execute(
+                {
+                    reminders: [
+                        {
+                            type: 'relative',
+                            taskId: 'task-1',
+                            minuteOffset: 15,
+                            notifyUser: 'ana@example.com',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.textContent).toBe(
+                'Added 1 time-based reminder\nWarning: reminder r-1 notifies user user-1, not the requested user user-2. Todoist did not apply notifyUser.',
+            )
         })
     })
 })

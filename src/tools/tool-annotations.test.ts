@@ -162,6 +162,7 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: false,
+        openWorldHint: true,
     },
     {
         name: ToolNames.UPDATE_REMINDERS,
@@ -169,6 +170,7 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
         readOnlyHint: false,
         destructiveHint: true,
         idempotentHint: true,
+        openWorldHint: true,
     },
     {
         name: ToolNames.FIND_REMINDERS,

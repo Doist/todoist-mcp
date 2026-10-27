@@ -498,6 +498,7 @@ function mapReminder(reminder: Reminder) {
         id: reminder.id,
         taskId: reminder.itemId,
         type: reminder.type,
+        notifyUid: reminder.notifyUid,
     }
 
     switch (reminder.type) {

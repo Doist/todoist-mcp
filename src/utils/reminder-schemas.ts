@@ -1,5 +1,6 @@
 import { LOCATION_TRIGGERS, REMINDER_DELIVERY_SERVICES } from '@doist/todoist-sdk'
 import { z } from 'zod'
+import { optionalString } from './schema-helpers.js'
 
 /**
  * Maximum number of reminders per add/update operation.
@@ -33,3 +34,20 @@ export const ReminderIsUrgentSchema = z
     .boolean()
     .optional()
     .describe('Whether this is an urgent reminder. Applies to relative and absolute reminders.')
+
+const NOTIFY_USER_DESCRIPTION =
+    'Who to remind: user ID, email, name, or "me". Must collaborate on the task\'s project.'
+
+/**
+ * Shared schema for who receives a new reminder. Without it, Todoist reminds the user creating it.
+ */
+export const ReminderNotifyUserSchema = optionalString(
+    `${NOTIFY_USER_DESCRIPTION} Defaults to the creator.`,
+)
+
+/**
+ * Shared schema for a new recipient of an existing reminder. Without it, the recipient is kept.
+ */
+export const ReminderNotifyUserUpdateSchema = optionalString(
+    `${NOTIFY_USER_DESCRIPTION} Omit to keep the current one.`,
+)
