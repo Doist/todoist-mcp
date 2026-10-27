@@ -225,8 +225,42 @@ describe(`${FIND_ACTIVITY} tool`, () => {
             expect(result.textContent).toContain(eventType)
         })
 
+        it('should send objectType along with objectId', async () => {
+            mockTodoistApi.getActivityLogs.mockResolvedValue({
+                results: [createMockActivityEvent()],
+                nextCursor: null,
+            })
+
+            await findActivity.execute(
+                { objectType: 'task', objectId: 'task-123', limit: 20 },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getActivityLogs).toHaveBeenCalledWith({
+                objectEventTypes: 'task:',
+                objectId: 'task-123',
+                limit: 20,
+                cursor: null,
+            })
+        })
+
+        // The API cannot apply objectId without the object's type, and an
+        // eventType alone (":completed") names no type.
         it.each([
-            ['objectId', 'task-123', { objectId: 'task-123' }],
+            ['on its own', {}],
+            ['with only eventType', { eventType: 'completed' as const }],
+        ])('should reject objectId %s', async (_label, extraArgs) => {
+            await expect(
+                findActivity.execute(
+                    { objectId: 'task-123', limit: 20, ...extraArgs },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow('objectId requires objectType')
+
+            expect(mockTodoistApi.getActivityLogs).not.toHaveBeenCalled()
+        })
+
+        it.each([
             ['projectId', 'project-abc', { parentProjectId: 'project-abc' }],
             ['taskId', 'parent-task-789', { parentItemId: 'parent-task-789' }],
             ['initiatorId', 'user-alice', { initiatorId: 'user-alice' }],
