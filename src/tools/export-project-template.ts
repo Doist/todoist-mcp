@@ -45,10 +45,16 @@ const OutputSchema = {
 const exportProjectTemplate = {
     name: ToolNames.EXPORT_PROJECT_TEMPLATE,
     description:
-        'Export an existing project as a Todoist template, either as CSV content or as a shareable URL. Use it to duplicate a project, share its structure, or hand the CSV to import-project-template. To read a project rather than export it, use find-tasks instead — it returns structured tasks rather than raw CSV. Nothing is modified.',
+        'Export an existing project as a Todoist template, either as CSV content or as a shareable URL. Use it to duplicate a project, share its structure, or hand the CSV to import-project-template. To read a project rather than export it, use find-tasks instead — it returns structured tasks rather than raw CSV. The project itself is not modified, but the "url" format uploads a copy and returns a link that anyone holding it can open.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    // Not read-only and open world: the "url" format uploads the CSV and returns a public link.
+    annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+    },
     // `format` is defaulted here as well as in the schema: scripts/run-tool.ts calls
     // execute() with raw JSON, so schema defaults are not applied on that path.
     async execute({ projectId, format = 'file', useRelativeDates }, client) {

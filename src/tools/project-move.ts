@@ -42,7 +42,8 @@ const projectMove = {
     description: 'Move a project between personal and workspace contexts.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    // Destructive: move-to-personal removes every collaborator from the project.
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     async execute(args, client) {
         let project: PersonalProject | WorkspaceProject
 
