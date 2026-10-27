@@ -1,3 +1,9 @@
+## [13.6.4](https://github.com/Doist/todoist-mcp/compare/v13.6.3...v13.6.4) (2026-10-27)
+
+### Bug Fixes
+
+* correct tool annotations flagged by ChatGPT app review ([#640](https://github.com/Doist/todoist-mcp/issues/640)) ([a2816d4](https://github.com/Doist/todoist-mcp/commit/a2816d4e79427b2eb9aae379573cf8f93836cc00))
+
 ## [13.6.3](https://github.com/Doist/todoist-mcp/compare/v13.6.2...v13.6.3) (2026-10-26)
 
 ### Bug Fixes
