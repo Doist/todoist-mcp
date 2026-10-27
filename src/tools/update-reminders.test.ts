@@ -1,7 +1,15 @@
 import type { Reminder, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { ToolNames } from '../utils/tool-names.js'
+import { resolveUserRefs } from '../utils/user-resolver.js'
 import { updateReminders } from './update-reminders.js'
+
+vi.mock('../utils/user-resolver.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../utils/user-resolver.js')>()
+    return { ...actual, resolveUserRefs: vi.fn() }
+})
+
+const mockResolveUserRefs = vi.mocked(resolveUserRefs)
 
 const mockTodoistApi = {
     updateReminder: vi.fn(),
@@ -293,6 +301,75 @@ describe(`${UPDATE_REMINDERS} tool`, () => {
             expect(result.textContent).toBe('Updated 2 reminders')
             expect(result.structuredContent.totalCount).toBe(2)
             expect(result.structuredContent.updatedReminderIds).toEqual(['r-1', 'r-2'])
+        })
+    })
+
+    describe('changing who is notified', () => {
+        beforeEach(() => {
+            mockResolveUserRefs.mockResolvedValue([
+                { userId: 'user-2', displayName: 'Ana', email: 'ana@example.com' },
+            ])
+        })
+
+        it('should change only the recipient of a relative reminder', async () => {
+            mockTodoistApi.updateReminder.mockResolvedValue(
+                createMockRelativeReminder({ notifyUid: 'user-2' }),
+            )
+
+            const result = await updateReminders.execute(
+                {
+                    reminders: [{ type: 'relative', id: 'reminder-1', notifyUser: 'Ana' }],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockResolveUserRefs).toHaveBeenCalledWith(mockTodoistApi, ['Ana'])
+            expect(mockTodoistApi.updateReminder).toHaveBeenCalledWith('reminder-1', {
+                reminderType: 'relative',
+                notifyUid: 'user-2',
+            })
+            expect(mockTodoistApi.updateReminder.mock.calls[0]?.[1]).not.toHaveProperty(
+                'notifyUser',
+            )
+            expect(result.textContent).toBe('Updated 1 reminder')
+            expect(result.structuredContent.reminders[0]?.notifyUid).toBe('user-2')
+        })
+
+        it('should change the recipient of a location reminder', async () => {
+            mockTodoistApi.updateLocationReminder.mockResolvedValue(
+                createMockLocationReminder({ notifyUid: 'user-2' }),
+            )
+
+            await updateReminders.execute(
+                {
+                    reminders: [
+                        { type: 'location', id: 'reminder-3', name: 'Gym', notifyUser: 'Ana' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.updateLocationReminder).toHaveBeenCalledWith('reminder-3', {
+                name: 'Gym',
+                notifyUid: 'user-2',
+            })
+        })
+
+        it('should warn when the reminder still notifies someone else', async () => {
+            mockTodoistApi.updateReminder.mockResolvedValue(
+                createMockRelativeReminder({ notifyUid: 'user-1' }),
+            )
+
+            const result = await updateReminders.execute(
+                {
+                    reminders: [{ type: 'relative', id: 'reminder-1', notifyUser: 'Ana' }],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.textContent).toBe(
+                'Updated 1 reminder\nWarning: reminder reminder-1 notifies user user-1, not the requested user user-2. Todoist did not apply notifyUser.',
+            )
         })
     })
 })

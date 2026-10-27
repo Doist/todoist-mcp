@@ -33,3 +33,14 @@ export const ReminderIsUrgentSchema = z
     .boolean()
     .optional()
     .describe('Whether this is an urgent reminder. Applies to relative and absolute reminders.')
+
+/**
+ * Shared schema for who receives a reminder. Without it, Todoist reminds the user creating it.
+ */
+export const ReminderNotifyUserSchema = z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+        'Who to remind: user ID, email, name, or "me". Must collaborate on the task\'s project. Defaults to the creator.',
+    )

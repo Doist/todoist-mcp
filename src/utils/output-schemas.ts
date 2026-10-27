@@ -159,6 +159,7 @@ const ReminderSchema = z.object({
     id: z.string(),
     taskId: z.string(),
     type: z.enum(REMINDER_TYPES),
+    notifyUid: z.string().optional().describe('User ID the reminder notifies.'),
     minuteOffset: z.number().optional().describe('Minutes before due. Relative reminders only.'),
     due: ReminderDueSchema.optional().describe('Absolute, and sometimes relative, reminders.'),
     name: z.string().optional().describe('Location name. Location reminders only.'),
