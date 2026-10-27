@@ -51,7 +51,13 @@ const addComments = {
         'Add multiple comments to tasks or projects, optionally notifying collaborators. Each comment must specify either taskId or projectId.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    // Open world: a comment notifies other people.
+    annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+    },
     async execute(args, client) {
         const { comments } = args
 

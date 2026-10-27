@@ -55,7 +55,7 @@ Leave it off when the description would restate the field name (`id`, `projectId
 3. `src/tool-registry.ts` — add it to `registeredTools`, in the section it belongs to
 4. `src/index.ts` — add it to the `tools` object and the named exports (public API)
 5. `src/tools/<tool-name>.test.ts` — create the test file
-6. `src/tools/tool-annotations.test.ts` — add the annotation expectation entry
+6. `src/tools/tool-annotations.test.ts` — add the annotation expectation entry, choosing hints by the rules in `CLAUDE.md` ("Tool annotations must describe the tool's worst case")
 7. `src/mcp-server.ts` — add to the `instructions` string **only** if the tool needs cross-tool routing guidance; per-tool detail belongs in the tool's own description
 
 `src/tool-registry.test.ts` enforces that steps 1, 3 and 4 agree with what the server actually registers, so a partial registration fails CI instead of silently degrading `lint:schemas` coverage or leaving the tool unreachable from `run-tool.ts`.

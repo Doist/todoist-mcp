@@ -91,7 +91,13 @@ const addTasks = {
         'Add one or more tasks to a project, section, or parent. Supports assignment to project collaborators.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    // Open world: assigning a task notifies the new assignee.
+    annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+    },
     async execute(args, client) {
         // Parse through the schema to ensure transforms run (e.g., empty string stripping)
         // even when execute() is called directly without MCP server parsing

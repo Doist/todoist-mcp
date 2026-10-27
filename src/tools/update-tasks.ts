@@ -198,7 +198,13 @@ const updateTasks = {
         'Update existing tasks including content, dates, priorities, and assignments. Send only the fields that change.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+    // Open world: assigning a task notifies the new assignee.
+    annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+    },
     async execute(args, client) {
         // Direct callers bypass the MCP schema parser, so parse here as well to enforce
         // transforms and the batch cap before starting concurrent work.

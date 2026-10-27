@@ -81,11 +81,16 @@ const OutputSchema = {
 
 const manageAssignments = {
     name: ToolNames.MANAGE_ASSIGNMENTS,
-    description:
-        'Bulk assignment operations for multiple tasks. Supports assign, unassign, and reassign operations with atomic rollback on failures.',
+    description: `Assign, unassign or reassign up to ${MAX_TASKS_PER_OPERATION} tasks at once. Assigning notifies the new assignee. Each task is updated independently, so one failure does not undo the others; failures are reported per task. Use dryRun to check the changes first.`,
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+    // Open world: assigning a task notifies the new assignee.
+    annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+    },
     async execute(args, client) {
         const { operation, taskIds, responsibleUser, fromAssigneeUser, dryRun } = args
 

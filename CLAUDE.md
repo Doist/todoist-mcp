@@ -10,6 +10,16 @@
 
 Declare the field `.optional()` instead and leave the key out of `structuredContent` (`foo: value ?? undefined`) when there is nothing to report. `src/tools/output-schema-nullability.test.ts` enforces this across every registered tool.
 
+### Tool annotations must describe the tool's worst case
+
+The ChatGPT app review rejects the server when any tool's hints understate what it can do. Annotations are per tool, not per `action`/`operation`, so a tool that groups several operations behind an enum must be annotated for the riskiest one. Their definitions:
+
+- **`readOnlyHint: true`** only if the tool retrieves, lists, searches or transforms data without persisting anything or causing a user-visible side effect. Creating a file or a shareable link counts as a side effect.
+- **`openWorldHint: true`** if the tool reaches anyone or anything outside the user's own Todoist account: notifying another person (comments, assignments), or producing a public URL. `getMcpAnnotations` defaults it to `false`, so set it explicitly when it applies.
+- **`destructiveHint: true`** if the tool deletes, overwrites, replaces prior state, removes someone's access, or is otherwise hard to undo. Additive actions, including sending notifications, are not destructive.
+
+`src/tools/tool-annotations.test.ts` pins every tool's hints, so changing one means updating its entry there.
+
 ### Removing/Clearing Optional Fields
 
 When you need to support clearing an optional field:

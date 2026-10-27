@@ -14,6 +14,9 @@ type ToolExpectation = {
     readOnlyHint: boolean
     destructiveHint: boolean
     idempotentHint: boolean
+    // Defaults to false: true only for tools that reach people or places outside the user's own
+    // Todoist account (notifications, public links).
+    openWorldHint?: boolean
 }
 
 const TOOL_EXPECTATIONS: ToolExpectation[] = [
@@ -23,6 +26,7 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: false,
+        openWorldHint: true,
     },
     {
         name: ToolNames.COMPLETE_TASKS,
@@ -44,6 +48,7 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
         readOnlyHint: false,
         destructiveHint: true,
         idempotentHint: false,
+        openWorldHint: true,
     },
     {
         name: ToolNames.RESCHEDULE_TASKS,
@@ -105,7 +110,7 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
         name: ToolNames.PROJECT_MOVE,
         title: 'Todoist: Project Move',
         readOnlyHint: false,
-        destructiveHint: false,
+        destructiveHint: true,
         idempotentHint: true,
     },
     {
@@ -135,6 +140,7 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: false,
+        openWorldHint: true,
     },
     {
         name: ToolNames.UPDATE_COMMENTS,
@@ -212,6 +218,7 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
         readOnlyHint: false,
         destructiveHint: true,
         idempotentHint: false,
+        openWorldHint: true,
     },
     {
         name: ToolNames.FIND_FILTERS,
@@ -321,9 +328,10 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
     {
         name: ToolNames.EXPORT_PROJECT_TEMPLATE,
         title: 'Todoist: Export Project Template',
-        readOnlyHint: true,
+        readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,
+        openWorldHint: true,
     },
     {
         name: ToolNames.IMPORT_PROJECT_TEMPLATE,
@@ -382,7 +390,7 @@ describe('Tool annotations', () => {
 
             expect(annotations).toMatchObject({
                 title: toolExpectation.title,
-                openWorldHint: false,
+                openWorldHint: toolExpectation.openWorldHint ?? false,
                 readOnlyHint: toolExpectation.readOnlyHint,
                 destructiveHint: toolExpectation.destructiveHint,
                 idempotentHint: toolExpectation.idempotentHint,
