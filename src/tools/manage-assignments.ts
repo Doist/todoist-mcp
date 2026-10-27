@@ -81,8 +81,7 @@ const OutputSchema = {
 
 const manageAssignments = {
     name: ToolNames.MANAGE_ASSIGNMENTS,
-    description:
-        "Assign, unassign or reassign up to 50 tasks at once. Assigning notifies the new assignee. Each task is updated independently, so one failure does not undo the others; every task's outcome is reported in the results. Use dryRun to check the changes first.",
+    description: `Assign, unassign or reassign up to ${MAX_TASKS_PER_OPERATION} tasks at once. Assigning notifies the new assignee. Each task is updated independently, so one failure does not undo the others; failures are reported per task. Use dryRun to check the changes first.`,
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     // Open world: assigning a task notifies the new assignee.
