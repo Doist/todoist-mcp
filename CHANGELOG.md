@@ -1,3 +1,9 @@
+## [13.7.1](https://github.com/Doist/todoist-mcp/compare/v13.7.0...v13.7.1) (2026-10-27)
+
+### Bug Fixes
+
+* require objectType when find-activity has objectId ([#635](https://github.com/Doist/todoist-mcp/issues/635)) ([3716326](https://github.com/Doist/todoist-mcp/commit/37163268a383891b6bb3c5a931f36cbc5f7ced13))
+
 ## [13.7.0](https://github.com/Doist/todoist-mcp/compare/v13.6.4...v13.7.0) (2026-10-27)
 
 ### Features
