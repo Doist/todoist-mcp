@@ -180,7 +180,7 @@ const OutputSchema = {
         .object({
             updateCount: z.number().describe('The number of tasks actually updated.'),
             skippedCount: z.number().describe('The number of tasks skipped (no changes).'),
-            failureCount: z.number().describe('The number of tasks that failed to update.'),
+            failureCount: z.number(),
             redundantMovesSkipped: z
                 .number()
                 .describe(

@@ -82,9 +82,9 @@ const OutputSchema = {
     failures: z
         .array(FailureSchema)
         .describe('Tasks that could not be created, with the reason for each.'),
-    totalRequested: z.number().describe('The total number of tasks requested.'),
-    successCount: z.number().describe('The number of successfully created tasks.'),
-    failureCount: z.number().describe('The number of failed task creations.'),
+    totalRequested: z.number(),
+    successCount: z.number(),
+    failureCount: z.number(),
 }
 
 const addTasks = {

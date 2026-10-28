@@ -49,7 +49,7 @@ const OutputSchema = {
         .object({
             updateCount: z.number().describe('The number of projects actually updated.'),
             skippedCount: z.number().describe('The number of projects skipped (no changes).'),
-            failureCount: z.number().describe('The number of projects that failed to update.'),
+            failureCount: z.number(),
         })
         .describe('Summary of operations performed.'),
 }

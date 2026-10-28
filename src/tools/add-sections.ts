@@ -37,9 +37,9 @@ const OutputSchema = {
     failures: z
         .array(FailureSchema)
         .describe('Sections that could not be created, with the reason for each.'),
-    totalRequested: z.number().describe('The total number of sections requested.'),
-    successCount: z.number().describe('The number of successfully created sections.'),
-    failureCount: z.number().describe('The number of failed section creations.'),
+    totalRequested: z.number(),
+    successCount: z.number(),
+    failureCount: z.number(),
 }
 
 const addSections = {
