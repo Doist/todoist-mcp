@@ -1,8 +1,14 @@
-import { type ColorKey, createCommand } from '@doist/todoist-sdk'
+import { type ColorKey, createCommand, type TodoistApi } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
 import { ColorOutputSchema, ColorSchema } from '../utils/colors.js'
 import { readFilterDescription } from '../utils/filter-description.js'
+import { FailureSchema } from '../utils/output-schemas.js'
+import { appendFailureSummary } from '../utils/response-builders.js'
+import { executeWithRetry } from '../utils/retry.js'
+import { settleSyncCommands } from '../utils/sync-commands.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { FilterOutputSchema } from './find-filters.js'
 
@@ -39,13 +45,21 @@ const ArgsSchema = {
 }
 
 const OutputSchema = {
-    filters: z.array(FilterOutputSchema).describe('The updated filters.'),
+    filters: z
+        .array(FilterOutputSchema)
+        .describe(
+            'The updated filters, as read back after the update. Empty if they could not be read back; updatedFilterIds still lists what was updated.',
+        ),
     totalCount: z.number().describe('The total number of filters updated.'),
     updatedFilterIds: z.array(z.string()).describe('The IDs of the updated filters.'),
+    failures: z
+        .array(FailureSchema)
+        .describe('Filters that could not be updated, with the reason for each.'),
     appliedOperations: z
         .object({
             updateCount: z.number().describe('The number of filters actually updated.'),
             skippedCount: z.number().describe('The number of filters skipped (no changes).'),
+            failureCount: z.number().describe('The number of filters that failed to update.'),
         })
         .describe('Summary of operations performed.'),
 }
@@ -80,7 +94,8 @@ const updateFilters = {
                     filters: [],
                     totalCount: 0,
                     updatedFilterIds: [],
-                    appliedOperations: { updateCount: 0, skippedCount },
+                    failures: [],
+                    appliedOperations: { updateCount: 0, skippedCount, failureCount: 0 },
                 },
             }
         }
@@ -99,55 +114,101 @@ const updateFilters = {
         })
 
         // Send commands only — then read back separately to get accurate server state
-        await client.sync({ commands })
+        const { outcomes } = await settleSyncCommands(client, commands)
 
-        const readResponse = await client.sync({ resourceTypes: ['filters'], syncToken: '*' })
-        const allFilters = (readResponse.filters ?? []).filter((f) => !f.isDeleted)
-        const updatedIds = new Set(toUpdate.map((f) => f.id))
-        const updatedFilters = allFilters
-            .filter((f) => updatedIds.has(f.id))
-            .map((f) => ({
-                id: f.id,
-                name: f.name,
-                query: f.query,
-                description: readFilterDescription(f),
-                color: ColorOutputSchema.parse(f.color),
-                isFavorite: f.isFavorite,
-                itemOrder: f.itemOrder,
-            }))
+        const updatedIds: string[] = []
+        const failures: Array<{ item: string; error: string }> = []
+        outcomes.forEach((outcome, i) => {
+            const id = toUpdate[i]?.id ?? `Filter ${i + 1}`
+            if (outcome.status === 'fulfilled') {
+                updatedIds.push(id)
+            } else {
+                failures.push({ item: id, error: formatBatchItemError(outcome.reason) })
+            }
+        })
 
-        const textContent = generateTextContent({ filters: updatedFilters, skippedCount })
+        logBatchFailures(ToolNames.UPDATE_FILTERS, filters.length, failures)
+
+        // The updates are already applied, so a failed read-back is reported rather than
+        // thrown: throwing would hide changes the caller would then make a second time.
+        let updatedFilters: z.infer<typeof FilterOutputSchema>[] = []
+        let readBackError: string | undefined
+        if (updatedIds.length > 0) {
+            try {
+                updatedFilters = await readBackFilters(client, new Set(updatedIds))
+            } catch (error) {
+                readBackError = formatBatchItemError(error)
+            }
+        }
+
+        const textContent = appendFailureSummary(
+            generateTextContent({
+                filters: updatedFilters,
+                updatedIds,
+                skippedCount,
+                readBackError,
+            }),
+            failures,
+        )
 
         return {
             textContent,
             structuredContent: {
                 filters: updatedFilters,
-                totalCount: updatedFilters.length,
-                updatedFilterIds: updatedFilters.map((f) => f.id),
+                totalCount: updatedIds.length,
+                updatedFilterIds: updatedIds,
+                failures,
                 appliedOperations: {
-                    updateCount: updatedFilters.length,
+                    updateCount: updatedIds.length,
                     skippedCount,
+                    failureCount: failures.length,
                 },
             },
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
 
+async function readBackFilters(
+    client: TodoistApi,
+    ids: Set<string>,
+): Promise<z.infer<typeof FilterOutputSchema>[]> {
+    const readResponse = await executeWithRetry(() =>
+        client.sync({ resourceTypes: ['filters'], syncToken: '*' }),
+    )
+    return (readResponse.filters ?? [])
+        .filter((f) => !f.isDeleted && ids.has(f.id))
+        .map((f) => ({
+            id: f.id,
+            name: f.name,
+            query: f.query,
+            description: readFilterDescription(f),
+            color: ColorOutputSchema.parse(f.color),
+            isFavorite: f.isFavorite,
+            itemOrder: f.itemOrder,
+        }))
+}
+
 function generateTextContent({
     filters,
+    updatedIds,
     skippedCount,
+    readBackError,
 }: {
     filters: Array<{ id: string; name: string }>
+    updatedIds: string[]
     skippedCount: number
+    readBackError: string | undefined
 }) {
-    const count = filters.length
+    const count = updatedIds.length
     let summary = `Updated ${count} filter${count === 1 ? '' : 's'}`
 
     if (skippedCount > 0) {
         summary += ` (${skippedCount} skipped - no changes)`
     }
 
-    if (count > 0) {
+    if (readBackError) {
+        summary += `: ${updatedIds.join(', ')}\nThe updated filters could not be read back: ${readBackError}`
+    } else if (filters.length > 0) {
         const filterList = filters.map((f) => `• ${f.name} (id=${f.id})`).join('\n')
         summary += `:\n${filterList}`
     }

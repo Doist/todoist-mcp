@@ -1,4 +1,9 @@
-import type { Filter, TodoistApi } from '@doist/todoist-sdk'
+import {
+    type Filter,
+    type SyncCommand,
+    type TodoistApi,
+    TodoistSyncError,
+} from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
 import { TEST_ERRORS } from '../utils/test-helpers.js'
@@ -10,6 +15,11 @@ const mockTodoistApi = {
 } as unknown as Mocked<TodoistApi>
 
 const { ADD_FILTERS } = ToolNames
+
+/** The `syncStatus` the Sync API returns when every command was applied. */
+function allApplied(commands: SyncCommand[]): Record<string, 'ok'> {
+    return Object.fromEntries(commands.map((command) => [command.uuid, 'ok' as const]))
+}
 
 function createMockFilter(overrides: Partial<Filter> = {}): Filter {
     return {
@@ -55,7 +65,7 @@ describe(`${ADD_FILTERS} tool`, () => {
                 return {
                     filters: createdFilters,
                     tempIdMapping,
-                    syncStatus: Object.fromEntries(commands.map((c) => [c.uuid, 'ok' as const])),
+                    syncStatus: allApplied(commands),
                 }
             })
 
@@ -105,7 +115,11 @@ describe(`${ADD_FILTERS} tool`, () => {
                         )
                     }
                 }
-                return { filters: createdFilters, tempIdMapping: tempIdMap }
+                return {
+                    filters: createdFilters,
+                    tempIdMapping: tempIdMap,
+                    syncStatus: allApplied(commands),
+                }
             })
 
             const result = await addFilters.execute(
@@ -155,7 +169,11 @@ describe(`${ADD_FILTERS} tool`, () => {
                         )
                     }
                 }
-                return { filters: createdFilters, tempIdMapping: tempIdMap }
+                return {
+                    filters: createdFilters,
+                    tempIdMapping: tempIdMap,
+                    syncStatus: allApplied(commands),
+                }
             })
         }
 
@@ -234,7 +252,11 @@ describe(`${ADD_FILTERS} tool`, () => {
                         )
                     }
                 }
-                return { filters: createdFilters, tempIdMapping: tempIdMap }
+                return {
+                    filters: createdFilters,
+                    tempIdMapping: tempIdMap,
+                    syncStatus: allApplied(commands),
+                }
             })
 
             const result = await addFilters.execute(
@@ -258,12 +280,105 @@ describe(`${ADD_FILTERS} tool`, () => {
     })
 
     describe('error handling', () => {
-        it('should propagate API errors', async () => {
+        it('reports every filter as failed when the request itself fails', async () => {
             mockTodoistApi.sync.mockRejectedValue(new Error(TEST_ERRORS.API_UNAUTHORIZED))
 
-            await expect(
-                addFilters.execute({ filters: [{ name: 'Test', query: 'today' }] }, mockTodoistApi),
-            ).rejects.toThrow(TEST_ERRORS.API_UNAUTHORIZED)
+            const result = await addFilters.execute(
+                { filters: [{ name: 'Test', query: 'today' }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.filters).toEqual([])
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'Test', error: TEST_ERRORS.API_UNAUTHORIZED },
+            ])
+            expect(result.textContent).toContain('Added 0 filters')
+        })
+
+        it('keeps the created filters when one command in the batch fails', async () => {
+            mockTodoistApi.sync.mockImplementation(async (request) => {
+                const [created, rejected] = request.commands ?? []
+                throw new TodoistSyncError(
+                    {
+                        error: 'Invalid argument value',
+                        errorCode: 20,
+                        errorExtra: { argument: 'query' },
+                        errorTag: 'INVALID_ARGUMENT_VALUE',
+                        httpCode: 400,
+                    },
+                    {
+                        syncStatus: {
+                            [created?.uuid ?? '']: 'ok',
+                            [rejected?.uuid ?? '']: {
+                                error: 'Invalid argument value',
+                                errorCode: 20,
+                                errorExtra: { argument: 'query' },
+                                errorTag: 'INVALID_ARGUMENT_VALUE',
+                                httpCode: 400,
+                            },
+                        },
+                        tempIdMapping: { [created?.tempId ?? '']: 'filter-1' },
+                    },
+                )
+            })
+
+            const result = await addFilters.execute(
+                {
+                    filters: [
+                        { name: 'Works', query: 'today' },
+                        { name: 'Broken', query: '((' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const { structuredContent } = result
+            expect(structuredContent.filters.map((filter) => filter.id)).toEqual(['filter-1'])
+            expect(structuredContent.totalRequested).toBe(2)
+            expect(structuredContent.successCount).toBe(1)
+            expect(structuredContent.failureCount).toBe(1)
+            expect(structuredContent.failures).toEqual([
+                {
+                    item: 'Broken',
+                    error: 'Invalid argument value (HTTP 400, code 20, tag INVALID_ARGUMENT_VALUE)',
+                },
+            ])
+            expect(result.textContent).toContain('Added 1 filter:')
+            expect(result.textContent).toContain('Failed (1) - address or drop these items')
+        })
+
+        it('retries a transient 5xx failure of the request', async () => {
+            vi.useFakeTimers()
+            try {
+                mockTodoistApi.sync
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    .mockImplementationOnce(async (request) => {
+                        const commands = request.commands ?? []
+                        return {
+                            tempIdMapping: { [commands[0]?.tempId ?? '']: 'filter-1' },
+                            syncStatus: allApplied(commands),
+                        }
+                    })
+
+                const promise = addFilters.execute(
+                    { filters: [{ name: 'Test', query: 'today' }] },
+                    mockTodoistApi,
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.sync).toHaveBeenCalledTimes(2)
+                // The retry resends the same commands, so the Sync API can skip any
+                // it already applied.
+                expect(mockTodoistApi.sync.mock.calls[1]?.[0].commands).toEqual(
+                    mockTodoistApi.sync.mock.calls[0]?.[0].commands,
+                )
+                expect(result.structuredContent.successCount).toBe(1)
+            } finally {
+                vi.useRealTimers()
+            }
         })
     })
 })

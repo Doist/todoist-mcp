@@ -1,8 +1,13 @@
 import { type ColorKey, createCommand } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
 import { ColorOutputSchema, ColorSchema } from '../utils/colors.js'
+import { FailureSchema } from '../utils/output-schemas.js'
+import { appendFailureSummary } from '../utils/response-builders.js'
 import { optionalString } from '../utils/schema-helpers.js'
+import { settleSyncCommands } from '../utils/sync-commands.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { FilterOutputSchema } from './find-filters.js'
 
@@ -30,6 +35,12 @@ const ArgsSchema = {
 const OutputSchema = {
     filters: z.array(FilterOutputSchema).describe('The created filters.'),
     totalCount: z.number().describe('The total number of filters created.'),
+    failures: z
+        .array(FailureSchema)
+        .describe('Filters that could not be created, with the reason for each.'),
+    totalRequested: z.number().describe('The total number of filters requested.'),
+    successCount: z.number().describe('The number of successfully created filters.'),
+    failureCount: z.number().describe('The number of failed filter creations.'),
 }
 
 const addFilters = {
@@ -40,8 +51,6 @@ const addFilters = {
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     async execute({ filters }, client) {
-        // Todoist Sync API returns tempIdMapping with camelCase keys (snake_case → camelCase).
-        // Use camelCase tempIds from the start so the lookup key matches the response key.
         const ts = Date.now()
         const tempIds = filters.map((_, i) => `tempFilterAdd${i}${ts}`)
 
@@ -63,41 +72,59 @@ const addFilters = {
 
         // Send commands only — combining resourceTypes + syncToken:'*' with commands
         // causes tempIdMapping to not be returned in the response.
-        const response = await client.sync({ commands })
-        const tempIdMapping = response.tempIdMapping ?? {}
+        const { outcomes, tempIdMapping } = await settleSyncCommands(client, commands)
+
+        const createdFilters: z.infer<typeof FilterOutputSchema>[] = []
+        const failures: Array<{ item: string; error: string }> = []
 
         // Reconstruct created filters from input args + server-assigned IDs
-        const createdFilters = filters
-            .map((filter, i) => {
-                const tempId = tempIds[i]
-                const realId = tempId !== undefined ? tempIdMapping[tempId] : undefined
-                if (!realId) return null
-                const outputColor =
-                    filter.color !== undefined ? ColorOutputSchema.parse(filter.color) : undefined
-                return {
-                    id: realId,
-                    name: filter.name,
-                    query: filter.query,
-                    // Omitted rather than null when absent: structured content is sanitised
-                    // with `removeNullFields`, so a null would be stripped and then fail
-                    // validation against the declared output schema.
-                    ...(filter.description ? { description: filter.description } : {}),
-                    color: outputColor,
-                    isFavorite: filter.isFavorite ?? false,
-                    itemOrder: 0,
-                }
+        filters.forEach((filter, i) => {
+            const outcome = outcomes[i]
+            const tempId = tempIds[i]
+            const realId = tempId !== undefined ? tempIdMapping[tempId] : undefined
+            if (outcome?.status !== 'fulfilled' || !realId) {
+                failures.push({
+                    item: filter.name,
+                    error:
+                        outcome?.status === 'rejected'
+                            ? formatBatchItemError(outcome.reason)
+                            : 'Todoist did not return an ID for the created filter',
+                })
+                return
+            }
+            createdFilters.push({
+                id: realId,
+                name: filter.name,
+                query: filter.query,
+                // Omitted rather than null when absent: structured content is sanitised
+                // with `removeNullFields`, so a null would be stripped and then fail
+                // validation against the declared output schema.
+                ...(filter.description ? { description: filter.description } : {}),
+                color:
+                    filter.color !== undefined ? ColorOutputSchema.parse(filter.color) : undefined,
+                isFavorite: filter.isFavorite ?? false,
+                itemOrder: 0,
             })
-            .filter((f): f is NonNullable<typeof f> => f !== null)
+        })
+
+        logBatchFailures(ToolNames.ADD_FILTERS, filters.length, failures, { redactItems: true })
 
         const count = createdFilters.length
         const filterList = createdFilters.map((f) => `• ${f.name} (id=${f.id})`).join('\n')
-        const textContent = `Added ${count} filter${count === 1 ? '' : 's'}:\n${filterList}`
+        const summary =
+            count > 0
+                ? `Added ${count} filter${count === 1 ? '' : 's'}:\n${filterList}`
+                : 'Added 0 filters'
 
         return {
-            textContent,
+            textContent: appendFailureSummary(summary, failures),
             structuredContent: {
                 filters: createdFilters,
                 totalCount: createdFilters.length,
+                failures,
+                totalRequested: filters.length,
+                successCount: createdFilters.length,
+                failureCount: failures.length,
             },
         }
     },

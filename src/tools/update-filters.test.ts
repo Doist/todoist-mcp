@@ -1,4 +1,4 @@
-import type { Filter, TodoistApi } from '@doist/todoist-sdk'
+import { type Filter, type TodoistApi, TodoistSyncError } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
 import { TEST_ERRORS } from '../utils/test-helpers.js'
@@ -25,6 +25,19 @@ function createMockFilter(overrides: Partial<Filter> = {}): Filter {
     }
 }
 
+/**
+ * Answers the update request with an applied status for every command, and the
+ * read-back with `filters`.
+ */
+function mockSync(filters: Filter[]) {
+    mockTodoistApi.sync.mockImplementation(async (request) => ({
+        filters,
+        syncStatus: Object.fromEntries(
+            (request.commands ?? []).map((command) => [command.uuid, 'ok' as const]),
+        ),
+    }))
+}
+
 describe(`${UPDATE_FILTERS} tool`, () => {
     beforeEach(() => {
         vi.clearAllMocks()
@@ -37,7 +50,7 @@ describe(`${UPDATE_FILTERS} tool`, () => {
                 name: 'Updated Name',
                 query: 'today',
             })
-            mockTodoistApi.sync.mockResolvedValue({ filters: [updatedFilter] })
+            mockSync([updatedFilter])
 
             const result = await updateFilters.execute(
                 { filters: [{ id: 'filter-1', name: 'Updated Name' }] },
@@ -63,7 +76,7 @@ describe(`${UPDATE_FILTERS} tool`, () => {
                 id: 'filter-1',
                 query: 'today & p1',
             })
-            mockTodoistApi.sync.mockResolvedValue({ filters: [updatedFilter] })
+            mockSync([updatedFilter])
 
             const result = await updateFilters.execute(
                 { filters: [{ id: 'filter-1', query: 'today & p1' }] },
@@ -81,7 +94,7 @@ describe(`${UPDATE_FILTERS} tool`, () => {
 
         it('should update a filter description', async () => {
             const updatedFilter = createMockFilter({ id: 'filter-1' })
-            mockTodoistApi.sync.mockResolvedValue({ filters: [updatedFilter] })
+            mockSync([updatedFilter])
 
             await updateFilters.execute(
                 { filters: [{ id: 'filter-1', description: 'Everything due this week' }] },
@@ -108,7 +121,7 @@ describe(`${UPDATE_FILTERS} tool`, () => {
 
         it('should clear a description when passed "remove"', async () => {
             const updatedFilter = createMockFilter({ id: 'filter-1' })
-            mockTodoistApi.sync.mockResolvedValue({ filters: [updatedFilter] })
+            mockSync([updatedFilter])
 
             await updateFilters.execute(
                 { filters: [{ id: 'filter-1', description: 'remove' }] },
@@ -125,7 +138,7 @@ describe(`${UPDATE_FILTERS} tool`, () => {
 
         it('should update isFavorite status', async () => {
             const updatedFilter = createMockFilter({ id: 'filter-1', isFavorite: true })
-            mockTodoistApi.sync.mockResolvedValue({ filters: [updatedFilter] })
+            mockSync([updatedFilter])
 
             await updateFilters.execute(
                 { filters: [{ id: 'filter-1', isFavorite: true }] },
@@ -161,7 +174,7 @@ describe(`${UPDATE_FILTERS} tool`, () => {
                 createMockFilter({ id: 'filter-1', name: 'New Name 1' }),
                 createMockFilter({ id: 'filter-2', name: 'New Name 2', itemOrder: 2 }),
             ]
-            mockTodoistApi.sync.mockResolvedValue({ filters: updatedFilters })
+            mockSync(updatedFilters)
 
             const result = await updateFilters.execute(
                 {
@@ -183,7 +196,7 @@ describe(`${UPDATE_FILTERS} tool`, () => {
 
         it('should mix updated and skipped filters', async () => {
             const updatedFilter = createMockFilter({ id: 'filter-1', name: 'Updated' })
-            mockTodoistApi.sync.mockResolvedValue({ filters: [updatedFilter] })
+            mockSync([updatedFilter])
 
             const result = await updateFilters.execute(
                 {
@@ -203,15 +216,93 @@ describe(`${UPDATE_FILTERS} tool`, () => {
     })
 
     describe('error handling', () => {
-        it('should propagate API errors', async () => {
+        it('reports every filter as failed when the update request itself fails', async () => {
             mockTodoistApi.sync.mockRejectedValue(new Error(TEST_ERRORS.API_UNAUTHORIZED))
 
-            await expect(
-                updateFilters.execute(
-                    { filters: [{ id: 'filter-1', name: 'Updated' }] },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(TEST_ERRORS.API_UNAUTHORIZED)
+            const result = await updateFilters.execute(
+                { filters: [{ id: 'filter-1', name: 'Updated' }] },
+                mockTodoistApi,
+            )
+
+            // Nothing was applied, so there is nothing to read back.
+            expect(mockTodoistApi.sync).toHaveBeenCalledOnce()
+            expect(result.structuredContent.updatedFilterIds).toEqual([])
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'filter-1', error: TEST_ERRORS.API_UNAUTHORIZED },
+            ])
+            expect(result.structuredContent.appliedOperations.failureCount).toBe(1)
+        })
+
+        it('keeps the updated filters when one command in the batch fails', async () => {
+            const commandError = {
+                error: 'Filter not found',
+                errorCode: 23,
+                errorExtra: {},
+                errorTag: 'NOT_FOUND',
+                httpCode: 404,
+            }
+            mockTodoistApi.sync
+                .mockImplementationOnce(async (request) => {
+                    const [updated, missing] = request.commands ?? []
+                    throw new TodoistSyncError(commandError, {
+                        syncStatus: {
+                            [updated?.uuid ?? '']: 'ok',
+                            [missing?.uuid ?? '']: commandError,
+                        },
+                        tempIdMapping: {},
+                    })
+                })
+                .mockResolvedValueOnce({
+                    filters: [createMockFilter({ id: 'filter-1', name: 'Renamed' })],
+                })
+
+            const result = await updateFilters.execute(
+                {
+                    filters: [
+                        { id: 'filter-1', name: 'Renamed' },
+                        { id: 'missing', name: 'Nope' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const { structuredContent } = result
+            expect(structuredContent.updatedFilterIds).toEqual(['filter-1'])
+            expect(structuredContent.filters.map((filter) => filter.name)).toEqual(['Renamed'])
+            expect(structuredContent.failures).toEqual([
+                {
+                    item: 'missing',
+                    error: 'Filter not found (HTTP 404, code 23, tag NOT_FOUND)',
+                },
+            ])
+            expect(structuredContent.appliedOperations).toEqual({
+                updateCount: 1,
+                skippedCount: 0,
+                failureCount: 1,
+            })
+            expect(result.textContent).toContain('Failed (1) - address or drop these items')
+        })
+
+        it('still reports the applied updates when they cannot be read back', async () => {
+            mockTodoistApi.sync
+                .mockImplementationOnce(async (request) => ({
+                    syncStatus: Object.fromEntries(
+                        (request.commands ?? []).map((command) => [command.uuid, 'ok' as const]),
+                    ),
+                }))
+                .mockRejectedValueOnce(new Error(TEST_ERRORS.API_UNAUTHORIZED))
+
+            const result = await updateFilters.execute(
+                { filters: [{ id: 'filter-1', name: 'Renamed' }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.updatedFilterIds).toEqual(['filter-1'])
+            expect(result.structuredContent.filters).toEqual([])
+            expect(result.structuredContent.failures).toEqual([])
+            expect(result.textContent).toBe(
+                `Updated 1 filter: filter-1\nThe updated filters could not be read back: ${TEST_ERRORS.API_UNAUTHORIZED}`,
+            )
         })
     })
 })
