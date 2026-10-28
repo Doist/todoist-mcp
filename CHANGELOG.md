@@ -1,3 +1,13 @@
+## [13.7.2](https://github.com/Doist/todoist-mcp/compare/v13.7.1...v13.7.2) (2026-10-28)
+
+### Bug Fixes
+
+* **add-tasks:** report a batch where every task fails as structured failures ([#646](https://github.com/Doist/todoist-mcp/issues/646)) ([5218b5a](https://github.com/Doist/todoist-mcp/commit/5218b5a2bd0b5b5f4d09e2ea26035bcf4e84dfd0)), closes [#505](https://github.com/Doist/todoist-mcp/issues/505) [#505](https://github.com/Doist/todoist-mcp/issues/505)
+* **comments:** report per-comment failures instead of failing the batch ([#645](https://github.com/Doist/todoist-mcp/issues/645)) ([9a5d635](https://github.com/Doist/todoist-mcp/commit/9a5d6356760e73c43cb3ac7ddd1b8496853e8fbb)), closes [#505](https://github.com/Doist/todoist-mcp/issues/505) [#505](https://github.com/Doist/todoist-mcp/issues/505)
+* **filters:** report per-filter failures instead of failing the batch ([#649](https://github.com/Doist/todoist-mcp/issues/649)) ([0d628e9](https://github.com/Doist/todoist-mcp/commit/0d628e92f784b204d10a117db2d7f8231dbaddce)), closes [#505](https://github.com/Doist/todoist-mcp/issues/505) [Doist/todoist-sdk-typescript#731](https://github.com/Doist/todoist-sdk-typescript/issues/731)
+* **labels,sections:** report per-item failures instead of failing the batch ([#647](https://github.com/Doist/todoist-mcp/issues/647)) ([edee3f9](https://github.com/Doist/todoist-mcp/commit/edee3f9bcc8abfc27b8f711b3eb359d87f8237a3)), closes [#505](https://github.com/Doist/todoist-mcp/issues/505)
+* **reminders:** report per-reminder failures instead of failing the batch ([#648](https://github.com/Doist/todoist-mcp/issues/648)) ([41fcc4d](https://github.com/Doist/todoist-mcp/commit/41fcc4d13016deb8295f090fc16e98b7cc50b0f1)), closes [#505](https://github.com/Doist/todoist-mcp/issues/505)
+
 ## [13.7.1](https://github.com/Doist/todoist-mcp/compare/v13.7.0...v13.7.1) (2026-10-27)
 
 ### Bug Fixes
