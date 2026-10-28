@@ -1,7 +1,11 @@
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
 import { mapComment } from '../tool-helpers.js'
-import { CommentSchema as CommentOutputSchema } from '../utils/output-schemas.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
+import { CommentSchema as CommentOutputSchema, FailureSchema } from '../utils/output-schemas.js'
+import { appendFailureSummary } from '../utils/response-builders.js'
+import { executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const CommentUpdateSchema = z.object({
@@ -17,9 +21,13 @@ const OutputSchema = {
     comments: z.array(CommentOutputSchema).describe('The updated comments.'),
     totalCount: z.number().describe('The total number of comments updated.'),
     updatedCommentIds: z.array(z.string()).describe('The IDs of the updated comments.'),
+    failures: z
+        .array(FailureSchema)
+        .describe('Comments that could not be updated, with the reason for each.'),
     appliedOperations: z
         .object({
             updateCount: z.number().describe('The number of comments updated.'),
+            failureCount: z.number(),
         })
         .describe('Summary of operations performed.'),
 }
@@ -33,16 +41,36 @@ const updateComments = {
     async execute(args, client) {
         const { comments } = args
 
-        const updateCommentPromises = comments.map(async (comment) => {
-            return await client.updateComment(comment.id, { content: comment.content })
+        // Each comment is updated independently, so one rejection neither discards the
+        // comments that were updated nor hides them behind one error.
+        const settled = await Promise.allSettled(
+            comments.map((comment) =>
+                executeWithRetry(() =>
+                    client.updateComment(comment.id, { content: comment.content }),
+                ),
+            ),
+        )
+
+        const mappedComments: ReturnType<typeof mapComment>[] = []
+        const failures: Array<{ item: string; error: string }> = []
+
+        settled.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                mappedComments.push(mapComment(result.value))
+            } else {
+                failures.push({
+                    item: comments[index]?.id ?? `Comment ${index + 1}`,
+                    error: formatBatchItemError(result.reason),
+                })
+            }
         })
 
-        const updatedComments = await Promise.all(updateCommentPromises)
-        const mappedComments = updatedComments.map(mapComment)
+        logBatchFailures(ToolNames.UPDATE_COMMENTS, comments.length, failures)
 
-        const textContent = generateTextContent({
-            comments: mappedComments,
-        })
+        const textContent = appendFailureSummary(
+            generateTextContent({ comments: mappedComments }),
+            failures,
+        )
 
         return {
             textContent,
@@ -50,8 +78,10 @@ const updateComments = {
                 comments: mappedComments,
                 totalCount: mappedComments.length,
                 updatedCommentIds: mappedComments.map((comment) => comment.id),
+                failures,
                 appliedOperations: {
                     updateCount: mappedComments.length,
+                    failureCount: failures.length,
                 },
             },
         }
