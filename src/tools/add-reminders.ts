@@ -18,7 +18,7 @@ import {
     ReminderServiceSchema,
 } from '../utils/reminder-schemas.js'
 import { appendFailureSummary } from '../utils/response-builders.js'
-import { executeWithRetry } from '../utils/retry.js'
+import { executeCreateWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const RelativeReminderInputSchema = z.object({
@@ -89,9 +89,9 @@ const OutputSchema = {
     failures: z
         .array(FailureSchema)
         .describe('Reminders that could not be created, with the reason for each.'),
-    totalRequested: z.number().describe('Total number of reminders requested.'),
-    successCount: z.number().describe('Number of reminders created.'),
-    failureCount: z.number().describe('Number of reminders that could not be created.'),
+    totalRequested: z.number(),
+    successCount: z.number(),
+    failureCount: z.number(),
 }
 
 const addReminders = {
@@ -116,6 +116,7 @@ const addReminders = {
 
         // Each reminder is created independently, so one rejection (or an unresolvable
         // notifyUser) neither discards the reminders that were created nor hides them.
+        // A create retries only a 503: after a 502/504 the reminder may already exist.
         const settled = await Promise.allSettled(
             reminders.map(async (reminder, index) => {
                 const recipient = recipients[index]
@@ -125,7 +126,7 @@ const addReminders = {
                 const notifyUid = recipient?.value
                 switch (reminder.type) {
                     case 'relative':
-                        return await executeWithRetry(() =>
+                        return await executeCreateWithRetry(() =>
                             client.addReminder({
                                 taskId: reminder.taskId,
                                 reminderType: 'relative',
@@ -136,7 +137,7 @@ const addReminders = {
                             } as AddReminderArgs),
                         )
                     case 'absolute':
-                        return await executeWithRetry(() =>
+                        return await executeCreateWithRetry(() =>
                             client.addReminder({
                                 taskId: reminder.taskId,
                                 reminderType: 'absolute',
@@ -147,7 +148,7 @@ const addReminders = {
                             } as AddReminderArgs),
                         )
                     case 'location':
-                        return await executeWithRetry(() =>
+                        return await executeCreateWithRetry(() =>
                             client.addLocationReminder({
                                 taskId: reminder.taskId,
                                 name: reminder.name,

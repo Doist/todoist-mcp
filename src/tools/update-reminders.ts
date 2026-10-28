@@ -79,12 +79,10 @@ const OutputSchema = {
     failures: z
         .array(FailureSchema)
         .describe('Reminders that could not be updated, with the reason for each.'),
-    appliedOperations: z
-        .object({
-            updateCount: z.number().describe('Number of reminders updated.'),
-            failureCount: z.number().describe('Number of reminders that failed to update.'),
-        })
-        .describe('Summary of operations performed.'),
+    appliedOperations: z.object({
+        updateCount: z.number(),
+        failureCount: z.number(),
+    }),
 }
 
 const updateReminders = {

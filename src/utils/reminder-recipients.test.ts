@@ -60,6 +60,23 @@ describe('resolveReminderRecipients', () => {
         }
         expect(mockResolveUserRefs).toHaveBeenCalledTimes(2)
     })
+
+    it('retries a transient failure of the lookup before failing the reminders', async () => {
+        vi.useFakeTimers()
+        try {
+            mockResolveUserRefs.mockRejectedValueOnce(
+                Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+            )
+
+            const promise = resolveReminderRecipients(client, ['Ana'])
+            await vi.runAllTimersAsync()
+
+            expect(await promise).toEqual([{ status: 'fulfilled', value: 'user-2' }])
+            expect(mockResolveUserRefs).toHaveBeenCalledTimes(2)
+        } finally {
+            vi.useRealTimers()
+        }
+    })
 })
 
 describe('describeRecipientMismatches', () => {

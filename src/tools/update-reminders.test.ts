@@ -374,6 +374,39 @@ describe(`${UPDATE_REMINDERS} tool`, () => {
     })
 
     describe('partial failures', () => {
+        it('updates the other reminders when one notifyUser cannot be resolved', async () => {
+            mockResolveUserRefs.mockImplementation(async (_client, refs) => {
+                if (refs[0] === 'nobody@example.com') {
+                    throw new Error('Could not find user(s): "nobody@example.com".')
+                }
+                return [{ userId: 'user-2', displayName: 'Ana', email: 'ana@example.com' }]
+            })
+            mockTodoistApi.updateReminder.mockResolvedValue(
+                createMockRelativeReminder({ id: 'r-1', notifyUid: 'user-2' }),
+            )
+
+            const result = await updateReminders.execute(
+                {
+                    reminders: [
+                        { type: 'relative', id: 'r-1', notifyUser: 'ana@example.com' },
+                        { type: 'relative', id: 'r-2', notifyUser: 'nobody@example.com' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            // The unresolvable recipient must not fall back to the default one.
+            expect(mockTodoistApi.updateReminder).toHaveBeenCalledOnce()
+            expect(mockTodoistApi.updateReminder).toHaveBeenCalledWith(
+                'r-1',
+                expect.objectContaining({ notifyUid: 'user-2' }),
+            )
+            expect(result.structuredContent.updatedReminderIds).toEqual(['r-1'])
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'r-2', error: 'Could not find user(s): "nobody@example.com".' },
+            ])
+        })
+
         it('keeps the updated reminders when one in the batch fails', async () => {
             mockTodoistApi.updateReminder
                 .mockResolvedValueOnce(createMockRelativeReminder({ id: 'r-1' }))

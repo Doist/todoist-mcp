@@ -1,4 +1,5 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
+import { executeWithRetry } from './retry.js'
 import { resolveUserRefs } from './user-resolver.js'
 
 /**
@@ -27,7 +28,7 @@ export async function resolveReminderRecipients(
     const outcomes = new Map<string, PromiseSettledResult<string | undefined>>()
     for (const [key, ref] of refsByKey) {
         try {
-            const [user] = await resolveUserRefs(client, [ref])
+            const [user] = await executeWithRetry(() => resolveUserRefs(client, [ref]))
             outcomes.set(key, { status: 'fulfilled', value: user?.userId })
         } catch (reason) {
             outcomes.set(key, { status: 'rejected', reason })

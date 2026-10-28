@@ -538,6 +538,22 @@ describe(`${ADD_REMINDERS} tool`, () => {
             expect(result.textContent).toContain('No reminders added')
         })
 
+        it('does not retry a reminder that failed with a 502, since it may have been created', async () => {
+            mockTodoistApi.addReminder.mockRejectedValueOnce(
+                Object.assign(new Error('Bad Gateway'), { httpStatusCode: 502 }),
+            )
+
+            const result = await addReminders.execute(
+                { reminders: [{ type: 'relative', taskId: 'task-1', minuteOffset: 15 }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.addReminder).toHaveBeenCalledOnce()
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'Reminder 1 on task task-1', error: 'Bad Gateway (HTTP 502)' },
+            ])
+        })
+
         it('retries a transient 5xx failure on a per-reminder call', async () => {
             vi.useFakeTimers()
             try {
