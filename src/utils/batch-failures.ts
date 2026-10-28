@@ -5,8 +5,14 @@ import type { ToolName } from './tool-names.js'
 
 type BatchFailure = z.infer<typeof FailureSchema>
 
-/** Stands in for a failed item whose label is the caller's own text. */
-const REDACTED_ITEM = '[redacted]'
+/** Stands in for caller text that must not reach the logs. */
+const REDACTED = '[redacted]'
+
+/**
+ * Error messages quote the caller's input they could not act on, such as
+ * `Could not find user(s): "ana@example.com"` or `Task "Call the dentist": …`.
+ */
+const QUOTED_TEXT = /"[^"]*"/g
 
 /**
  * Records the items a batch tool could not act on.
@@ -22,6 +28,7 @@ const REDACTED_ITEM = '[redacted]'
  * @param options.redactItems - Set where `item` is the caller's own text rather
  * than an identifier, e.g. a task title. That text can carry personal data and
  * must not reach server logs; the error and its code carry the diagnosis anyway.
+ * Quoted text inside each error is always redacted, for the same reason.
  */
 export function logBatchFailures(
     toolName: ToolName,
@@ -40,8 +47,10 @@ export function logBatchFailures(
     console.error(`${toolName}: items failed`, {
         failed: failures.length,
         of: total,
-        sample: options.redactItems
-            ? sample.map((failure) => ({ ...failure, item: REDACTED_ITEM }))
-            : sample,
+        sample: sample.map((failure) => ({
+            ...failure,
+            item: options.redactItems ? REDACTED : failure.item,
+            error: failure.error.replace(QUOTED_TEXT, `"${REDACTED}"`),
+        })),
     })
 }
