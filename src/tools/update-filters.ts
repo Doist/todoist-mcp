@@ -1,4 +1,4 @@
-import { type ColorKey, createCommand, type TodoistApi } from '@doist/todoist-sdk'
+import { type ColorKey, createCommand, type Filter } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
@@ -59,7 +59,7 @@ const OutputSchema = {
         .object({
             updateCount: z.number().describe('The number of filters actually updated.'),
             skippedCount: z.number().describe('The number of filters skipped (no changes).'),
-            failureCount: z.number().describe('The number of filters that failed to update.'),
+            failureCount: z.number(),
         })
         .describe('Summary of operations performed.'),
 }
@@ -134,10 +134,23 @@ const updateFilters = {
         let updatedFilters: z.infer<typeof FilterOutputSchema>[] = []
         let readBackError: string | undefined
         if (updatedIds.length > 0) {
+            // Only the request is caught: a filter that fails to map is a schema
+            // mismatch, which should still fail loudly.
+            let readBack: Filter[] | undefined
             try {
-                updatedFilters = await readBackFilters(client, new Set(updatedIds))
+                const readResponse = await executeWithRetry(() =>
+                    client.sync({ resourceTypes: ['filters'], syncToken: '*' }),
+                )
+                readBack = readResponse.filters ?? []
             } catch (error) {
                 readBackError = formatBatchItemError(error)
+                console.error(`${ToolNames.UPDATE_FILTERS}: read-back failed`, {
+                    updated: updatedIds.length,
+                    error: readBackError,
+                })
+            }
+            if (readBack) {
+                updatedFilters = toUpdatedFilters(readBack, new Set(updatedIds))
             }
         }
 
@@ -168,14 +181,11 @@ const updateFilters = {
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
 
-async function readBackFilters(
-    client: TodoistApi,
+function toUpdatedFilters(
+    filters: Filter[],
     ids: Set<string>,
-): Promise<z.infer<typeof FilterOutputSchema>[]> {
-    const readResponse = await executeWithRetry(() =>
-        client.sync({ resourceTypes: ['filters'], syncToken: '*' }),
-    )
-    return (readResponse.filters ?? [])
+): z.infer<typeof FilterOutputSchema>[] {
+    return filters
         .filter((f) => !f.isDeleted && ids.has(f.id))
         .map((f) => ({
             id: f.id,

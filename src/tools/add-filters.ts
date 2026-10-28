@@ -38,9 +38,9 @@ const OutputSchema = {
     failures: z
         .array(FailureSchema)
         .describe('Filters that could not be created, with the reason for each.'),
-    totalRequested: z.number().describe('The total number of filters requested.'),
-    successCount: z.number().describe('The number of successfully created filters.'),
-    failureCount: z.number().describe('The number of failed filter creations.'),
+    totalRequested: z.number(),
+    successCount: z.number(),
+    failureCount: z.number(),
 }
 
 const addFilters = {

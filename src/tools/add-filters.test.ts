@@ -1,12 +1,7 @@
-import {
-    type Filter,
-    type SyncCommand,
-    type TodoistApi,
-    TodoistSyncError,
-} from '@doist/todoist-sdk'
+import { type Filter, type TodoistApi, TodoistSyncError } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
-import { TEST_ERRORS } from '../utils/test-helpers.js'
+import { allApplied, TEST_ERRORS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { addFilters } from './add-filters.js'
 
@@ -15,11 +10,6 @@ const mockTodoistApi = {
 } as unknown as Mocked<TodoistApi>
 
 const { ADD_FILTERS } = ToolNames
-
-/** The `syncStatus` the Sync API returns when every command was applied. */
-function allApplied(commands: SyncCommand[]): Record<string, 'ok'> {
-    return Object.fromEntries(commands.map((command) => [command.uuid, 'ok' as const]))
-}
 
 function createMockFilter(overrides: Partial<Filter> = {}): Filter {
     return {
@@ -345,6 +335,23 @@ describe(`${ADD_FILTERS} tool`, () => {
             ])
             expect(result.textContent).toContain('Added 1 filter:')
             expect(result.textContent).toContain('Failed (1) - address or drop these items')
+        })
+
+        it('reports a filter as failed when Todoist applied it but returned no ID', async () => {
+            mockTodoistApi.sync.mockImplementation(async (request) => ({
+                tempIdMapping: {},
+                syncStatus: allApplied(request.commands),
+            }))
+
+            const result = await addFilters.execute(
+                { filters: [{ name: 'Lost', query: 'today' }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.filters).toEqual([])
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'Lost', error: 'Todoist did not return an ID for the created filter' },
+            ])
         })
 
         it('retries a transient 5xx failure of the request', async () => {

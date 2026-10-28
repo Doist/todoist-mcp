@@ -1,7 +1,7 @@
 import { type Filter, type TodoistApi, TodoistSyncError } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
-import { TEST_ERRORS } from '../utils/test-helpers.js'
+import { allApplied, TEST_ERRORS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { updateFilters } from './update-filters.js'
 
@@ -32,9 +32,7 @@ function createMockFilter(overrides: Partial<Filter> = {}): Filter {
 function mockSync(filters: Filter[]) {
     mockTodoistApi.sync.mockImplementation(async (request) => ({
         filters,
-        syncStatus: Object.fromEntries(
-            (request.commands ?? []).map((command) => [command.uuid, 'ok' as const]),
-        ),
+        syncStatus: allApplied(request.commands),
     }))
 }
 
@@ -284,11 +282,10 @@ describe(`${UPDATE_FILTERS} tool`, () => {
         })
 
         it('still reports the applied updates when they cannot be read back', async () => {
+            const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
             mockTodoistApi.sync
                 .mockImplementationOnce(async (request) => ({
-                    syncStatus: Object.fromEntries(
-                        (request.commands ?? []).map((command) => [command.uuid, 'ok' as const]),
-                    ),
+                    syncStatus: allApplied(request.commands),
                 }))
                 .mockRejectedValueOnce(new Error(TEST_ERRORS.API_UNAUTHORIZED))
 
@@ -303,6 +300,11 @@ describe(`${UPDATE_FILTERS} tool`, () => {
             expect(result.textContent).toBe(
                 `Updated 1 filter: filter-1\nThe updated filters could not be read back: ${TEST_ERRORS.API_UNAUTHORIZED}`,
             )
+            expect(consoleErrorSpy).toHaveBeenCalledWith('update-filters: read-back failed', {
+                updated: 1,
+                error: TEST_ERRORS.API_UNAUTHORIZED,
+            })
+            consoleErrorSpy.mockRestore()
         })
     })
 })

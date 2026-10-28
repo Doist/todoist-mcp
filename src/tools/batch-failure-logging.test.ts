@@ -8,6 +8,7 @@ import {
 } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { addComments } from './add-comments.js'
+import { addFilters } from './add-filters.js'
 import { addLabels } from './add-labels.js'
 import { addProjects } from './add-projects.js'
 import { addReminders } from './add-reminders.js'
@@ -16,6 +17,7 @@ import { addTasks } from './add-tasks.js'
 import { completeTasks } from './complete-tasks.js'
 import { uncompleteTasks } from './uncomplete-tasks.js'
 import { updateComments } from './update-comments.js'
+import { updateFilters } from './update-filters.js'
 import { updateLabels } from './update-labels.js'
 import { updateProjects } from './update-projects.js'
 import { updateReminders } from './update-reminders.js'
@@ -201,6 +203,24 @@ const cases = [
             )
         },
     },
+    {
+        toolName: ToolNames.ADD_FILTERS,
+        of: 1,
+        item: '[redacted]',
+        run: (client: Mocked<TodoistApi>) => {
+            client.sync.mockRejectedValue(apiError)
+            return addFilters.execute({ filters: [{ name: 'A filter', query: 'today' }] }, client)
+        },
+    },
+    {
+        toolName: ToolNames.UPDATE_FILTERS,
+        of: 1,
+        item: 'filter-1',
+        run: (client: Mocked<TodoistApi>) => {
+            client.sync.mockRejectedValue(apiError)
+            return updateFilters.execute({ filters: [{ id: 'filter-1', name: 'Renamed' }] }, client)
+        },
+    },
 ]
 
 describe('batch tools log the items they could not act on', () => {
@@ -227,6 +247,7 @@ describe('batch tools log the items they could not act on', () => {
             updateSection: vi.fn(),
             addReminder: vi.fn(),
             updateReminder: vi.fn(),
+            sync: vi.fn(),
             getProject: vi.fn().mockResolvedValue(createMockProject()),
             getWorkspaces: vi.fn().mockResolvedValue([]),
             getUser: vi.fn().mockResolvedValue(createMockUser()),

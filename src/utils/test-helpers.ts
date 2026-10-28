@@ -4,6 +4,7 @@ import type {
     Label,
     PersonalProject,
     Section,
+    SyncCommand,
     Task,
     WorkspaceProject,
 } from '@doist/todoist-sdk'
@@ -170,6 +171,13 @@ export function createMockFilter(overrides: Partial<Filter> = {}): Filter {
         itemOrder: 0,
         ...overrides,
     }
+}
+
+/**
+ * The `syncStatus` the Sync API returns when every command was applied.
+ */
+export function allApplied(commands: SyncCommand[] = []): Record<string, 'ok'> {
+    return Object.fromEntries(commands.map((command) => [command.uuid, 'ok' as const]))
 }
 
 /**
