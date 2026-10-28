@@ -70,7 +70,7 @@ const OutputSchema = {
             skippedCount: z
                 .number()
                 .describe('Number of operations skipped (no changes or shared label not found).'),
-            failureCount: z.number().describe('Number of labels that failed to update.'),
+            failureCount: z.number(),
         })
         .describe('Summary of operations performed.'),
 }

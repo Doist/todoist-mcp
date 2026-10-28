@@ -6,7 +6,7 @@ import { logBatchFailures } from '../utils/batch-failures.js'
 import { ColorSchema } from '../utils/colors.js'
 import { FailureSchema, LabelSchema as LabelOutputSchema } from '../utils/output-schemas.js'
 import { appendFailureSummary } from '../utils/response-builders.js'
-import { executeWithRetry } from '../utils/retry.js'
+import { executeCreateWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const LabelSchema = z.object({
@@ -29,9 +29,9 @@ const OutputSchema = {
     failures: z
         .array(FailureSchema)
         .describe('Labels that could not be created, with the reason for each.'),
-    totalRequested: z.number().describe('The total number of labels requested.'),
-    successCount: z.number().describe('The number of successfully created labels.'),
-    failureCount: z.number().describe('The number of failed label creations.'),
+    totalRequested: z.number(),
+    successCount: z.number(),
+    failureCount: z.number(),
 }
 
 const addLabels = {
@@ -43,8 +43,9 @@ const addLabels = {
     async execute({ labels }, client) {
         // Each label is created independently, so one rejection (e.g. a duplicate name)
         // neither discards the labels that were created nor hides them behind one error.
+        // A create retries only a 503: after a 502/504 the label may already exist.
         const settled = await Promise.allSettled(
-            labels.map((label) => executeWithRetry(() => client.addLabel(label))),
+            labels.map((label) => executeCreateWithRetry(() => client.addLabel(label))),
         )
 
         const newLabels: Label[] = []

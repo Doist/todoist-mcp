@@ -46,12 +46,10 @@ const OutputSchema = {
     failures: z
         .array(FailureSchema)
         .describe('Sections that could not be updated, with the reason for each.'),
-    appliedOperations: z
-        .object({
-            updateCount: z.number().describe('The number of sections updated.'),
-            failureCount: z.number().describe('The number of sections that failed to update.'),
-        })
-        .describe('Summary of operations performed.'),
+    appliedOperations: z.object({
+        updateCount: z.number(),
+        failureCount: z.number(),
+    }),
 }
 
 const updateSections = {

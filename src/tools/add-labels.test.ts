@@ -114,6 +114,19 @@ describe(`${ADD_LABELS} tool`, () => {
             expect(result.textContent).toContain('Added 0 labels')
         })
 
+        it('does not retry a label that failed with a 502, since it may have been created', async () => {
+            mockTodoistApi.addLabel.mockRejectedValueOnce(
+                Object.assign(new Error('Bad Gateway'), { httpStatusCode: 502 }),
+            )
+
+            const result = await addLabels.execute({ labels: [{ name: 'Work' }] }, mockTodoistApi)
+
+            expect(mockTodoistApi.addLabel).toHaveBeenCalledOnce()
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'Work', error: 'Bad Gateway (HTTP 502)' },
+            ])
+        })
+
         it('retries a transient 5xx failure on a per-label call', async () => {
             vi.useFakeTimers()
             try {
