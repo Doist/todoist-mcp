@@ -7,11 +7,13 @@ import {
     TEST_IDS,
 } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
+import { addComments } from './add-comments.js'
 import { addProjects } from './add-projects.js'
 import { addSections } from './add-sections.js'
 import { addTasks } from './add-tasks.js'
 import { completeTasks } from './complete-tasks.js'
 import { uncompleteTasks } from './uncomplete-tasks.js'
+import { updateComments } from './update-comments.js'
 import { updateProjects } from './update-projects.js'
 import { updateTasks } from './update-tasks.js'
 
@@ -108,6 +110,34 @@ const cases = [
             )
         },
     },
+    {
+        toolName: ToolNames.ADD_COMMENTS,
+        of: 1,
+        item: '[redacted]',
+        run: (client: Mocked<TodoistApi>) => {
+            client.addComment.mockRejectedValue(apiError)
+            return addComments.execute(
+                {
+                    comments: [
+                        { taskId: TEST_IDS.TASK_1, content: 'A comment', notifyUsers: ['none'] },
+                    ],
+                },
+                client,
+            )
+        },
+    },
+    {
+        toolName: ToolNames.UPDATE_COMMENTS,
+        of: 1,
+        item: 'comment-1',
+        run: (client: Mocked<TodoistApi>) => {
+            client.updateComment.mockRejectedValue(apiError)
+            return updateComments.execute(
+                { comments: [{ id: 'comment-1', content: 'Edited' }] },
+                client,
+            )
+        },
+    },
 ]
 
 describe('batch tools log the items they could not act on', () => {
@@ -127,6 +157,8 @@ describe('batch tools log the items they could not act on', () => {
             addProject: vi.fn(),
             updateProject: vi.fn(),
             addSection: vi.fn(),
+            addComment: vi.fn(),
+            updateComment: vi.fn(),
             getProject: vi.fn().mockResolvedValue(createMockProject()),
             getWorkspaces: vi.fn().mockResolvedValue([]),
             getUser: vi.fn().mockResolvedValue(createMockUser()),

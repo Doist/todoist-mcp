@@ -27,7 +27,7 @@ const OutputSchema = {
     appliedOperations: z
         .object({
             updateCount: z.number().describe('The number of comments updated.'),
-            failureCount: z.number().describe('The number of comments that failed to update.'),
+            failureCount: z.number(),
         })
         .describe('Summary of operations performed.'),
 }

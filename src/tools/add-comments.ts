@@ -13,7 +13,7 @@ import {
 import { ApiLimits } from '../utils/constants.js'
 import { CommentSchema as CommentOutputSchema, FailureSchema } from '../utils/output-schemas.js'
 import { appendFailureSummary } from '../utils/response-builders.js'
-import { executeWithRetry } from '../utils/retry.js'
+import { executeCreateWithRetry, executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { resolveUserRefs } from '../utils/user-resolver.js'
 
@@ -49,9 +49,9 @@ const OutputSchema = {
         .describe(
             'Comments that could not be added, identified by their content, with the reason for each.',
         ),
-    totalRequested: z.number().describe('The total number of comments requested.'),
-    successCount: z.number().describe('The number of successfully added comments.'),
-    failureCount: z.number().describe('The number of comments that could not be added.'),
+    totalRequested: z.number(),
+    successCount: z.number(),
+    failureCount: z.number(),
 }
 
 type CommentInput = z.infer<typeof CommentSchema>
@@ -89,7 +89,7 @@ const addComments = {
         ): Promise<string[]> {
             if (notifyUsers) {
                 if (isNoNotifyList(notifyUsers)) return []
-                const resolved = await resolveUserRefs(client, notifyUsers)
+                const resolved = await executeWithRetry(() => resolveUserRefs(client, notifyUsers))
                 return resolved.map((user) => user.userId)
             }
 
@@ -121,7 +121,7 @@ const addComments = {
                     return Promise.reject(preparation.reason)
                 }
                 const { target, uidsToNotify } = preparation.value
-                return executeWithRetry(() =>
+                return executeCreateWithRetry(() =>
                     client.addComment({
                         content: comments[index]?.content,
                         ...target,

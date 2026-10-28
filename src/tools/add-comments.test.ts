@@ -698,6 +698,26 @@ describe(`${ADD_COMMENTS} tool`, () => {
             ])
         })
 
+        it('does not retry a comment that failed with a 502, since it may have been posted', async () => {
+            mockTodoistApi.addComment.mockRejectedValueOnce(
+                Object.assign(new Error('Bad Gateway'), { httpStatusCode: 502 }),
+            )
+
+            const result = await addComments.execute(
+                {
+                    comments: [
+                        { taskId: 'task123', content: 'Maybe posted', notifyUsers: ['none'] },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.addComment).toHaveBeenCalledOnce()
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'Maybe posted', error: 'Bad Gateway (HTTP 502)' },
+            ])
+        })
+
         it('retries a transient 5xx failure on a per-comment call', async () => {
             vi.useFakeTimers()
             try {
