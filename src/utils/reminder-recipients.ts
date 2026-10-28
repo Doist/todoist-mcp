@@ -1,18 +1,19 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
+import { executeWithRetry } from './retry.js'
 import { resolveUserRefs } from './user-resolver.js'
 
 /**
  * Resolve each reminder's `notifyUser` reference to a user ID.
  *
- * The result lines up with the input, with `undefined` wherever no reference
- * was given, so the reminder keeps Todoist's default of notifying its creator.
- *
- * @throws Error naming the first reference that could not be resolved
+ * The result lines up with the input. Each entry is settled on its own, so a
+ * reference that cannot be resolved fails only the reminders that use it. A
+ * reminder with no reference resolves to `undefined`, which keeps Todoist's
+ * default of notifying its creator.
  */
 export async function resolveReminderRecipients(
     client: TodoistApi,
     notifyUsers: (string | undefined)[],
-): Promise<(string | undefined)[]> {
+): Promise<PromiseSettledResult<string | undefined>[]> {
     // References that differ only in case or padding are the same person, as in
     // `resolveUserRefs`, but the first spelling is what gets resolved, since a
     // user ID is not safe to lower-case.
@@ -24,13 +25,20 @@ export async function resolveReminderRecipients(
 
     // Resolved one at a time on purpose: the first lookup populates the
     // collaborator cache that the rest read.
-    const userIds = new Map<string, string>()
+    const outcomes = new Map<string, PromiseSettledResult<string | undefined>>()
     for (const [key, ref] of refsByKey) {
-        const [user] = await resolveUserRefs(client, [ref])
-        if (user) userIds.set(key, user.userId)
+        try {
+            const [user] = await executeWithRetry(() => resolveUserRefs(client, [ref]))
+            outcomes.set(key, { status: 'fulfilled', value: user?.userId })
+        } catch (reason) {
+            outcomes.set(key, { status: 'rejected', reason })
+        }
     }
 
-    return notifyUsers.map((ref) => (ref?.trim() ? userIds.get(toKey(ref)) : undefined))
+    const noReference: PromiseSettledResult<undefined> = { status: 'fulfilled', value: undefined }
+    return notifyUsers.map((ref) =>
+        ref?.trim() ? (outcomes.get(toKey(ref)) ?? noReference) : noReference,
+    )
 }
 
 function toKey(ref: string): string {

@@ -1,8 +1,10 @@
 import type { AddReminderArgs } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
 import { countRemindersByType, mapReminder } from '../tool-helpers.js'
-import { ReminderSchema as ReminderOutputSchema } from '../utils/output-schemas.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
+import { FailureSchema, ReminderSchema as ReminderOutputSchema } from '../utils/output-schemas.js'
 import {
     describeRecipientMismatches,
     resolveReminderRecipients,
@@ -15,6 +17,8 @@ import {
     ReminderNotifyUserSchema,
     ReminderServiceSchema,
 } from '../utils/reminder-schemas.js'
+import { appendFailureSummary } from '../utils/response-builders.js'
+import { executeCreateWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const RelativeReminderInputSchema = z.object({
@@ -82,6 +86,12 @@ const OutputSchema = {
     reminders: z.array(ReminderOutputSchema).describe('The created reminders.'),
     totalCount: z.number().describe('Total number of reminders created.'),
     addedReminderIds: z.array(z.string()).describe('IDs of the created reminders.'),
+    failures: z
+        .array(FailureSchema)
+        .describe('Reminders that could not be created, with the reason for each.'),
+    totalRequested: z.number(),
+    successCount: z.number(),
+    failureCount: z.number(),
 }
 
 const addReminders = {
@@ -99,51 +109,87 @@ const addReminders = {
     async execute(args, client) {
         const { reminders } = args
 
-        const notifyUids = await resolveReminderRecipients(
+        const recipients = await resolveReminderRecipients(
             client,
             reminders.map((reminder) => reminder.notifyUser),
         )
 
-        const addReminderPromises = reminders.map(async (reminder, index) => {
-            const notifyUid = notifyUids[index]
-            switch (reminder.type) {
-                case 'relative':
-                    return await client.addReminder({
-                        taskId: reminder.taskId,
-                        reminderType: 'relative',
-                        minuteOffset: reminder.minuteOffset,
-                        service: reminder.service,
-                        isUrgent: reminder.isUrgent,
-                        notifyUid,
-                    } as AddReminderArgs)
-                case 'absolute':
-                    return await client.addReminder({
-                        taskId: reminder.taskId,
-                        reminderType: 'absolute',
-                        due: reminder.due,
-                        service: reminder.service,
-                        isUrgent: reminder.isUrgent,
-                        notifyUid,
-                    } as AddReminderArgs)
-                case 'location':
-                    return await client.addLocationReminder({
-                        taskId: reminder.taskId,
-                        name: reminder.name,
-                        locLat: reminder.locLat,
-                        locLong: reminder.locLong,
-                        locTrigger: reminder.locTrigger,
-                        radius: reminder.radius,
-                        notifyUid,
-                    })
+        // Each reminder is created independently, so one rejection (or an unresolvable
+        // notifyUser) neither discards the reminders that were created nor hides them.
+        // A create retries only a 503: after a 502/504 the reminder may already exist.
+        const settled = await Promise.allSettled(
+            reminders.map(async (reminder, index) => {
+                const recipient = recipients[index]
+                if (recipient?.status === 'rejected') {
+                    throw recipient.reason
+                }
+                const notifyUid = recipient?.value
+                switch (reminder.type) {
+                    case 'relative':
+                        return await executeCreateWithRetry(() =>
+                            client.addReminder({
+                                taskId: reminder.taskId,
+                                reminderType: 'relative',
+                                minuteOffset: reminder.minuteOffset,
+                                service: reminder.service,
+                                isUrgent: reminder.isUrgent,
+                                notifyUid,
+                            } as AddReminderArgs),
+                        )
+                    case 'absolute':
+                        return await executeCreateWithRetry(() =>
+                            client.addReminder({
+                                taskId: reminder.taskId,
+                                reminderType: 'absolute',
+                                due: reminder.due,
+                                service: reminder.service,
+                                isUrgent: reminder.isUrgent,
+                                notifyUid,
+                            } as AddReminderArgs),
+                        )
+                    case 'location':
+                        return await executeCreateWithRetry(() =>
+                            client.addLocationReminder({
+                                taskId: reminder.taskId,
+                                name: reminder.name,
+                                locLat: reminder.locLat,
+                                locLong: reminder.locLong,
+                                locTrigger: reminder.locTrigger,
+                                radius: reminder.radius,
+                                notifyUid,
+                            }),
+                        )
+                }
+            }),
+        )
+
+        const mappedReminders: ReturnType<typeof mapReminder>[] = []
+        // The recipient each created reminder asked for, aligned with `mappedReminders`.
+        const requestedUids: (string | undefined)[] = []
+        const failures: Array<{ item: string; error: string }> = []
+
+        settled.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                mappedReminders.push(mapReminder(result.value))
+                const recipient = recipients[index]
+                requestedUids.push(recipient?.status === 'fulfilled' ? recipient.value : undefined)
+            } else {
+                failures.push({
+                    item: `Reminder ${index + 1} on task ${reminders[index]?.taskId}`,
+                    error: formatBatchItemError(result.reason),
+                })
             }
         })
 
-        const newReminders = await Promise.all(addReminderPromises)
-        const mappedReminders = newReminders.map(mapReminder)
-        const textContent = [
-            generateTextContent(mappedReminders),
-            ...describeRecipientMismatches(mappedReminders, notifyUids),
-        ].join('\n')
+        logBatchFailures(ToolNames.ADD_REMINDERS, reminders.length, failures)
+
+        const textContent = appendFailureSummary(
+            [
+                generateTextContent(mappedReminders),
+                ...describeRecipientMismatches(mappedReminders, requestedUids),
+            ].join('\n'),
+            failures,
+        )
 
         return {
             textContent,
@@ -151,6 +197,10 @@ const addReminders = {
                 reminders: mappedReminders,
                 totalCount: mappedReminders.length,
                 addedReminderIds: mappedReminders.map((r) => r.id),
+                failures,
+                totalRequested: reminders.length,
+                successCount: mappedReminders.length,
+                failureCount: failures.length,
             },
         }
     },

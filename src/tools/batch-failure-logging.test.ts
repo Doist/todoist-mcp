@@ -10,6 +10,7 @@ import { ToolNames } from '../utils/tool-names.js'
 import { addComments } from './add-comments.js'
 import { addLabels } from './add-labels.js'
 import { addProjects } from './add-projects.js'
+import { addReminders } from './add-reminders.js'
 import { addSections } from './add-sections.js'
 import { addTasks } from './add-tasks.js'
 import { completeTasks } from './complete-tasks.js'
@@ -17,6 +18,7 @@ import { uncompleteTasks } from './uncomplete-tasks.js'
 import { updateComments } from './update-comments.js'
 import { updateLabels } from './update-labels.js'
 import { updateProjects } from './update-projects.js'
+import { updateReminders } from './update-reminders.js'
 import { updateSections } from './update-sections.js'
 import { updateTasks } from './update-tasks.js'
 
@@ -175,6 +177,30 @@ const cases = [
             )
         },
     },
+    {
+        toolName: ToolNames.ADD_REMINDERS,
+        of: 1,
+        item: `Reminder 1 on task ${TEST_IDS.TASK_1}`,
+        run: (client: Mocked<TodoistApi>) => {
+            client.addReminder.mockRejectedValue(apiError)
+            return addReminders.execute(
+                { reminders: [{ type: 'relative', taskId: TEST_IDS.TASK_1, minuteOffset: 15 }] },
+                client,
+            )
+        },
+    },
+    {
+        toolName: ToolNames.UPDATE_REMINDERS,
+        of: 1,
+        item: 'reminder-1',
+        run: (client: Mocked<TodoistApi>) => {
+            client.updateReminder.mockRejectedValue(apiError)
+            return updateReminders.execute(
+                { reminders: [{ type: 'relative', id: 'reminder-1', minuteOffset: 30 }] },
+                client,
+            )
+        },
+    },
 ]
 
 describe('batch tools log the items they could not act on', () => {
@@ -199,6 +225,8 @@ describe('batch tools log the items they could not act on', () => {
             addLabel: vi.fn(),
             renameSharedLabel: vi.fn(),
             updateSection: vi.fn(),
+            addReminder: vi.fn(),
+            updateReminder: vi.fn(),
             getProject: vi.fn().mockResolvedValue(createMockProject()),
             getWorkspaces: vi.fn().mockResolvedValue([]),
             getUser: vi.fn().mockResolvedValue(createMockUser()),

@@ -1,7 +1,9 @@
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
 import { mapReminder } from '../tool-helpers.js'
-import { ReminderSchema as ReminderOutputSchema } from '../utils/output-schemas.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
+import { FailureSchema, ReminderSchema as ReminderOutputSchema } from '../utils/output-schemas.js'
 import {
     describeRecipientMismatches,
     resolveReminderRecipients,
@@ -14,6 +16,8 @@ import {
     ReminderNotifyUserUpdateSchema,
     ReminderServiceSchema,
 } from '../utils/reminder-schemas.js'
+import { appendFailureSummary } from '../utils/response-builders.js'
+import { executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const RelativeReminderUpdateSchema = z.object({
@@ -72,6 +76,13 @@ const OutputSchema = {
     reminders: z.array(ReminderOutputSchema).describe('The updated reminders.'),
     totalCount: z.number().describe('Total reminders updated.'),
     updatedReminderIds: z.array(z.string()).describe('IDs of updated reminders.'),
+    failures: z
+        .array(FailureSchema)
+        .describe('Reminders that could not be updated, with the reason for each.'),
+    appliedOperations: z.object({
+        updateCount: z.number(),
+        failureCount: z.number(),
+    }),
 }
 
 const updateReminders = {
@@ -89,46 +100,80 @@ const updateReminders = {
     async execute(args, client) {
         const { reminders } = args
 
-        const notifyUids = await resolveReminderRecipients(
+        const recipients = await resolveReminderRecipients(
             client,
             reminders.map((reminder) => reminder.notifyUser),
         )
 
-        const updatePromises = reminders.map(async (reminder, index) => {
-            const notifyUid = notifyUids[index]
-            const recipient = notifyUid !== undefined ? { notifyUid } : {}
-            switch (reminder.type) {
-                case 'relative': {
-                    const { id, type: _, notifyUser: __, ...updateArgs } = reminder
-                    return await client.updateReminder(id, {
-                        reminderType: 'relative',
-                        ...updateArgs,
-                        ...recipient,
-                    })
+        // Each reminder is updated independently, so one rejection (or an unresolvable
+        // notifyUser) neither discards the reminders that were updated nor hides them.
+        const settled = await Promise.allSettled(
+            reminders.map(async (reminder, index) => {
+                const recipient = recipients[index]
+                if (recipient?.status === 'rejected') {
+                    throw recipient.reason
                 }
-                case 'absolute': {
-                    const { id, type: _, notifyUser: __, ...updateArgs } = reminder
-                    return await client.updateReminder(id, {
-                        reminderType: 'absolute',
-                        ...updateArgs,
-                        ...recipient,
-                    })
+                const notifyUid = recipient?.value
+                const recipientArgs = notifyUid !== undefined ? { notifyUid } : {}
+                switch (reminder.type) {
+                    case 'relative': {
+                        const { id, type: _, notifyUser: __, ...updateArgs } = reminder
+                        return await executeWithRetry(() =>
+                            client.updateReminder(id, {
+                                reminderType: 'relative',
+                                ...updateArgs,
+                                ...recipientArgs,
+                            }),
+                        )
+                    }
+                    case 'absolute': {
+                        const { id, type: _, notifyUser: __, ...updateArgs } = reminder
+                        return await executeWithRetry(() =>
+                            client.updateReminder(id, {
+                                reminderType: 'absolute',
+                                ...updateArgs,
+                                ...recipientArgs,
+                            }),
+                        )
+                    }
+                    case 'location': {
+                        const { id, type: _, notifyUser: __, ...updateArgs } = reminder
+                        return await executeWithRetry(() =>
+                            client.updateLocationReminder(id, { ...updateArgs, ...recipientArgs }),
+                        )
+                    }
                 }
-                case 'location': {
-                    const { id, type: _, notifyUser: __, ...updateArgs } = reminder
-                    return await client.updateLocationReminder(id, { ...updateArgs, ...recipient })
-                }
+            }),
+        )
+
+        const mappedReminders: ReturnType<typeof mapReminder>[] = []
+        // The recipient each updated reminder asked for, aligned with `mappedReminders`.
+        const requestedUids: (string | undefined)[] = []
+        const failures: Array<{ item: string; error: string }> = []
+
+        settled.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                mappedReminders.push(mapReminder(result.value))
+                const recipient = recipients[index]
+                requestedUids.push(recipient?.status === 'fulfilled' ? recipient.value : undefined)
+            } else {
+                failures.push({
+                    item: reminders[index]?.id ?? `Reminder ${index + 1}`,
+                    error: formatBatchItemError(result.reason),
+                })
             }
         })
 
-        const updatedReminders = await Promise.all(updatePromises)
-        const mappedReminders = updatedReminders.map(mapReminder)
+        logBatchFailures(ToolNames.UPDATE_REMINDERS, reminders.length, failures)
 
         const label = mappedReminders.length === 1 ? 'reminder' : 'reminders'
-        const textContent = [
-            `Updated ${mappedReminders.length} ${label}`,
-            ...describeRecipientMismatches(mappedReminders, notifyUids),
-        ].join('\n')
+        const textContent = appendFailureSummary(
+            [
+                `Updated ${mappedReminders.length} ${label}`,
+                ...describeRecipientMismatches(mappedReminders, requestedUids),
+            ].join('\n'),
+            failures,
+        )
 
         return {
             textContent,
@@ -136,6 +181,11 @@ const updateReminders = {
                 reminders: mappedReminders,
                 totalCount: mappedReminders.length,
                 updatedReminderIds: mappedReminders.map((r) => r.id),
+                failures,
+                appliedOperations: {
+                    updateCount: mappedReminders.length,
+                    failureCount: failures.length,
+                },
             },
         }
     },
