@@ -516,13 +516,6 @@ export class DueStringParseError extends Error {
     }
 }
 
-export class BatchDueStringParseError extends Error {
-    constructor(message: string) {
-        super(message)
-        this.name = 'BatchDueStringParseError'
-    }
-}
-
 /**
  * Compact single-line variant of {@link formatToolExecutionError} for batch
  * tools that report per-item failures. Unlike `error.message` (which for SDK
@@ -604,7 +597,7 @@ export function formatToolExecutionError(error: unknown): string {
         return error.message
     }
 
-    if (error instanceof DueStringParseError || error instanceof BatchDueStringParseError) {
+    if (error instanceof DueStringParseError) {
         return error.message
     }
 

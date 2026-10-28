@@ -1,6 +1,5 @@
 import z from 'zod'
 import {
-    BatchDueStringParseError,
     DueStringParseError,
     formatBatchItemError,
     formatDueStringParseError,
@@ -196,8 +195,8 @@ describe('formatToolExecutionError', () => {
         })
 
         it('recovers the item-limit tag from wrapper errors that embed per-item failures', () => {
-            // Shape thrown by batch tools (e.g. add-tasks) when every item
-            // fails: a plain Error whose message embeds the per-item summaries.
+            // A plain Error whose message embeds per-item summaries, as thrown
+            // by a tool that folds its items' errors into one message.
             const output = formatToolExecutionError(
                 new Error(
                     'All 1 task(s) failed to create: "one too many": Maximum number of items exceeded (HTTP 403, code 49, tag MAX_ITEMS_LIMIT_REACHED)',
@@ -268,18 +267,6 @@ describe('formatToolExecutionError', () => {
             ).toBe(
                 'Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed. Use Todoist recurrence syntax, for example `every year on July 1`; don\'t prefix it with `recurring`. Change only `dueString` and retry.',
             )
-        })
-
-        it('preserves every retry guidance after an all-failed batch wraps it', () => {
-            const output = formatToolExecutionError(
-                new BatchDueStringParseError(
-                    'All 2 task(s) failed to create: "Lavendel abschneiden": Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed. Use Todoist recurrence syntax, for example `every year on July 1`; don\'t prefix it with `recurring`. Change only `dueString` and retry.; "Frauenmantel abschneiden": Task "Frauenmantel abschneiden" wasn\'t created because `dueString` could not be parsed. Use Todoist recurrence syntax, for example `every year on July 1`; don\'t prefix it with `recurring`. Change only `dueString` and retry.',
-                ),
-            )
-
-            expect(output).toContain('All 2 task(s) failed to create')
-            expect(output).toContain('Lavendel abschneiden')
-            expect(output).toContain('Frauenmantel abschneiden')
         })
 
         it('preserves dueString recovery guidance in batch-item output', () => {
