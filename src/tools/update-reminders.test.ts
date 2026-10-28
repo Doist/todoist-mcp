@@ -372,4 +372,71 @@ describe(`${UPDATE_REMINDERS} tool`, () => {
             )
         })
     })
+
+    describe('partial failures', () => {
+        it('keeps the updated reminders when one in the batch fails', async () => {
+            mockTodoistApi.updateReminder
+                .mockResolvedValueOnce(createMockRelativeReminder({ id: 'r-1' }))
+                .mockRejectedValueOnce(new Error('API Error: Reminder not found'))
+
+            const result = await updateReminders.execute(
+                {
+                    reminders: [
+                        { type: 'relative', id: 'r-1', minuteOffset: 30 },
+                        { type: 'relative', id: 'missing', minuteOffset: 30 },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.updatedReminderIds).toEqual(['r-1'])
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'missing', error: 'API Error: Reminder not found' },
+            ])
+            expect(result.structuredContent.appliedOperations).toEqual({
+                updateCount: 1,
+                failureCount: 1,
+            })
+            expect(result.textContent).toContain('Updated 1 reminder')
+            expect(result.textContent).toContain('Failed (1) - address or drop these items')
+        })
+
+        it('returns structured failures when every reminder in the batch fails', async () => {
+            mockTodoistApi.updateReminder.mockRejectedValue(
+                new Error('API Error: Reminder not found'),
+            )
+
+            const result = await updateReminders.execute(
+                { reminders: [{ type: 'relative', id: 'missing', minuteOffset: 30 }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.reminders).toEqual([])
+            expect(result.structuredContent.appliedOperations.failureCount).toBe(1)
+            expect(result.textContent).toContain('Updated 0 reminders')
+        })
+
+        it('retries a transient 5xx failure on a per-reminder call', async () => {
+            vi.useFakeTimers()
+            try {
+                mockTodoistApi.updateReminder
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    .mockResolvedValueOnce(createMockRelativeReminder({ id: 'r-1' }))
+
+                const promise = updateReminders.execute(
+                    { reminders: [{ type: 'relative', id: 'r-1', minuteOffset: 30 }] },
+                    mockTodoistApi,
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.updateReminder).toHaveBeenCalledTimes(2)
+                expect(result.structuredContent.updatedReminderIds).toEqual(['r-1'])
+            } finally {
+                vi.useRealTimers()
+            }
+        })
+    })
 })

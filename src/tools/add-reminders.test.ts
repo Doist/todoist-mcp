@@ -415,25 +415,31 @@ describe(`${ADD_REMINDERS} tool`, () => {
             expect(result.textContent).toBe('Added 2 time-based reminders and 1 location reminder')
         })
 
-        it('should not create any reminder when a notifyUser cannot be resolved', async () => {
+        it('should not create a reminder whose notifyUser cannot be resolved', async () => {
             mockUserLookup()
 
-            await expect(
-                addReminders.execute(
-                    {
-                        reminders: [
-                            {
-                                type: 'relative',
-                                taskId: 'task-1',
-                                minuteOffset: 15,
-                                notifyUser: 'nobody@example.com',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('Could not find user(s): "nobody@example.com".')
+            const result = await addReminders.execute(
+                {
+                    reminders: [
+                        {
+                            type: 'relative',
+                            taskId: 'task-1',
+                            minuteOffset: 15,
+                            notifyUser: 'nobody@example.com',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            // Falling back to the default recipient would notify the wrong person.
             expect(mockTodoistApi.addReminder).not.toHaveBeenCalled()
+            expect(result.structuredContent.failures).toEqual([
+                {
+                    item: 'Reminder 1 on task task-1',
+                    error: 'Could not find user(s): "nobody@example.com".',
+                },
+            ])
         })
 
         it('should warn when the reminder does not notify the requested user', async () => {
@@ -459,6 +465,100 @@ describe(`${ADD_REMINDERS} tool`, () => {
             expect(result.textContent).toBe(
                 'Added 1 time-based reminder\nWarning: reminder r-1 notifies user user-1, not the requested user user-2. Todoist did not apply notifyUser.',
             )
+        })
+    })
+
+    describe('partial failures', () => {
+        it('keeps the created reminders when one in the batch fails', async () => {
+            mockTodoistApi.addReminder
+                .mockResolvedValueOnce(createMockRelativeReminder({ id: 'r-1', itemId: 'task-1' }))
+                .mockRejectedValueOnce(new Error('API Error: Task has no due date'))
+
+            const result = await addReminders.execute(
+                {
+                    reminders: [
+                        { type: 'relative', taskId: 'task-1', minuteOffset: 15 },
+                        { type: 'relative', taskId: 'task-2', minuteOffset: 15 },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const { structuredContent } = result
+            expect(structuredContent.addedReminderIds).toEqual(['r-1'])
+            expect(structuredContent.totalRequested).toBe(2)
+            expect(structuredContent.successCount).toBe(1)
+            expect(structuredContent.failureCount).toBe(1)
+            expect(structuredContent.failures).toEqual([
+                { item: 'Reminder 2 on task task-2', error: 'API Error: Task has no due date' },
+            ])
+            expect(result.textContent).toContain('Added 1 time-based reminder')
+            expect(result.textContent).toContain('Failed (1) - address or drop these items')
+        })
+
+        it('checks the recipient of each created reminder against the user it asked for', async () => {
+            // The failed first reminder must not shift the second one onto the first
+            // reminder's requested user.
+            mockUserLookup()
+            mockTodoistApi.addReminder
+                .mockRejectedValueOnce(new Error('API Error: Task has no due date'))
+                .mockResolvedValueOnce(
+                    createMockRelativeReminder({ id: 'r-2', notifyUid: 'user-1' }),
+                )
+
+            const result = await addReminders.execute(
+                {
+                    reminders: [
+                        {
+                            type: 'relative',
+                            taskId: 'task-1',
+                            minuteOffset: 15,
+                            notifyUser: 'ana@example.com',
+                        },
+                        { type: 'relative', taskId: 'task-2', minuteOffset: 15, notifyUser: 'me' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.addedReminderIds).toEqual(['r-2'])
+            expect(result.textContent).not.toContain('Warning')
+        })
+
+        it('returns structured failures when every reminder in the batch fails', async () => {
+            mockTodoistApi.addReminder.mockRejectedValue(new Error('API Error: Task not found'))
+
+            const result = await addReminders.execute(
+                { reminders: [{ type: 'relative', taskId: 'missing', minuteOffset: 15 }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.reminders).toEqual([])
+            expect(result.structuredContent.failures).toHaveLength(1)
+            expect(result.textContent).toContain('No reminders added')
+        })
+
+        it('retries a transient 5xx failure on a per-reminder call', async () => {
+            vi.useFakeTimers()
+            try {
+                mockTodoistApi.addReminder
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    .mockResolvedValueOnce(createMockRelativeReminder({ id: 'r-1' }))
+
+                const promise = addReminders.execute(
+                    { reminders: [{ type: 'relative', taskId: 'task-1', minuteOffset: 15 }] },
+                    mockTodoistApi,
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.addReminder).toHaveBeenCalledTimes(2)
+                expect(result.structuredContent.addedReminderIds).toEqual(['r-1'])
+            } finally {
+                vi.useRealTimers()
+            }
         })
     })
 })

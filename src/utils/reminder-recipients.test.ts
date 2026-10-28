@@ -28,7 +28,12 @@ describe('resolveReminderRecipients', () => {
     it('lines the resolved IDs up with the input, leaving unset entries undefined', async () => {
         const result = await resolveReminderRecipients(client, [undefined, 'Ana', 'me', ''])
 
-        expect(result).toEqual([undefined, 'user-2', 'user-1', undefined])
+        expect(result).toEqual([
+            { status: 'fulfilled', value: undefined },
+            { status: 'fulfilled', value: 'user-2' },
+            { status: 'fulfilled', value: 'user-1' },
+            { status: 'fulfilled', value: undefined },
+        ])
     })
 
     it('resolves references that differ only in case or padding once, by their first spelling', async () => {
@@ -36,13 +41,24 @@ describe('resolveReminderRecipients', () => {
 
         expect(mockResolveUserRefs).toHaveBeenCalledTimes(1)
         expect(mockResolveUserRefs).toHaveBeenCalledWith(client, ['Ana'])
-        expect(result).toEqual(['user-2', 'user-2', 'user-2'])
+        expect(result.map((entry) => entry.status === 'fulfilled' && entry.value)).toEqual([
+            'user-2',
+            'user-2',
+            'user-2',
+        ])
     })
 
-    it('fails instead of dropping a reference it cannot resolve', async () => {
-        await expect(resolveReminderRecipients(client, ['Ana', 'Bob'])).rejects.toThrow(
-            'Could not find user(s): "Bob".',
-        )
+    it('fails only the reminders whose reference cannot be resolved, instead of dropping it', async () => {
+        const result = await resolveReminderRecipients(client, ['Ana', 'Bob', ' bob '])
+
+        expect(result[0]).toEqual({ status: 'fulfilled', value: 'user-2' })
+        for (const entry of result.slice(1)) {
+            expect(entry.status).toBe('rejected')
+            expect(entry.status === 'rejected' && entry.reason).toEqual(
+                new Error('Could not find user(s): "Bob".'),
+            )
+        }
+        expect(mockResolveUserRefs).toHaveBeenCalledTimes(2)
     })
 })
 
