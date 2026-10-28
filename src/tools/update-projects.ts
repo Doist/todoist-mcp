@@ -44,9 +44,7 @@ const OutputSchema = {
     updatedProjectIds: z.array(z.string()).describe('The IDs of the updated projects.'),
     failures: z
         .array(FailureSchema)
-        .describe(
-            'Projects that could not be updated, with the reason for each. A failure here does not affect the other projects in the batch — do not retry the whole batch; address or drop the failed items.',
-        ),
+        .describe('Projects that could not be updated, with the reason for each.'),
     appliedOperations: z
         .object({
             updateCount: z.number().describe('The number of projects actually updated.'),

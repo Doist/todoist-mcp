@@ -50,9 +50,7 @@ const OutputSchema = {
     totalCount: z.number().describe('The total number of projects created.'),
     failures: z
         .array(FailureSchema)
-        .describe(
-            'Projects that could not be created, with the reason for each. A failure here does not affect the other projects in the batch — do not retry the whole batch; address or drop the failed items.',
-        ),
+        .describe('Projects that could not be created, with the reason for each.'),
     totalRequested: z.number().describe('The total number of projects requested.'),
     successCount: z.number().describe('The number of successfully created projects.'),
     failureCount: z.number().describe('The number of failed project creations.'),
