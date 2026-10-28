@@ -24,12 +24,12 @@ The ChatGPT app review rejects the server when any tool's hints understate what 
 
 A tool that writes a list of items settles each item on its own and returns the ones it could not act on in a `failures` array (`FailureSchema`), alongside the successes, even when every item fails. A thrown error hides the items that were written, so callers assume nothing happened and a retry writes them twice. Follow `src/tools/add-projects.ts`:
 
-- `Promise.allSettled` over the items, with each SDK call wrapped in `executeWithRetry` (the `registerTool` retry never sees a settled failure).
+- `Promise.allSettled` over the items, with each SDK call wrapped in a retry, since the `registerTool` retry never sees a settled failure. A create uses `executeCreateWithRetry`, which retries only a 503: after a 502/504 the item may already exist and the API cannot dedupe a repeat. Updates and lookups use `executeWithRetry`.
 - `formatBatchItemError` for each reason, `logBatchFailures` for the log line, `appendFailureSummary` for the text.
 - Lookups shared across items (current user, workspace, recipients) fail only the items that need them.
 - Sync-backed batches go through `settleSyncCommands` (`src/utils/sync-commands.ts`), which reports each command's outcome.
 
-`src/tools/batch-failures-contract.test.ts` enforces this for every non-read-only tool with a list parameter. The few that are all-or-nothing by design are listed there with the reason.
+`src/tools/batch-failures-contract.test.ts` enforces this for every non-read-only tool with a list parameter. The exceptions, including tools not converted yet, are listed there with the reason for each.
 
 ### Removing/Clearing Optional Fields
 

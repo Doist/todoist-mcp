@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { registeredTools } from '../tool-registry.js'
 import { ToolNames } from '../utils/tool-names.js'
 
@@ -10,45 +11,48 @@ import { ToolNames } from '../utils/tool-names.js'
  *
  * https://github.com/Doist/todoist-mcp/issues/505
  */
-const ALL_OR_NOTHING_TOOLS: Partial<Record<string, string>> = {
+const EXCEPTIONS: Partial<Record<string, string>> = {
+    [ToolNames.MANAGE_ASSIGNMENTS]:
+        "reports each task's outcome in its own results and throws only when every task failed, so no write is hidden",
     [ToolNames.RESCHEDULE_TASKS]:
-        'one Sync request whose result is reported as a whole; retried as a whole',
-    [ToolNames.MANAGE_ASSIGNMENTS]: 'rolls the batch back as a unit when it fails',
-    [ToolNames.REORDER_OBJECTS]: 'one ordering of sibling items, applied as a unit',
+        'not converted yet: it sends one Sync request and throws on the first failed command, hiding the ones that were applied',
+    [ToolNames.REORDER_OBJECTS]:
+        'not converted yet: it sends one Sync request and throws on the first failed command, hiding the ones that were applied',
 }
 
-type ZodDef = { type?: string; innerType?: unknown; in?: unknown }
+type JsonSchemaObject = { properties?: Record<string, { type?: unknown }> }
 
-function zodDef(schema: unknown): ZodDef | undefined {
-    return (schema as { _zod?: { def?: ZodDef } } | undefined)?._zod?.def
-}
-
-/** Whether a parameter takes a list, looking through optional/default/pipe wrappers. */
-function isArrayParameter(schema: unknown): boolean {
-    let def = zodDef(schema)
-    while (def && (def.type === 'optional' || def.type === 'default' || def.type === 'pipe')) {
-        def = zodDef(def.innerType ?? def.in)
-    }
-    return def?.type === 'array'
+/** Reads a tool's schema the way it is advertised in `tools/list`. */
+function jsonSchemaOf(shape: z.ZodRawShape, io: 'input' | 'output'): JsonSchemaObject {
+    return z.toJSONSchema(z.object(shape), { io, target: 'draft-2020-12' }) as JsonSchemaObject
 }
 
 const batchWriteTools = registeredTools.filter(
     (tool) =>
         !tool.annotations.readOnlyHint &&
-        Object.values(tool.parameters).some((schema) => isArrayParameter(schema)),
+        Object.values(jsonSchemaOf(tool.parameters, 'input').properties ?? {}).some(
+            (property) => property.type === 'array',
+        ),
 )
 
 describe('batch write tools', () => {
-    it.each(
-        batchWriteTools
-            .filter((tool) => !(tool.name in ALL_OR_NOTHING_TOOLS))
-            .map((tool) => [tool.name, tool] as const),
-    )('%s reports per-item failures', (_name, tool) => {
-        expect(Object.keys(tool.outputSchema ?? {})).toContain('failures')
+    it('are found at all, so the checks below cannot pass vacuously', () => {
+        expect(batchWriteTools.map((tool) => tool.name)).toEqual(
+            expect.arrayContaining([ToolNames.ADD_TASKS, ToolNames.ADD_PROJECTS]),
+        )
     })
 
-    it.each(Object.keys(ALL_OR_NOTHING_TOOLS))(
-        '%s is still a registered batch write tool, or should leave the exemption list',
+    it.each(
+        batchWriteTools
+            .filter((tool) => !(tool.name in EXCEPTIONS))
+            .map((tool) => [tool.name, tool] as const),
+    )('%s reports per-item failures', (_name, tool) => {
+        const failures = jsonSchemaOf(tool.outputSchema ?? {}, 'output').properties?.failures
+        expect(failures?.type).toBe('array')
+    })
+
+    it.each(Object.keys(EXCEPTIONS))(
+        '%s is still a registered batch write tool, or should leave the exceptions list',
         (name) => {
             expect(batchWriteTools.map((tool) => tool.name)).toContain(name)
         },
