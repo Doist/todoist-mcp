@@ -90,8 +90,6 @@ const cases = [
         },
     },
     {
-        // `add-tasks` throws when every task fails, so only a partial failure
-        // reaches the log.
         toolName: ToolNames.ADD_TASKS,
         of: 2,
         item: '[redacted]',

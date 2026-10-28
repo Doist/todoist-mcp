@@ -22,7 +22,7 @@ import {
     PrioritySchema,
 } from '../utils/priorities.js'
 import { summarizeBatch, summarizeTaskOperation } from '../utils/response-builders.js'
-import { executeWithRetry } from '../utils/retry.js'
+import { executeCreateWithRetry, executeWithRetry } from '../utils/retry.js'
 import { optionalString } from '../utils/schema-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 
@@ -272,7 +272,7 @@ async function processTask(
         if (!targetProjectId && parentId) {
             // For subtasks, get project from parent task
             try {
-                const parentTask = await client.getTask(parentId)
+                const parentTask = await executeWithRetry(() => client.getTask(parentId))
                 targetProjectId = parentTask.projectId
             } catch (_error) {
                 throw new Error(`Task "${task.content}": Parent task "${parentId}" not found`)
@@ -282,7 +282,7 @@ async function processTask(
             // Let real API/network errors propagate; only a missing section is "not found".
             targetProjectId = sectionProjectCache.get(sectionId)
             if (!targetProjectId) {
-                const section = await client.getSection(sectionId)
+                const section = await executeWithRetry(() => client.getSection(sectionId))
                 if (!section) {
                     throw new Error(`Task "${task.content}": Section "${sectionId}" not found`)
                 }
@@ -317,7 +317,8 @@ async function processTask(
     }
 
     try {
-        return await executeWithRetry(() => client.addTask(taskArgs))
+        // A 502/504 may mean the task was created, and the API cannot dedupe a repeat.
+        return await executeCreateWithRetry(() => client.addTask(taskArgs))
     } catch (error) {
         const recovery = formatDueStringParseError(error, {
             taskContent: task.content,

@@ -594,6 +594,47 @@ describe(`${ADD_TASKS} tool`, () => {
             expect(result.textContent).toContain('0/2 successful')
         })
 
+        it('does not retry a create that failed with a 502, since the task may exist', async () => {
+            mockTodoistApi.addTask.mockRejectedValueOnce(
+                Object.assign(new Error('Bad Gateway'), { httpStatusCode: 502 }),
+            )
+
+            const result = await addTasks.execute(
+                { tasks: [{ content: 'Maybe created' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.addTask).toHaveBeenCalledOnce()
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'Maybe created', error: 'Bad Gateway (HTTP 502)' },
+            ])
+        })
+
+        it('retries a transient 5xx failure while looking up the project', async () => {
+            vi.useFakeTimers()
+            try {
+                mockTodoistApi.getProject.mockReset()
+                mockTodoistApi.getProject
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Bad Gateway'), { httpStatusCode: 502 }),
+                    )
+                    .mockResolvedValueOnce(createMockProject({ id: '6cfCcrrCFg2xP94Q' }))
+                mockTodoistApi.addTask.mockResolvedValueOnce(createMockTask({ content: 'Lookup' }))
+
+                const promise = addTasks.execute(
+                    { tasks: [{ content: 'Lookup', projectId: '6cfCcrrCFg2xP94Q' }] },
+                    mockTodoistApi,
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.getProject).toHaveBeenCalledTimes(2)
+                expect(result.structuredContent.successCount).toBe(1)
+            } finally {
+                vi.useRealTimers()
+            }
+        })
+
         it('retries a transient 5xx failure on a per-task call', async () => {
             vi.useFakeTimers()
             try {
@@ -735,9 +776,15 @@ describe(`${ADD_TASKS} tool`, () => {
                 mockTodoistApi,
             )
             expect(result.structuredContent.tasks).toEqual([])
-            expect(result.structuredContent.failures[0]?.error).toContain(
-                'Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed',
-            )
+            // Each failure keeps the guidance for its own task.
+            expect(result.structuredContent.failures.map((failure) => failure.error)).toEqual([
+                expect.stringContaining(
+                    'Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed',
+                ),
+                expect.stringContaining(
+                    'Task "Frauenmantel abschneiden" wasn\'t created because `dueString` could not be parsed',
+                ),
+            ])
         })
     })
 

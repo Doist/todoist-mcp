@@ -9,7 +9,15 @@ const DEFAULT_MAX_DELAY_MS = 2000
  */
 const MIN_RETRY_DELAY_MS = 50
 
-const RETRYABLE_STATUS_CODES = new Set([502, 503, 504])
+const RETRYABLE_STATUS_CODES: ReadonlySet<number> = new Set([502, 503, 504])
+
+/**
+ * A create that reached the server can have succeeded even when the response is a
+ * 502 or 504, and the API has no idempotency key to make a repeat safe, so retrying
+ * it could create the item twice. A 503 means the server turned the request away,
+ * so that is the only status a create retries.
+ */
+const CREATE_RETRYABLE_STATUS_CODES: ReadonlySet<number> = new Set([503])
 
 type RetryConfig = {
     maxRetries?: number
@@ -17,6 +25,8 @@ type RetryConfig = {
     maxDelayMs?: number
     /** Injectable randomness for deterministic tests. Defaults to `Math.random`. */
     random?: () => number
+    /** HTTP statuses worth retrying. Defaults to 502, 503 and 504. */
+    retryableStatusCodes?: ReadonlySet<number>
 }
 
 function extractHttpStatusCode(error: unknown): number | undefined {
@@ -48,9 +58,12 @@ function extractHttpStatusCode(error: unknown): number | undefined {
     return undefined
 }
 
-function isTransientError(error: unknown): boolean {
+function isTransientError(
+    error: unknown,
+    retryableStatusCodes: ReadonlySet<number> = RETRYABLE_STATUS_CODES,
+): boolean {
     const statusCode = extractHttpStatusCode(error)
-    return statusCode !== undefined && RETRYABLE_STATUS_CODES.has(statusCode)
+    return statusCode !== undefined && retryableStatusCodes.has(statusCode)
 }
 
 /**
@@ -95,7 +108,7 @@ async function executeWithRetry<T>(fn: () => Promise<T>, config: RetryConfig = {
         } catch (error) {
             lastError = error
 
-            if (attempt < maxRetries && isTransientError(error)) {
+            if (attempt < maxRetries && isTransientError(error, config.retryableStatusCodes)) {
                 const delay = getRetryDelay({ attempt, baseDelayMs, maxDelayMs, random })
                 await sleep(delay)
                 continue
@@ -108,7 +121,19 @@ async function executeWithRetry<T>(fn: () => Promise<T>, config: RetryConfig = {
     throw lastError
 }
 
+/**
+ * {@link executeWithRetry} for a request that creates something, retrying only the
+ * statuses that cannot mean it was already created.
+ */
+async function executeCreateWithRetry<T>(
+    fn: () => Promise<T>,
+    config: Omit<RetryConfig, 'retryableStatusCodes'> = {},
+): Promise<T> {
+    return executeWithRetry(fn, { ...config, retryableStatusCodes: CREATE_RETRYABLE_STATUS_CODES })
+}
+
 export {
+    executeCreateWithRetry,
     executeWithRetry,
     extractHttpStatusCode,
     getRetryDelay,
