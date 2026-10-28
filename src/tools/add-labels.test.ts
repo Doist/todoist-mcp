@@ -80,25 +80,59 @@ describe(`${ADD_LABELS} tool`, () => {
             expect(label?.isFavorite).toBe(true)
         })
 
-        it('should reject when one of multiple label creates fails', async () => {
+        it('should keep the created labels when one in the batch fails', async () => {
             mockTodoistApi.addLabel
                 .mockResolvedValueOnce(createMockLabel({ id: 'label-1', name: 'Work' }))
                 .mockRejectedValueOnce(new Error(TEST_ERRORS.API_UNAUTHORIZED))
 
-            await expect(
-                addLabels.execute(
-                    { labels: [{ name: 'Work' }, { name: 'Personal' }] },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(TEST_ERRORS.API_UNAUTHORIZED)
+            const result = await addLabels.execute(
+                { labels: [{ name: 'Work' }, { name: 'Personal' }] },
+                mockTodoistApi,
+            )
+
+            const { structuredContent } = result
+            expect(structuredContent.labels.map((label) => label.id)).toEqual(['label-1'])
+            expect(structuredContent.totalRequested).toBe(2)
+            expect(structuredContent.successCount).toBe(1)
+            expect(structuredContent.failureCount).toBe(1)
+            expect(structuredContent.failures).toEqual([
+                { item: 'Personal', error: TEST_ERRORS.API_UNAUTHORIZED },
+            ])
+            expect(result.textContent).toContain('Added 1 label:')
+            expect(result.textContent).toContain('Failed (1) - address or drop these items')
         })
 
-        it('should propagate API errors', async () => {
+        it('returns structured failures when every label in the batch fails', async () => {
             mockTodoistApi.addLabel.mockRejectedValue(new Error(TEST_ERRORS.API_UNAUTHORIZED))
 
-            await expect(
-                addLabels.execute({ labels: [{ name: 'Work' }] }, mockTodoistApi),
-            ).rejects.toThrow(TEST_ERRORS.API_UNAUTHORIZED)
+            const result = await addLabels.execute({ labels: [{ name: 'Work' }] }, mockTodoistApi)
+
+            expect(result.structuredContent.labels).toEqual([])
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'Work', error: TEST_ERRORS.API_UNAUTHORIZED },
+            ])
+            expect(result.textContent).toContain('Added 0 labels')
+        })
+
+        it('retries a transient 5xx failure on a per-label call', async () => {
+            vi.useFakeTimers()
+            try {
+                mockTodoistApi.addLabel
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    .mockResolvedValueOnce(createMockLabel({ id: 'label-1', name: 'Work' }))
+
+                const promise = addLabels.execute({ labels: [{ name: 'Work' }] }, mockTodoistApi)
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.addLabel).toHaveBeenCalledTimes(2)
+                expect(result.structuredContent.successCount).toBe(1)
+                expect(result.structuredContent.failureCount).toBe(0)
+            } finally {
+                vi.useRealTimers()
+            }
         })
     })
 

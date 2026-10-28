@@ -258,19 +258,28 @@ describe(`${UPDATE_SECTIONS} tool`, () => {
     })
 
     describe('error handling', () => {
-        it('should propagate API errors', async () => {
-            const apiError = new Error('API Error: Section not found')
-            mockTodoistApi.updateSection.mockRejectedValue(apiError)
+        it('returns structured failures when every section in the batch fails', async () => {
+            mockTodoistApi.updateSection.mockRejectedValue(
+                new Error('API Error: Section not found'),
+            )
 
-            await expect(
-                updateSections.execute(
-                    { sections: [{ id: 'nonexistent', name: 'New Name' }] },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('API Error: Section not found')
+            const result = await updateSections.execute(
+                { sections: [{ id: 'nonexistent', name: 'New Name' }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.sections).toEqual([])
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'nonexistent', error: 'API Error: Section not found' },
+            ])
+            expect(result.structuredContent.appliedOperations).toEqual({
+                updateCount: 0,
+                failureCount: 1,
+            })
+            expect(result.textContent).toContain('Updated 0 sections')
         })
 
-        it('should handle partial failures in multiple sections', async () => {
+        it('should keep the updated sections when one in the batch fails', async () => {
             const mockSection = createMockSection({
                 id: 'section-1',
                 projectId: 'project-1',
@@ -281,17 +290,51 @@ describe(`${UPDATE_SECTIONS} tool`, () => {
                 .mockResolvedValueOnce(mockSection)
                 .mockRejectedValueOnce(new Error('API Error: Section not found'))
 
-            await expect(
-                updateSections.execute(
-                    {
-                        sections: [
-                            { id: 'section-1', name: 'Updated Section' },
-                            { id: 'nonexistent', name: 'New Name' },
-                        ],
-                    },
+            const result = await updateSections.execute(
+                {
+                    sections: [
+                        { id: 'section-1', name: 'Updated Section' },
+                        { id: 'nonexistent', name: 'New Name' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.updatedSectionIds).toEqual(['section-1'])
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'nonexistent', error: 'API Error: Section not found' },
+            ])
+            expect(result.structuredContent.appliedOperations).toEqual({
+                updateCount: 1,
+                failureCount: 1,
+            })
+            expect(result.textContent).toContain('Updated 1 section:')
+            expect(result.textContent).toContain('Failed (1) - address or drop these items')
+        })
+
+        it('retries a transient 5xx failure on a per-section call', async () => {
+            vi.useFakeTimers()
+            try {
+                mockTodoistApi.updateSection
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    .mockResolvedValueOnce(
+                        createMockSection({ id: 'section-1', projectId: 'project-1' }),
+                    )
+
+                const promise = updateSections.execute(
+                    { sections: [{ id: 'section-1', name: 'Renamed' }] },
                     mockTodoistApi,
-                ),
-            ).rejects.toThrow('API Error: Section not found')
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.updateSection).toHaveBeenCalledTimes(2)
+                expect(result.structuredContent.appliedOperations.failureCount).toBe(0)
+            } finally {
+                vi.useRealTimers()
+            }
         })
     })
 })
