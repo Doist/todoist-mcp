@@ -40,6 +40,7 @@ describe(`${UPDATE_LABELS} tool`, () => {
                 updateCount: 1,
                 renameCount: 0,
                 skippedCount: 0,
+                failureCount: 0,
             })
             expect(result.textContent).toContain('Updated 1 label')
             expect(result.textContent).toContain('Renamed')
@@ -110,19 +111,82 @@ describe(`${UPDATE_LABELS} tool`, () => {
                 updateCount: 0,
                 renameCount: 0,
                 skippedCount: 1,
+                failureCount: 0,
             })
             expect(result.textContent).toContain('skipped - no changes')
         })
 
-        it('should propagate API errors from updateLabel', async () => {
+        it('should report API errors from updateLabel as failures', async () => {
             mockTodoistApi.updateLabel.mockRejectedValue(new Error(TEST_ERRORS.API_UNAUTHORIZED))
 
-            await expect(
-                updateLabels.execute(
+            const result = await updateLabels.execute(
+                { labels: [{ labelType: 'personal', id: 'label-1', name: 'X' }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.updatedLabels).toEqual([])
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'label-1', error: TEST_ERRORS.API_UNAUTHORIZED },
+            ])
+            expect(result.structuredContent.appliedOperations.failureCount).toBe(1)
+        })
+
+        it('should keep the other updates when one label in the batch fails', async () => {
+            mockTodoistApi.updateLabel
+                .mockResolvedValueOnce(createMockLabel({ id: 'label-1', name: 'Work' }))
+                .mockRejectedValueOnce(new Error(TEST_ERRORS.API_UNAUTHORIZED))
+            mockTodoistApi.renameSharedLabel.mockRejectedValueOnce(
+                new Error(TEST_ERRORS.API_UNAUTHORIZED),
+            )
+
+            const result = await updateLabels.execute(
+                {
+                    labels: [
+                        { labelType: 'personal', id: 'label-1', name: 'Work' },
+                        { labelType: 'personal', id: 'label-2', name: 'Home' },
+                        { labelType: 'shared', name: 'team', newName: 'squad' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.updatedLabels.map((label) => label.id)).toEqual([
+                'label-1',
+            ])
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'label-2', error: TEST_ERRORS.API_UNAUTHORIZED },
+                { item: 'team', error: TEST_ERRORS.API_UNAUTHORIZED },
+            ])
+            expect(result.structuredContent.appliedOperations).toEqual({
+                updateCount: 1,
+                renameCount: 0,
+                skippedCount: 0,
+                failureCount: 2,
+            })
+            expect(result.textContent).toContain('Failed (2) - address or drop these items')
+        })
+
+        it('retries a transient 5xx failure on a per-label call', async () => {
+            vi.useFakeTimers()
+            try {
+                mockTodoistApi.updateLabel
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    .mockResolvedValueOnce(createMockLabel({ id: 'label-1' }))
+
+                const promise = updateLabels.execute(
                     { labels: [{ labelType: 'personal', id: 'label-1', name: 'X' }] },
                     mockTodoistApi,
-                ),
-            ).rejects.toThrow(TEST_ERRORS.API_UNAUTHORIZED)
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.updateLabel).toHaveBeenCalledTimes(2)
+                expect(result.structuredContent.appliedOperations.failureCount).toBe(0)
+            } finally {
+                vi.useRealTimers()
+            }
         })
 
         it('should normalize a display color name to canonical key', async () => {
@@ -164,6 +228,7 @@ describe(`${UPDATE_LABELS} tool`, () => {
                 updateCount: 0,
                 renameCount: 1,
                 skippedCount: 0,
+                failureCount: 0,
             })
             expect(result.textContent).toContain('old → new')
         })
@@ -183,6 +248,7 @@ describe(`${UPDATE_LABELS} tool`, () => {
                 updateCount: 0,
                 renameCount: 0,
                 skippedCount: 1,
+                failureCount: 0,
             })
             expect(result.textContent).toContain('shared label not found')
         })
@@ -212,6 +278,7 @@ describe(`${UPDATE_LABELS} tool`, () => {
                 updateCount: 1,
                 renameCount: 1,
                 skippedCount: 0,
+                failureCount: 0,
             })
             expect(result.textContent).toContain('Personal:')
             expect(result.textContent).toContain('Shared:')

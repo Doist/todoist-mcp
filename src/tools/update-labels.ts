@@ -1,8 +1,12 @@
 import type { Label } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
 import { ColorSchema } from '../utils/colors.js'
-import { LabelSchema as LabelOutputSchema } from '../utils/output-schemas.js'
+import { FailureSchema, LabelSchema as LabelOutputSchema } from '../utils/output-schemas.js'
+import { appendFailureSummary } from '../utils/response-builders.js'
+import { executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const PersonalLabelUpdateSchema = z.object({
@@ -54,6 +58,11 @@ const OutputSchema = {
     totalCount: z
         .number()
         .describe('The total number of successful operations (personal + shared).'),
+    failures: z
+        .array(FailureSchema)
+        .describe(
+            'Labels that could not be updated, identified by ID (personal) or name (shared), with the reason for each.',
+        ),
     appliedOperations: z
         .object({
             updateCount: z.number().describe('Number of personal labels updated.'),
@@ -61,6 +70,7 @@ const OutputSchema = {
             skippedCount: z
                 .number()
                 .describe('Number of operations skipped (no changes or shared label not found).'),
+            failureCount: z.number(),
         })
         .describe('Summary of operations performed.'),
 }
@@ -80,25 +90,48 @@ const updateLabels = {
             | { kind: 'renamed'; name: string; newName: string }
             | { kind: 'skipped'; reason: SkipReason }
 
-        const results: Result[] = await Promise.all(
+        // Each label is updated independently, so one rejection neither discards the
+        // labels that were updated nor hides them behind one error.
+        const settled = await Promise.allSettled(
             labels.map(async (label): Promise<Result> => {
                 if (label.labelType === 'personal') {
                     const skipReason = getPersonalSkipReason(label)
                     if (skipReason !== null) return { kind: 'skipped', reason: skipReason }
 
                     const { id, labelType: _labelType, ...updateArgs } = label
-                    const updated = await client.updateLabel(id, updateArgs)
+                    const updated = await executeWithRetry(() => client.updateLabel(id, updateArgs))
                     return { kind: 'updated', label: updated }
                 }
 
-                const ok = await client.renameSharedLabel({
-                    name: label.name,
-                    newName: label.newName,
-                })
+                const ok = await executeWithRetry(() =>
+                    client.renameSharedLabel({ name: label.name, newName: label.newName }),
+                )
                 if (!ok) return { kind: 'skipped', reason: 'not-found' }
                 return { kind: 'renamed', name: label.name, newName: label.newName }
             }),
         )
+
+        const results: Result[] = []
+        const failures: Array<{ item: string; error: string }> = []
+
+        settled.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                results.push(result.value)
+                return
+            }
+            const label = labels[index]
+            failures.push({
+                item: label
+                    ? label.labelType === 'personal'
+                        ? label.id
+                        : label.name
+                    : `Label ${index + 1}`,
+                error: formatBatchItemError(result.reason),
+            })
+        })
+
+        // A shared label is identified by its name, which is the caller's own text.
+        logBatchFailures(ToolNames.UPDATE_LABELS, labels.length, failures, { redactItems: true })
 
         const updatedLabels = results
             .filter((r): r is { kind: 'updated'; label: Label } => r.kind === 'updated')
@@ -119,12 +152,15 @@ const updateLabels = {
             (r) => r.kind === 'skipped' && r.reason === 'not-found',
         ).length
 
-        const textContent = generateTextContent({
-            updatedLabels,
-            renamedSharedLabels,
-            skippedNoFields,
-            skippedNotFound,
-        })
+        const textContent = appendFailureSummary(
+            generateTextContent({
+                updatedLabels,
+                renamedSharedLabels,
+                skippedNoFields,
+                skippedNotFound,
+            }),
+            failures,
+        )
 
         return {
             textContent,
@@ -132,10 +168,12 @@ const updateLabels = {
                 updatedLabels,
                 renamedSharedLabels,
                 totalCount: updatedLabels.length + renamedSharedLabels.length,
+                failures,
                 appliedOperations: {
                     updateCount: updatedLabels.length,
                     renameCount: renamedSharedLabels.length,
                     skippedCount,
+                    failureCount: failures.length,
                 },
             },
         }

@@ -1,7 +1,15 @@
 import type { Section } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { SectionSchema as SectionOutputSchema, toSectionSummary } from '../utils/output-schemas.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
+import {
+    FailureSchema,
+    SectionSchema as SectionOutputSchema,
+    toSectionSummary,
+} from '../utils/output-schemas.js'
+import { appendFailureSummary } from '../utils/response-builders.js'
+import { executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const SectionUpdateSchema = z
@@ -35,6 +43,13 @@ const OutputSchema = {
     sections: z.array(SectionOutputSchema).describe('The updated sections.'),
     totalCount: z.number().describe('The total number of sections updated.'),
     updatedSectionIds: z.array(z.string()).describe('The IDs of the updated sections.'),
+    failures: z
+        .array(FailureSchema)
+        .describe('Sections that could not be updated, with the reason for each.'),
+    appliedOperations: z.object({
+        updateCount: z.number(),
+        failureCount: z.number(),
+    }),
 }
 
 const updateSections = {
@@ -44,7 +59,9 @@ const updateSections = {
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     async execute({ sections }, client) {
-        const updatedSections = await Promise.all(
+        // Each section is updated independently, so one rejection neither discards the
+        // sections that were updated nor hides them behind one error.
+        const settled = await Promise.allSettled(
             sections.map(({ id, name, description }) => {
                 // The SDK's UpdateSectionArgs is RequireAtLeastOne, which a
                 // dynamically-built partial can't satisfy statically; the schema
@@ -57,12 +74,29 @@ const updateSections = {
                         ? { description: description === '' ? null : description }
                         : {}),
                 } as Parameters<typeof client.updateSection>[1]
-                return client.updateSection(id, updateArgs)
+                return executeWithRetry(() => client.updateSection(id, updateArgs))
             }),
         )
 
+        const updatedSections: Section[] = []
+        const failures: Array<{ item: string; error: string }> = []
+
+        settled.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                updatedSections.push(result.value)
+            } else {
+                failures.push({
+                    item: sections[index]?.id ?? `Section ${index + 1}`,
+                    error: formatBatchItemError(result.reason),
+                })
+            }
+        })
+
+        logBatchFailures(ToolNames.UPDATE_SECTIONS, sections.length, failures)
+
         const textContent = generateTextContent({
             sections: updatedSections,
+            failures,
         })
 
         return {
@@ -71,20 +105,34 @@ const updateSections = {
                 sections: updatedSections.map(toSectionSummary),
                 totalCount: updatedSections.length,
                 updatedSectionIds: updatedSections.map((section) => section.id),
+                failures,
+                appliedOperations: {
+                    updateCount: updatedSections.length,
+                    failureCount: failures.length,
+                },
             },
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
 
-function generateTextContent({ sections }: { sections: Section[] }) {
+function generateTextContent({
+    sections,
+    failures,
+}: {
+    sections: Section[]
+    failures: Array<{ item: string; error: string }>
+}) {
     const count = sections.length
     const sectionList = sections
         .map((section) => `• ${section.name} (id=${section.id}, projectId=${section.projectId})`)
         .join('\n')
 
-    const summary = `Updated ${count} section${count === 1 ? '' : 's'}:\n${sectionList}`
+    const summary =
+        count > 0
+            ? `Updated ${count} section${count === 1 ? '' : 's'}:\n${sectionList}`
+            : 'Updated 0 sections'
 
-    return summary
+    return appendFailureSummary(summary, failures)
 }
 
 export { updateSections }
