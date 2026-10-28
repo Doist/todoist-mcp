@@ -68,6 +68,26 @@ describe('logBatchFailures', () => {
         )
     })
 
+    it('redacts the caller text that an error quotes', () => {
+        logBatchFailures('add-reminders', 1, [
+            {
+                item: 'Reminder 1 on task 6X4Vw2Hfmg73Q2XR',
+                error: 'Could not find user(s): "ana@example.com", "Bo Smith".',
+            },
+        ])
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith('add-reminders: items failed', {
+            failed: 1,
+            of: 1,
+            sample: [
+                {
+                    item: 'Reminder 1 on task 6X4Vw2Hfmg73Q2XR',
+                    error: 'Could not find user(s): "[redacted]", "[redacted]".',
+                },
+            ],
+        })
+    })
+
     it('stays quiet when every item succeeds', () => {
         logBatchFailures('complete-tasks', 2, [])
 

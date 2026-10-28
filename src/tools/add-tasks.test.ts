@@ -495,35 +495,35 @@ describe(`${ADD_TASKS} tool`, () => {
     })
 
     describe('error handling', () => {
-        it('should throw error for invalid duration format', async () => {
-            await expect(
-                addTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                content: 'Task with invalid duration',
-                                duration: 'invalid',
-                                projectId: '6cfCcrrCFg2xP94Q',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(
+        it('should report an invalid duration format as a failure', async () => {
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        {
+                            content: 'Task with invalid duration',
+                            duration: 'invalid',
+                            projectId: '6cfCcrrCFg2xP94Q',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+            expect(result.structuredContent.tasks).toEqual([])
+            expect(result.structuredContent.failures[0]?.error).toContain(
                 'Task "Task with invalid duration": Invalid duration format "invalid"',
             )
         })
 
-        it('should throw error when single task fails (all-fail case)', async () => {
+        it('should report a single failed task as a failure (all-fail case)', async () => {
             const apiError = new Error('API Error: Bad Request')
             mockTodoistApi.addTask.mockRejectedValue(apiError)
 
-            await expect(
-                addTasks.execute(
-                    { tasks: [{ content: 'Test task', projectId: '6cfCcrrCFg2xP94Q' }] },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(apiError.message)
+            const result = await addTasks.execute(
+                { tasks: [{ content: 'Test task', projectId: '6cfCcrrCFg2xP94Q' }] },
+                mockTodoistApi,
+            )
+            expect(result.structuredContent.tasks).toEqual([])
+            expect(result.structuredContent.failures[0]?.error).toContain(apiError.message)
         })
 
         it('should handle partial failures and return both successes and failures', async () => {
@@ -569,22 +569,96 @@ describe(`${ADD_TASKS} tool`, () => {
             expect(result.textContent).toContain('1/2 successful')
         })
 
-        it('should throw error when all tasks in a batch fail', async () => {
+        it('returns structured failures when every task in the batch fails', async () => {
             const apiError1 = new Error('API Error: First task failed')
             const apiError2 = new Error('API Error: Second task failed')
             mockTodoistApi.addTask.mockRejectedValueOnce(apiError1).mockRejectedValueOnce(apiError2)
 
-            await expect(
-                addTasks.execute(
-                    {
-                        tasks: [
-                            { content: 'First task', projectId: '6cfCcrrCFg2xP94Q' },
-                            { content: 'Second task', projectId: '6cfCcrrCFg2xP94Q' },
-                        ],
-                    },
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        { content: 'First task', projectId: '6cfCcrrCFg2xP94Q' },
+                        { content: 'Second task', projectId: '6cfCcrrCFg2xP94Q' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.tasks).toEqual([])
+            expect(result.structuredContent.successCount).toBe(0)
+            expect(result.structuredContent.failureCount).toBe(2)
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'First task', error: 'API Error: First task failed' },
+                { item: 'Second task', error: 'API Error: Second task failed' },
+            ])
+            expect(result.textContent).toContain('0/2 successful')
+        })
+
+        it('does not retry a create that failed with a 502, since the task may exist', async () => {
+            mockTodoistApi.addTask.mockRejectedValueOnce(
+                Object.assign(new Error('Bad Gateway'), { httpStatusCode: 502 }),
+            )
+
+            const result = await addTasks.execute(
+                { tasks: [{ content: 'Maybe created' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.addTask).toHaveBeenCalledOnce()
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'Maybe created', error: 'Bad Gateway (HTTP 502)' },
+            ])
+        })
+
+        it('retries a transient 5xx failure while looking up the project', async () => {
+            vi.useFakeTimers()
+            try {
+                mockTodoistApi.getProject.mockReset()
+                mockTodoistApi.getProject
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Bad Gateway'), { httpStatusCode: 502 }),
+                    )
+                    .mockResolvedValueOnce(createMockProject({ id: '6cfCcrrCFg2xP94Q' }))
+                mockTodoistApi.addTask.mockResolvedValueOnce(createMockTask({ content: 'Lookup' }))
+
+                const promise = addTasks.execute(
+                    { tasks: [{ content: 'Lookup', projectId: '6cfCcrrCFg2xP94Q' }] },
                     mockTodoistApi,
-                ),
-            ).rejects.toThrow('All 2 task(s) failed to create')
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.getProject).toHaveBeenCalledTimes(2)
+                expect(result.structuredContent.successCount).toBe(1)
+            } finally {
+                vi.useRealTimers()
+            }
+        })
+
+        it('retries a transient 5xx failure on a per-task call', async () => {
+            vi.useFakeTimers()
+            try {
+                mockTodoistApi.addTask
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    .mockResolvedValueOnce(
+                        createMockTask({ id: 'task-retry', content: 'Retry me' }),
+                    )
+
+                const promise = addTasks.execute(
+                    { tasks: [{ content: 'Retry me' }] },
+                    mockTodoistApi,
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.addTask).toHaveBeenCalledTimes(2)
+                expect(result.structuredContent.successCount).toBe(1)
+                expect(result.structuredContent.failureCount).toBe(0)
+            } finally {
+                vi.useRealTimers()
+            }
         })
 
         it('should preserve the item-limit error tag when a project is full', async () => {
@@ -602,12 +676,12 @@ describe(`${ADD_TASKS} tool`, () => {
             })
             mockTodoistApi.addTask.mockRejectedValue(itemLimitError)
 
-            await expect(
-                addTasks.execute(
-                    { tasks: [{ content: 'One too many', projectId: '6cfCcrrCFg2xP94Q' }] },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(
+            const result = await addTasks.execute(
+                { tasks: [{ content: 'One too many', projectId: '6cfCcrrCFg2xP94Q' }] },
+                mockTodoistApi,
+            )
+            expect(result.structuredContent.tasks).toEqual([])
+            expect(result.structuredContent.failures[0]?.error).toContain(
                 'Maximum number of items exceeded (HTTP 403, code 49, tag MAX_ITEMS_LIMIT_REACHED)',
             )
         })
@@ -686,25 +760,31 @@ describe(`${ADD_TASKS} tool`, () => {
             })
             mockTodoistApi.addTask.mockRejectedValue(invalidDueString)
 
-            await expect(
-                addTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                content: 'Lavendel abschneiden',
-                                dueString: 'recurring every year on July 1',
-                            },
-                            {
-                                content: 'Frauenmantel abschneiden',
-                                dueString: 'recurring every year on July 1',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(
-                'Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed',
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        {
+                            content: 'Lavendel abschneiden',
+                            dueString: 'recurring every year on July 1',
+                        },
+                        {
+                            content: 'Frauenmantel abschneiden',
+                            dueString: 'recurring every year on July 1',
+                        },
+                    ],
+                },
+                mockTodoistApi,
             )
+            expect(result.structuredContent.tasks).toEqual([])
+            // Each failure keeps the guidance for its own task.
+            expect(result.structuredContent.failures.map((failure) => failure.error)).toEqual([
+                expect.stringContaining(
+                    'Task "Lavendel abschneiden" wasn\'t created because `dueString` could not be parsed',
+                ),
+                expect.stringContaining(
+                    'Task "Frauenmantel abschneiden" wasn\'t created because `dueString` could not be parsed',
+                ),
+            ])
         })
     })
 
@@ -807,19 +887,19 @@ describe(`${ADD_TASKS} tool`, () => {
         })
 
         it('should prevent assignment without project context', async () => {
-            await expect(
-                addTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                content: 'Task with assignment but no project',
-                                responsibleUser: 'user@example.com',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        {
+                            content: 'Task with assignment but no project',
+                            responsibleUser: 'user@example.com',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+            expect(result.structuredContent.tasks).toEqual([])
+            expect(result.structuredContent.failures[0]?.error).toContain(
                 'Task "Task with assignment but no project": Cannot assign tasks without specifying project context. Please specify a projectId, sectionId, or parentId.',
             )
         })
@@ -911,42 +991,44 @@ describe(`${ADD_TASKS} tool`, () => {
             validateSpy.mockRestore()
         })
 
-        it('should throw a clear error when the section does not exist', async () => {
+        it('should report a clear failure when the section does not exist', async () => {
             mockTodoistApi.getSection.mockResolvedValue(null as unknown as never)
 
-            await expect(
-                addTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                content: 'Section task',
-                                sectionId: 'missing-section',
-                                responsibleUser: 'user@example.com',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('Task "Section task": Section "missing-section" not found')
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        {
+                            content: 'Section task',
+                            sectionId: 'missing-section',
+                            responsibleUser: 'user@example.com',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+            expect(result.structuredContent.tasks).toEqual([])
+            expect(result.structuredContent.failures[0]?.error).toContain(
+                'Task "Section task": Section "missing-section" not found',
+            )
         })
 
-        it('should propagate non-not-found errors when resolving the section', async () => {
+        it('should report non-not-found errors from resolving the section', async () => {
             mockTodoistApi.getSection.mockRejectedValue(new Error('Service Unavailable'))
 
-            await expect(
-                addTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                content: 'Section task',
-                                sectionId: TEST_IDS.SECTION_1,
-                                responsibleUser: 'user@example.com',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('Service Unavailable')
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        {
+                            content: 'Section task',
+                            sectionId: TEST_IDS.SECTION_1,
+                            responsibleUser: 'user@example.com',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+            expect(result.structuredContent.tasks).toEqual([])
+            expect(result.structuredContent.failures[0]?.error).toContain('Service Unavailable')
         })
     })
 
@@ -1094,24 +1176,24 @@ describe(`${ADD_TASKS} tool`, () => {
     })
 
     describe('archived project validation', () => {
-        it('should throw error when project is archived', async () => {
+        it('should report a failure when project is archived', async () => {
             mockTodoistApi.getProject.mockResolvedValue(
                 createMockProject({ isArchived: true, name: 'Archived Project' }),
             )
 
-            await expect(
-                addTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                content: 'Task in archived project',
-                                projectId: '6cfCcrrCFg2xP94Q',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        {
+                            content: 'Task in archived project',
+                            projectId: '6cfCcrrCFg2xP94Q',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+            expect(result.structuredContent.tasks).toEqual([])
+            expect(result.structuredContent.failures[0]?.error).toContain(
                 'Task "Task in archived project": Cannot create task in archived project "Archived Project"',
             )
 
@@ -1131,22 +1213,22 @@ describe(`${ADD_TASKS} tool`, () => {
             expect(mockTodoistApi.addTask).toHaveBeenCalled()
         })
 
-        it('should propagate error when project is deleted (not found)', async () => {
+        it('should report the error when project is deleted (not found)', async () => {
             mockTodoistApi.getProject.mockRejectedValue(new Error('Project not found'))
 
-            await expect(
-                addTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                content: 'Task in deleted project',
-                                projectId: 'deleted-project-id',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('Project not found')
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        {
+                            content: 'Task in deleted project',
+                            projectId: 'deleted-project-id',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+            expect(result.structuredContent.tasks).toEqual([])
+            expect(result.structuredContent.failures[0]?.error).toContain('Project not found')
 
             expect(mockTodoistApi.addTask).not.toHaveBeenCalled()
         })

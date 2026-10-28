@@ -2,7 +2,6 @@ import type { AddTaskArgs, Task, TodoistApi } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import {
-    BatchDueStringParseError,
     DueStringParseError,
     formatBatchItemError,
     formatDueStringParseError,
@@ -23,6 +22,7 @@ import {
     PrioritySchema,
 } from '../utils/priorities.js'
 import { summarizeBatch, summarizeTaskOperation } from '../utils/response-builders.js'
+import { executeCreateWithRetry, executeWithRetry } from '../utils/retry.js'
 import { optionalString } from '../utils/schema-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 
@@ -79,10 +79,12 @@ const ArgsSchema = {
 const OutputSchema = {
     tasks: z.array(TaskOutputSchema).describe('The created tasks.'),
     totalCount: z.number().describe('The total number of tasks created.'),
-    failures: z.array(FailureSchema).describe('Failed task creations with error details.'),
-    totalRequested: z.number().describe('The total number of tasks requested.'),
-    successCount: z.number().describe('The number of successfully created tasks.'),
-    failureCount: z.number().describe('The number of failed task creations.'),
+    failures: z
+        .array(FailureSchema)
+        .describe('Tasks that could not be created, with the reason for each.'),
+    totalRequested: z.number(),
+    successCount: z.number(),
+    failureCount: z.number(),
 }
 
 const addTasks = {
@@ -143,13 +145,11 @@ const addTasks = {
 
         const newTasks: Task[] = []
         const failures: Array<{ item: string; error: string }> = []
-        let hasDueStringParseFailure = false
 
         for (const { index, result } of indexed) {
             if (result.status === 'fulfilled') {
                 newTasks.push(result.value)
             } else {
-                hasDueStringParseFailure ||= result.reason instanceof DueStringParseError
                 failures.push({
                     item: tasks[index]?.content ?? `Task ${index + 1}`,
                     // Keep API error signals (status/code/tag) — `error.message`
@@ -160,16 +160,9 @@ const addTasks = {
             }
         }
 
-        // If all tasks failed, throw an error
-        if (newTasks.length === 0 && failures.length > 0) {
-            const details = failures.map((f) => `"${f.item}": ${f.error}`).join('; ')
-            const message = `All ${failures.length} task(s) failed to create: ${details}`
-            if (hasDueStringParseFailure) {
-                throw new BatchDueStringParseError(message)
-            }
-            throw new Error(message)
-        }
-
+        // Every task is settled on its own, so a batch where all of them failed is still
+        // reported as a structured result rather than thrown: each failure keeps its own
+        // reason (including due-string recovery guidance) for the caller to act on.
         const mappedTasks = newTasks.map(mapTask)
 
         logBatchFailures(ToolNames.ADD_TASKS, tasks.length, failures, { redactItems: true })
@@ -225,7 +218,7 @@ async function processTask(
 
     // Validate project is not archived
     if (resolvedProjectId) {
-        const project = await client.getProject(resolvedProjectId)
+        const project = await executeWithRetry(() => client.getProject(resolvedProjectId))
         if (project.isArchived) {
             throw new Error(
                 `Task "${task.content}": Cannot create task in archived project "${project.name}"`,
@@ -279,7 +272,7 @@ async function processTask(
         if (!targetProjectId && parentId) {
             // For subtasks, get project from parent task
             try {
-                const parentTask = await client.getTask(parentId)
+                const parentTask = await executeWithRetry(() => client.getTask(parentId))
                 targetProjectId = parentTask.projectId
             } catch (_error) {
                 throw new Error(`Task "${task.content}": Parent task "${parentId}" not found`)
@@ -289,7 +282,7 @@ async function processTask(
             // Let real API/network errors propagate; only a missing section is "not found".
             targetProjectId = sectionProjectCache.get(sectionId)
             if (!targetProjectId) {
-                const section = await client.getSection(sectionId)
+                const section = await executeWithRetry(() => client.getSection(sectionId))
                 if (!section) {
                     throw new Error(`Task "${task.content}": Section "${sectionId}" not found`)
                 }
@@ -324,7 +317,8 @@ async function processTask(
     }
 
     try {
-        return await client.addTask(taskArgs)
+        // A 502/504 may mean the task was created, and the API cannot dedupe a repeat.
+        return await executeCreateWithRetry(() => client.addTask(taskArgs))
     } catch (error) {
         const recovery = formatDueStringParseError(error, {
             taskContent: task.content,

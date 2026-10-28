@@ -7,7 +7,7 @@ import { logBatchFailures } from '../utils/batch-failures.js'
 import { ColorSchema } from '../utils/colors.js'
 import { FailureSchema, ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
 import { appendFailureSummary } from '../utils/response-builders.js'
-import { executeWithRetry } from '../utils/retry.js'
+import { executeCreateWithRetry, executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { workspaceResolver } from '../utils/workspace-resolver.js'
 
@@ -50,12 +50,10 @@ const OutputSchema = {
     totalCount: z.number().describe('The total number of projects created.'),
     failures: z
         .array(FailureSchema)
-        .describe(
-            'Projects that could not be created, with the reason for each. A failure here does not affect the other projects in the batch — do not retry the whole batch; address or drop the failed items.',
-        ),
-    totalRequested: z.number().describe('The total number of projects requested.'),
-    successCount: z.number().describe('The number of successfully created projects.'),
-    failureCount: z.number().describe('The number of failed project creations.'),
+        .describe('Projects that could not be created, with the reason for each.'),
+    totalRequested: z.number(),
+    successCount: z.number(),
+    failureCount: z.number(),
 }
 
 const addProjects = {
@@ -86,12 +84,12 @@ const addProjects = {
         // Each project is created independently: a failure on one (for example, the API
         // rejecting it with a 403 permission error) must not discard the projects that
         // succeeded nor collapse into one opaque batch error that invites a full retry.
-        // Per-item calls go through executeWithRetry so transient 5xx failures still get
-        // the same backoff the registerTool() wrapper applies to single-call tools.
+        // Each create goes through executeCreateWithRetry, which retries a 503 but not a
+        // 502/504, since the item may already exist and the API cannot dedupe a repeat.
         const settled = await Promise.allSettled(
             projects.map(async ({ workspace, ...rest }) => {
                 const workspaceId = await resolveWorkspaceId(workspace)
-                return await executeWithRetry(() =>
+                return await executeCreateWithRetry(() =>
                     client.addProject({ ...rest, ...(workspaceId ? { workspaceId } : {}) }),
                 )
             }),

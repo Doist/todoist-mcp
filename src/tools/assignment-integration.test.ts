@@ -143,20 +143,20 @@ describe('Assignment Integration Tests', () => {
                 },
             })
 
-            await expect(
-                addTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                content: 'Invalid assignment task',
-                                projectId: 'project-123',
-                                responsibleUser: 'nonexistent@example.com',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        {
+                            content: 'Invalid assignment task',
+                            projectId: 'project-123',
+                            responsibleUser: 'nonexistent@example.com',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+            expect(result.structuredContent.tasks).toEqual([])
+            expect(result.structuredContent.failures[0]?.error).toContain(
                 'Task "Invalid assignment task": User not found in project collaborators. Use find-project-collaborators to see valid assignees',
             )
 
@@ -447,38 +447,38 @@ describe('Assignment Integration Tests', () => {
                 },
             })
 
-            await expect(
-                addTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                content: 'Task in unshared project',
-                                projectId: 'project-123',
-                                responsibleUser: 'john@example.com',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        {
+                            content: 'Task in unshared project',
+                            projectId: 'project-123',
+                            responsibleUser: 'john@example.com',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+            expect(result.structuredContent.tasks).toEqual([])
+            expect(result.structuredContent.failures[0]?.error).toContain(
                 'Task "Task in unshared project": Project not shared. Share the project to enable assignments',
             )
         })
 
         it('should handle inbox assignment restriction', async () => {
-            await expect(
-                addTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                content: 'Inbox task with assignment',
-                                responsibleUser: 'john@example.com',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        {
+                            content: 'Inbox task with assignment',
+                            responsibleUser: 'john@example.com',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+            expect(result.structuredContent.tasks).toEqual([])
+            expect(result.structuredContent.failures[0]?.error).toContain(
                 'Task "Inbox task with assignment": Cannot assign tasks without specifying project context. Please specify a projectId, sectionId, or parentId.',
             )
         })
@@ -486,20 +486,20 @@ describe('Assignment Integration Tests', () => {
         it('should handle parent task not found', async () => {
             mockTodoistApi.getTask.mockRejectedValueOnce(new Error('Task not found'))
 
-            await expect(
-                addTasks.execute(
-                    {
-                        tasks: [
-                            {
-                                content: 'Subtask with bad parent',
-                                parentId: 'nonexistent-parent',
-                                responsibleUser: 'john@example.com',
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow(
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        {
+                            content: 'Subtask with bad parent',
+                            parentId: 'nonexistent-parent',
+                            responsibleUser: 'john@example.com',
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+            expect(result.structuredContent.tasks).toEqual([])
+            expect(result.structuredContent.failures[0]?.error).toContain(
                 'Task "Subtask with bad parent": Parent task "nonexistent-parent" not found',
             )
         })

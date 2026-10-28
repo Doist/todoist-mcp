@@ -10,7 +10,7 @@ import {
     toSectionSummary,
 } from '../utils/output-schemas.js'
 import { appendFailureSummary } from '../utils/response-builders.js'
-import { executeWithRetry } from '../utils/retry.js'
+import { executeCreateWithRetry, executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const SectionSchema = z.object({
@@ -36,12 +36,10 @@ const OutputSchema = {
     totalCount: z.number().describe('The total number of sections created.'),
     failures: z
         .array(FailureSchema)
-        .describe(
-            'Sections that could not be created, with the reason for each. A failure here does not affect the other sections in the batch — do not retry the whole batch; address or drop the failed items.',
-        ),
-    totalRequested: z.number().describe('The total number of sections requested.'),
-    successCount: z.number().describe('The number of successfully created sections.'),
-    failureCount: z.number().describe('The number of failed section creations.'),
+        .describe('Sections that could not be created, with the reason for each.'),
+    totalRequested: z.number(),
+    successCount: z.number(),
+    failureCount: z.number(),
 }
 
 const addSections = {
@@ -58,8 +56,8 @@ const addSections = {
         // Each section is created independently: a failure on one (for example, the API
         // rejecting it with a 403 permission error) must not discard the sections that
         // succeeded nor collapse into one opaque batch error that invites a full retry.
-        // Per-item calls go through executeWithRetry so transient 5xx failures still get
-        // the same backoff the registerTool() wrapper applies to single-call tools.
+        // Each create goes through executeCreateWithRetry, which retries a 503 but not a
+        // 502/504, since the item may already exist and the API cannot dedupe a repeat.
         const settled = await Promise.allSettled(
             sections.map(async (section) => {
                 const todoistUser = isInboxProjectId(section.projectId)
@@ -71,7 +69,7 @@ const addSections = {
                         user: todoistUser,
                         client: undefined,
                     })) ?? section.projectId
-                return executeWithRetry(() => client.addSection({ ...section, projectId }))
+                return executeCreateWithRetry(() => client.addSection({ ...section, projectId }))
             }),
         )
 

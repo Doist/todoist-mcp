@@ -309,7 +309,8 @@ describe('registerTool error path', () => {
             context: unknown,
         ) => Promise<{
             content: Array<{ text: string }>
-            isError: boolean
+            isError?: boolean
+            structuredContent?: { failures?: Array<{ item: string; error: string }> }
         }>
 
         const output = await callback(
@@ -328,14 +329,19 @@ describe('registerTool error path', () => {
             {},
         )
 
-        expect(output.isError).toBe(true)
-        expect(output.content[0]?.text).toContain('All 2 task(s) failed to create')
-        expect(output.content[0]?.text).toContain('Lavendel abschneiden')
-        expect(output.content[0]?.text).toContain('Frauenmantel abschneiden')
-        expect(output.content[0]?.text).toContain('`dueString` could not be parsed')
-        expect(output.content[0]?.text).toContain('`every year on July 1`')
-        expect(output.content[0]?.text).toContain("don't prefix it with `recurring`")
-        expect(output.content[0]?.text).toContain('Change only `dueString` and retry.')
+        // Every task failing is still a structured result, so each failure keeps its own
+        // recovery guidance rather than being folded into one thrown error.
+        expect(output.isError).toBeFalsy()
+        expect(output.structuredContent?.failures?.map((failure) => failure.item)).toEqual([
+            'Lavendel abschneiden',
+            'Frauenmantel abschneiden',
+        ])
+        const text = output.content.map((part) => part.text).join('\n')
+        expect(text).toContain('Added tasks: 0/2 successful.')
+        expect(text).toContain('`dueString` could not be parsed')
+        expect(text).toContain('`every year on July 1`')
+        expect(text).toContain("don't prefix it with `recurring`")
+        expect(text).toContain('Change only `dueString` and retry.')
     })
 })
 

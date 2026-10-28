@@ -1,4 +1,5 @@
 import {
+    executeCreateWithRetry,
     executeWithRetry,
     extractHttpStatusCode,
     getRetryDelay,
@@ -375,4 +376,28 @@ describe('getRetryDelay', () => {
         expect(result).toBe('success')
         expect(fn).toHaveBeenCalledTimes(1)
     })
+})
+
+describe('executeCreateWithRetry', () => {
+    it('retries a 503, where the server turned the create away', async () => {
+        const fn = vi
+            .fn()
+            .mockRejectedValueOnce({ httpStatusCode: 503 })
+            .mockResolvedValueOnce('created')
+
+        await expect(executeCreateWithRetry(fn, NO_DELAY)).resolves.toBe('created')
+        expect(fn).toHaveBeenCalledTimes(2)
+    })
+
+    it.each([502, 504])(
+        'does not retry a %i, since the create may already have happened',
+        async (httpStatusCode) => {
+            const fn = vi.fn().mockRejectedValue({ httpStatusCode })
+
+            await expect(executeCreateWithRetry(fn, NO_DELAY)).rejects.toEqual({
+                httpStatusCode,
+            })
+            expect(fn).toHaveBeenCalledOnce()
+        },
+    )
 })

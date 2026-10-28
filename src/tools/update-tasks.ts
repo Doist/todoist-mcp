@@ -175,14 +175,12 @@ const OutputSchema = {
     updatedTaskIds: z.array(z.string()).describe('The IDs of the updated tasks.'),
     failures: z
         .array(FailureSchema)
-        .describe(
-            'Tasks that could not be updated, with the reason for each. A failure here does not affect the other tasks in the batch.',
-        ),
+        .describe('Tasks that could not be updated, with the reason for each.'),
     appliedOperations: z
         .object({
             updateCount: z.number().describe('The number of tasks actually updated.'),
             skippedCount: z.number().describe('The number of tasks skipped (no changes).'),
-            failureCount: z.number().describe('The number of tasks that failed to update.'),
+            failureCount: z.number(),
             redundantMovesSkipped: z
                 .number()
                 .describe(
