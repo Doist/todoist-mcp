@@ -1,7 +1,9 @@
 import type { AddCommentArgs, TodoistApi } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
 import { isInboxProjectId, mapComment, resolveInboxProjectId } from '../tool-helpers.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
 import {
     type CommentTarget,
     NO_NOTIFY_KEYWORD,
@@ -9,7 +11,9 @@ import {
     isNoNotifyList,
 } from '../utils/comment-recipients.js'
 import { ApiLimits } from '../utils/constants.js'
-import { CommentSchema as CommentOutputSchema } from '../utils/output-schemas.js'
+import { CommentSchema as CommentOutputSchema, FailureSchema } from '../utils/output-schemas.js'
+import { appendFailureSummary } from '../utils/response-builders.js'
+import { executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { resolveUserRefs } from '../utils/user-resolver.js'
 
@@ -40,6 +44,14 @@ const OutputSchema = {
     comments: z.array(CommentOutputSchema).describe('The created comments.'),
     totalCount: z.number().describe('The total number of comments created.'),
     addedCommentIds: z.array(z.string()).describe('The IDs of the added comments.'),
+    failures: z
+        .array(FailureSchema)
+        .describe(
+            'Comments that could not be added, identified by their content, with the reason for each.',
+        ),
+    totalRequested: z.number().describe('The total number of comments requested.'),
+    successCount: z.number().describe('The number of successfully added comments.'),
+    failureCount: z.number().describe('The number of comments that could not be added.'),
 }
 
 type CommentInput = z.infer<typeof CommentSchema>
@@ -61,64 +73,86 @@ const addComments = {
     async execute(args, client) {
         const { comments } = args
 
-        // Validate each comment
-        for (const [index, comment] of comments.entries()) {
-            if (!comment.taskId && !comment.projectId) {
-                throw new Error(
-                    `Comment ${index + 1}: Either taskId or projectId must be provided.`,
-                )
+        // The current user is needed to resolve "inbox" and to keep the author out of
+        // their own comment's recipients. Fetched at most once, and only if a comment
+        // needs it, so a failed lookup fails just those comments.
+        let currentUser: Promise<TodoistUser> | undefined
+        const getCurrentUser = () => (currentUser ??= executeWithRetry(() => client.getUser()))
+
+        // Two comments on the same target within one call are a single conversation,
+        // so they notify the same people: each target's thread is read only once.
+        const defaultRecipientsByTarget = new Map<string, Promise<string[]>>()
+
+        async function resolveRecipients(
+            { notifyUsers }: CommentInput,
+            target: CommentTarget,
+        ): Promise<string[]> {
+            if (notifyUsers) {
+                if (isNoNotifyList(notifyUsers)) return []
+                const resolved = await resolveUserRefs(client, notifyUsers)
+                return resolved.map((user) => user.userId)
             }
-            if (comment.taskId && comment.projectId) {
-                throw new Error(
-                    `Comment ${index + 1}: Cannot provide both taskId and projectId. Choose one.`,
-                )
+
+            const { id: currentUserId } = await getCurrentUser()
+            const key = target.taskId ? `task:${target.taskId}` : `project:${target.projectId}`
+            let pending = defaultRecipientsByTarget.get(key)
+            if (!pending) {
+                pending = getDefaultCommentRecipients(client, target, currentUserId)
+                defaultRecipientsByTarget.set(key, pending)
             }
+            return await pending
         }
 
-        // Every comment needs the current user, either to resolve "inbox" or to
-        // keep the author out of their own comment's recipients.
-        const needsInboxResolution = comments.some((comment) => isInboxProjectId(comment.projectId))
-        const needsDefaultRecipients = comments.some((comment) => !comment.notifyUsers)
-        const todoistUser =
-            needsInboxResolution || needsDefaultRecipients ? await client.getUser() : undefined
-
-        const targets = await Promise.all(
+        // Every comment's target and recipients are resolved before any is posted, so
+        // reading a thread for its default recipients never sees this batch's comments.
+        const prepared = await Promise.allSettled(
             comments.map(async (comment) => {
-                // Resolve "inbox" to actual inbox project ID if needed
-                const resolvedProjectId = await resolveInboxProjectId({
-                    projectId: comment.projectId,
-                    user: todoistUser,
-                    client: todoistUser ? undefined : client,
-                })
-
-                return (
-                    comment.taskId ? { taskId: comment.taskId } : { projectId: resolvedProjectId }
-                ) as CommentTarget
+                const target = await resolveTarget(comment, getCurrentUser)
+                const uidsToNotify = await resolveRecipients(comment, target)
+                return { target, uidsToNotify }
             }),
         )
 
-        const recipients = await resolveRecipientsPerComment({
-            comments,
-            targets,
-            client,
-            currentUser: todoistUser,
+        // Each comment is added independently: one bad target must not hide the
+        // comments that were posted, or a retry of the whole batch would post them twice.
+        const settled = await Promise.allSettled(
+            prepared.map((preparation, index) => {
+                if (preparation.status === 'rejected') {
+                    return Promise.reject(preparation.reason)
+                }
+                const { target, uidsToNotify } = preparation.value
+                return executeWithRetry(() =>
+                    client.addComment({
+                        content: comments[index]?.content,
+                        ...target,
+                        // Nobody to notify means no recipient field at all,
+                        // rather than an empty one.
+                        ...(uidsToNotify.length > 0 && { uidsToNotify }),
+                    } as AddCommentArgs),
+                )
+            }),
+        )
+
+        const mappedComments: ReturnType<typeof mapComment>[] = []
+        const failures: Array<{ item: string; error: string }> = []
+
+        settled.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                mappedComments.push(mapComment(result.value))
+            } else {
+                failures.push({
+                    item: comments[index]?.content ?? `Comment ${index + 1}`,
+                    error: formatBatchItemError(result.reason),
+                })
+            }
         })
 
-        const newComments = await Promise.all(
-            comments.map(async ({ content }, index) => {
-                const uidsToNotify = recipients[index] ?? []
-                return await client.addComment({
-                    content,
-                    ...targets[index],
-                    // Nobody to notify means no recipient field at all,
-                    // rather than an empty one.
-                    ...(uidsToNotify.length > 0 && { uidsToNotify }),
-                } as AddCommentArgs)
-            }),
-        )
+        logBatchFailures(ToolNames.ADD_COMMENTS, comments.length, failures, { redactItems: true })
 
-        const mappedComments = newComments.map(mapComment)
-        const textContent = generateTextContent({ comments: mappedComments })
+        const textContent = appendFailureSummary(
+            generateTextContent({ comments: mappedComments }),
+            failures,
+        )
 
         return {
             textContent,
@@ -126,47 +160,39 @@ const addComments = {
                 comments: mappedComments,
                 totalCount: mappedComments.length,
                 addedCommentIds: mappedComments.map((comment) => comment.id),
+                failures,
+                totalRequested: comments.length,
+                successCount: mappedComments.length,
+                failureCount: failures.length,
             },
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
 
 /**
- * Work out the recipients for every comment in the batch, reading each distinct
- * target's thread only once. Two comments on the same task within one call are
- * a single conversation, so they notify the same people.
+ * Work out what a comment is posted on, resolving "inbox" to the user's inbox project.
+ *
+ * @throws Error when the comment names neither or both of taskId and projectId
  */
-async function resolveRecipientsPerComment({
-    comments,
-    targets,
-    client,
-    currentUser,
-}: {
-    comments: CommentInput[]
-    targets: CommentTarget[]
-    client: TodoistApi
-    currentUser: TodoistUser | undefined
-}): Promise<string[][]> {
-    const byTarget = new Map<string, Promise<string[]>>()
+async function resolveTarget(
+    comment: CommentInput,
+    getCurrentUser: () => Promise<TodoistUser>,
+): Promise<CommentTarget> {
+    if (!comment.taskId && !comment.projectId) {
+        throw new Error('Either taskId or projectId must be provided.')
+    }
+    if (comment.taskId && comment.projectId) {
+        throw new Error('Cannot provide both taskId and projectId. Choose one.')
+    }
+    if (comment.taskId) {
+        return { taskId: comment.taskId }
+    }
 
-    return await Promise.all(
-        comments.map(async ({ notifyUsers }, index) => {
-            if (notifyUsers) {
-                if (isNoNotifyList(notifyUsers)) return []
-                const resolved = await resolveUserRefs(client, notifyUsers)
-                return resolved.map((user) => user.userId)
-            }
-
-            const target = targets[index]
-            if (!target || !currentUser) return []
-
-            const key = target.taskId ? `task:${target.taskId}` : `project:${target.projectId}`
-            const pending =
-                byTarget.get(key) ?? getDefaultCommentRecipients(client, target, currentUser.id)
-            byTarget.set(key, pending)
-            return await pending
-        }),
-    )
+    const projectId = await resolveInboxProjectId({
+        projectId: comment.projectId,
+        user: isInboxProjectId(comment.projectId) ? await getCurrentUser() : undefined,
+    })
+    return { projectId } as CommentTarget
 }
 
 function generateTextContent({ comments }: { comments: ReturnType<typeof mapComment>[] }): string {

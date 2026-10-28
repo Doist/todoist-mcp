@@ -70,8 +70,10 @@ describe(`${UPDATE_COMMENTS} tool`, () => {
                 ],
                 totalCount: 1,
                 updatedCommentIds: ['98765'],
+                failures: [],
                 appliedOperations: {
                     updateCount: 1,
+                    failureCount: 0,
                 },
             }),
         )
@@ -116,8 +118,10 @@ describe(`${UPDATE_COMMENTS} tool`, () => {
                 ],
                 totalCount: 1,
                 updatedCommentIds: ['98767'],
+                failures: [],
                 appliedOperations: {
                     updateCount: 1,
+                    failureCount: 0,
                 },
             }),
         )
@@ -181,8 +185,10 @@ describe(`${UPDATE_COMMENTS} tool`, () => {
                     ],
                     totalCount: 2,
                     updatedCommentIds: ['11111', '22222'],
+                    failures: [],
                     appliedOperations: {
                         updateCount: 2,
+                        failureCount: 0,
                     },
                 }),
             )
@@ -237,8 +243,10 @@ describe(`${UPDATE_COMMENTS} tool`, () => {
                     ]),
                     totalCount: 2,
                     updatedCommentIds: ['33333', '44444'],
+                    failures: [],
                     appliedOperations: {
                         updateCount: 2,
+                        failureCount: 0,
                     },
                 }),
             )
@@ -299,8 +307,10 @@ describe(`${UPDATE_COMMENTS} tool`, () => {
                     ]),
                     totalCount: 2,
                     updatedCommentIds: ['55555', '66666'],
+                    failures: [],
                     appliedOperations: {
                         updateCount: 2,
+                        failureCount: 0,
                     },
                 }),
             )
@@ -357,11 +367,80 @@ describe(`${UPDATE_COMMENTS} tool`, () => {
                     ]),
                     totalCount: 2,
                     updatedCommentIds: ['77777', '88888'],
+                    failures: [],
                     appliedOperations: {
                         updateCount: 2,
+                        failureCount: 0,
                     },
                 }),
             )
+        })
+    })
+
+    describe('error handling', () => {
+        it('should keep the updated comments when one in the batch fails', async () => {
+            mockTodoistApi.updateComment
+                .mockResolvedValueOnce(createMockComment({ id: 'c1', content: 'Fixed typo' }))
+                .mockRejectedValueOnce(new Error('API Error: Comment not found'))
+
+            const result = await updateComments.execute(
+                {
+                    comments: [
+                        { id: 'c1', content: 'Fixed typo' },
+                        { id: 'missing', content: 'Nope' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.updatedCommentIds).toEqual(['c1'])
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'missing', error: 'API Error: Comment not found' },
+            ])
+            expect(result.structuredContent.appliedOperations).toEqual({
+                updateCount: 1,
+                failureCount: 1,
+            })
+            expect(result.textContent).toContain('Updated 1 task comment')
+            expect(result.textContent).toContain('Failed (1) - address or drop these items')
+        })
+
+        it('returns structured failures when every comment in the batch fails', async () => {
+            mockTodoistApi.updateComment.mockRejectedValue(
+                new Error('API Error: Comment not found'),
+            )
+
+            const result = await updateComments.execute(
+                { comments: [{ id: 'missing', content: 'Nope' }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.comments).toEqual([])
+            expect(result.structuredContent.failures).toHaveLength(1)
+            expect(result.textContent).toContain('No comments updated')
+        })
+
+        it('retries a transient 5xx failure on a per-comment call', async () => {
+            vi.useFakeTimers()
+            try {
+                mockTodoistApi.updateComment
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    .mockResolvedValueOnce(createMockComment({ id: 'c1' }))
+
+                const promise = updateComments.execute(
+                    { comments: [{ id: 'c1', content: 'Retry me' }] },
+                    mockTodoistApi,
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.updateComment).toHaveBeenCalledTimes(2)
+                expect(result.structuredContent.appliedOperations.failureCount).toBe(0)
+            } finally {
+                vi.useRealTimers()
+            }
         })
     })
 })

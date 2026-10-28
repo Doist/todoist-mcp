@@ -366,25 +366,31 @@ describe(`${ADD_COMMENTS} tool`, () => {
             expect(result.textContent).toContain('Notified 3 people')
         })
 
-        it('should surface an unresolvable user as an error', async () => {
+        it('should report an unresolvable user as a failure without posting', async () => {
             mockResolveUserRefs.mockRejectedValue(
                 new Error('Could not find user(s): "Nobody", "Nobody Else".'),
             )
 
-            await expect(
-                addComments.execute(
-                    {
-                        comments: [
-                            {
-                                taskId: 'task456',
-                                content: 'Please review',
-                                notifyUsers: ['Nobody', 'Nobody Else'],
-                            },
-                        ],
-                    },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('Could not find user(s): "Nobody", "Nobody Else".')
+            const result = await addComments.execute(
+                {
+                    comments: [
+                        {
+                            taskId: 'task456',
+                            content: 'Please review',
+                            notifyUsers: ['Nobody', 'Nobody Else'],
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.addComment).not.toHaveBeenCalled()
+            expect(result.structuredContent.failures).toEqual([
+                {
+                    item: 'Please review',
+                    error: 'Could not find user(s): "Nobody", "Nobody Else".',
+                },
+            ])
         })
 
         it('should omit uidsToNotify entirely when told to notify nobody', async () => {
@@ -569,17 +575,154 @@ describe(`${ADD_COMMENTS} tool`, () => {
     })
 
     describe('validation', () => {
-        it('should throw error when neither taskId nor projectId provided', async () => {
-            await expect(
-                addComments.execute({ comments: [{ content: 'Test comment' }] }, mockTodoistApi),
-            ).rejects.toThrow('Comment 1: Either taskId or projectId must be provided.')
+        it('should report a comment with neither taskId nor projectId as a failure', async () => {
+            const result = await addComments.execute(
+                { comments: [{ content: 'Test comment' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.addComment).not.toHaveBeenCalled()
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'Test comment', error: 'Either taskId or projectId must be provided.' },
+            ])
         })
 
-        it('should throw error when both taskId and projectId provided', async () => {
+        it('should report a comment with both taskId and projectId as a failure', async () => {
             const comment = { taskId: 'task123', projectId: 'project456', content: 'Test comment' }
-            await expect(
-                addComments.execute({ comments: [comment] }, mockTodoistApi),
-            ).rejects.toThrow('Comment 1: Cannot provide both taskId and projectId. Choose one.')
+            const result = await addComments.execute({ comments: [comment] }, mockTodoistApi)
+
+            expect(mockTodoistApi.addComment).not.toHaveBeenCalled()
+            expect(result.structuredContent.failures).toEqual([
+                {
+                    item: 'Test comment',
+                    error: 'Cannot provide both taskId and projectId. Choose one.',
+                },
+            ])
+        })
+    })
+
+    describe('partial failures', () => {
+        it('reports the posted comment alongside the failed one, so a retry can skip it', async () => {
+            // https://github.com/Doist/todoist-mcp/issues/505: the first comment is saved and
+            // the second targets an invalid task. Reporting only an error led callers to
+            // replay the batch and post the first comment twice.
+            const invalidTaskId = Object.assign(new Error('HTTP 400: Bad Request'), {
+                httpStatusCode: 400,
+                responseData: {
+                    error: 'Invalid argument value',
+                    error_code: 20,
+                    error_extra: { argument: 'task_id' },
+                    error_tag: 'INVALID_ARGUMENT_VALUE',
+                    http_code: 400,
+                },
+            })
+            mockTodoistApi.addComment
+                .mockResolvedValueOnce(
+                    createMockComment({
+                        id: 'posted',
+                        taskId: 'task123',
+                        content: 'Valid comment',
+                    }),
+                )
+                .mockRejectedValueOnce(invalidTaskId)
+
+            const result = await addComments.execute(
+                {
+                    comments: [
+                        { taskId: 'task123', content: 'Valid comment', notifyUsers: ['none'] },
+                        {
+                            taskId: '0000000000000000',
+                            content: 'Invalid destination',
+                            notifyUsers: ['none'],
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const { structuredContent } = result
+            expect(structuredContent.addedCommentIds).toEqual(['posted'])
+            expect(structuredContent.totalRequested).toBe(2)
+            expect(structuredContent.successCount).toBe(1)
+            expect(structuredContent.failureCount).toBe(1)
+            expect(structuredContent.failures).toEqual([
+                {
+                    item: 'Invalid destination',
+                    error: 'Invalid argument value (HTTP 400, code 20, tag INVALID_ARGUMENT_VALUE)',
+                },
+            ])
+            expect(result.textContent).toContain('Added 1 task comment')
+            expect(result.textContent).toContain('Failed (1) - address or drop these items')
+        })
+
+        it('returns structured failures when every comment in the batch fails', async () => {
+            mockTodoistApi.addComment.mockRejectedValue(new Error('API Error: Task not found'))
+
+            const result = await addComments.execute(
+                {
+                    comments: [
+                        { taskId: 'missing-1', content: 'First', notifyUsers: ['none'] },
+                        { taskId: 'missing-2', content: 'Second', notifyUsers: ['none'] },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.comments).toEqual([])
+            expect(result.structuredContent.failures.map((failure) => failure.item)).toEqual([
+                'First',
+                'Second',
+            ])
+            expect(result.textContent).toContain('No comments added')
+        })
+
+        it('fails only the comments that need the current user when it cannot be fetched', async () => {
+            mockTodoistApi.getUser.mockRejectedValueOnce(new Error('API Error: Unauthorized'))
+            mockTodoistApi.addComment.mockResolvedValue(
+                createMockComment({ id: 'silent', taskId: 'task123' }),
+            )
+
+            const result = await addComments.execute(
+                {
+                    comments: [
+                        { taskId: 'task123', content: 'Silent note', notifyUsers: ['none'] },
+                        { projectId: 'inbox', content: 'Inbox note', notifyUsers: ['none'] },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.addedCommentIds).toEqual(['silent'])
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'Inbox note', error: 'API Error: Unauthorized' },
+            ])
+        })
+
+        it('retries a transient 5xx failure on a per-comment call', async () => {
+            vi.useFakeTimers()
+            try {
+                mockTodoistApi.addComment
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    .mockResolvedValueOnce(createMockComment({ id: 'retried' }))
+
+                const promise = addComments.execute(
+                    {
+                        comments: [
+                            { taskId: 'task123', content: 'Retry me', notifyUsers: ['none'] },
+                        ],
+                    },
+                    mockTodoistApi,
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.addComment).toHaveBeenCalledTimes(2)
+                expect(result.structuredContent.addedCommentIds).toEqual(['retried'])
+            } finally {
+                vi.useRealTimers()
+            }
         })
     })
 })
