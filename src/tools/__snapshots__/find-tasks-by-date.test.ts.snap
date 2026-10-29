@@ -88,5 +88,5 @@ exports[`find-tasks-by-date tool > responsibleUser parameter > should filter tas
 "Today's tasks + overdue assigned to john@example.com: 1 (limit 50).
 Filter: today + overdue tasks; assigned to: john@example.com.
 Preview:
-    Task assigned to John • due 2025-08-15 • P4 • id=8485093748"
+    Task assigned to John • due 2025-08-15 • P4 • +John D. • id=8485093748"
 `;

@@ -394,8 +394,8 @@ describe('Assignment Integration Tests', () => {
             )
 
             expect(result.textContent).toContain('Project collaborators')
-            expect(result.textContent).toContain('John Doe (john@example.com)')
-            expect(result.textContent).toContain('Jane Smith (jane@example.com)')
+            expect(result.textContent).toContain('John D. (john@example.com)')
+            expect(result.textContent).toContain('Jane S. (jane@example.com)')
             expect(result.structuredContent.collaborators).toHaveLength(2)
         })
 

@@ -3,7 +3,7 @@ import { type Mocked, type MockedFunction, vi } from 'vitest'
 import { getTasksByFilter, MappedTask } from '../tool-helpers.js'
 import { createMappedTask, createMockUser, TEST_ERRORS, TEST_IDS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
-import { resolveUserNameToId } from '../utils/user-resolver.js'
+import { getAssigneeShortNames, resolveUserNameToId } from '../utils/user-resolver.js'
 import { findTasksByDate } from './find-tasks-by-date.js'
 
 // Mock only getTasksByFilter, use actual implementations for everything else
@@ -18,6 +18,7 @@ vi.mock('../tool-helpers', async () => {
 // Mock user resolver
 vi.mock('../utils/user-resolver', () => ({
     resolveUserNameToId: vi.fn(),
+    getAssigneeShortNames: vi.fn(async () => new Map<string, string>()),
     SELF_USER_KEYWORD: 'me',
 }))
 
@@ -601,6 +602,9 @@ describe(`${FIND_TASKS_BY_DATE} tool`, () => {
             ]
             const mockResponse = { tasks: mockTasks, nextCursor: null }
             mockGetTasksByFilter.mockResolvedValue(mockResponse)
+            vi.mocked(getAssigneeShortNames).mockResolvedValueOnce(
+                new Map([['user-123', 'John D.']]),
+            )
 
             const result = await findTasksByDate.execute(
                 {
@@ -624,6 +628,8 @@ describe(`${FIND_TASKS_BY_DATE} tool`, () => {
 
             const textContent = result.textContent
             expect(textContent).toContain('assigned to john@example.com')
+            expect(getAssigneeShortNames).toHaveBeenCalledWith(mockTodoistApi, mockTasks)
+            expect(textContent).toContain(' • +John D. • ')
             expect(textContent).toMatchSnapshot()
         })
 

@@ -22,6 +22,7 @@ type TaskLike = {
     dueDate?: string
     priority?: Priority
     projectName?: string
+    responsibleUid?: string
 }
 
 type ProjectLike = {
@@ -136,15 +137,21 @@ export function appendFailureSummary(
 }
 
 /**
- * Formats a single task-like object into a readable preview line
+ * Formats a single task-like object into a readable preview line. When
+ * `assigneeNames` is given, an assigned task shows `+` and its assignee's short
+ * name, or their user ID if they can't be named, as the Todoist CLI does.
  */
-function formatTaskPreview(task: TaskLike): string {
+function formatTaskPreview(task: TaskLike, assigneeNames?: ReadonlyMap<string, string>): string {
     const content = task.content || task.title || 'Untitled'
     const due = task.dueDate ? ` • due ${task.dueDate}` : ''
     const priority = task.priority ? ` • ${task.priority.toUpperCase()}` : ''
     const project = task.projectName ? ` • ${task.projectName}` : ''
+    const assignee =
+        assigneeNames && task.responsibleUid
+            ? ` • +${assigneeNames.get(task.responsibleUid) ?? task.responsibleUid}`
+            : ''
     const id = task.id ? ` • id=${task.id}` : ''
-    return `    ${content}${due}${priority}${project}${id}`
+    return `    ${content}${due}${priority}${project}${assignee}${id}`
 }
 
 /**
@@ -174,9 +181,13 @@ export function formatProjectPreview(project: ProjectLike): string {
 /**
  * Creates preview lines for task lists
  */
-export function previewTasks(tasks: TaskLike[], limit = 5): string {
+export function previewTasks(
+    tasks: TaskLike[],
+    limit = 5,
+    assigneeNames?: ReadonlyMap<string, string>,
+): string {
     const previewTasks = tasks.slice(0, limit)
-    const lines = previewTasks.map(formatTaskPreview).join('\n')
+    const lines = previewTasks.map((task) => formatTaskPreview(task, assigneeNames)).join('\n')
 
     // If we're showing fewer tasks than the total, add an indicator
     if (tasks.length > limit) {

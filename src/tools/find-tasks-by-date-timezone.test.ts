@@ -15,6 +15,7 @@ vi.mock('../tool-helpers', async () => {
 
 vi.mock('../utils/user-resolver', () => ({
     resolveUserNameToId: vi.fn(),
+    getAssigneeShortNames: vi.fn(async () => new Map<string, string>()),
     SELF_USER_KEYWORD: 'me',
 }))
 

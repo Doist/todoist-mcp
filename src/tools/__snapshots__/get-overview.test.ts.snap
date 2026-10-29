@@ -23,7 +23,7 @@ _Note: This overview lists projects and sections only; tasks are not included. C
 exports[`get-overview tool > project overview (with projectId) > should generate detailed project overview with tasks 1`] = `
 "# test-abc123def456-project
 
-- id=8485093748; content=Task without section
+- id=8485093748; assignee=Ada L.; content=Task without section
 
 ## To Do
 - id=8485093749; content=Task in To Do section

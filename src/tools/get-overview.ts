@@ -10,6 +10,7 @@ import { mapTask, type Project, resolveInboxProjectId } from '../tool-helpers.js
 import { ApiLimits } from '../utils/constants.js'
 import { SectionSchema, type SectionSummary, toSectionSummary } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
+import { getAssigneeShortNames } from '../utils/user-resolver.js'
 
 const ArgsSchema = {
     projectId: z
@@ -214,15 +215,22 @@ function buildTaskTree(tasks: MappedTask[]): TaskTreeNode[] {
     return roots
 }
 
-function renderTaskTreeMarkdown(tasks: TaskTreeNode[], indent = ''): string[] {
+function renderTaskTreeMarkdown(
+    tasks: TaskTreeNode[],
+    assigneeNames: ReadonlyMap<string, string>,
+    indent = '',
+): string[] {
     const lines: string[] = []
     for (const task of tasks) {
         const idPart = `id=${task.id}`
         const duePart = task.dueDate ? `; due=${task.dueDate}` : ''
+        const assigneePart = task.responsibleUid
+            ? `; assignee=${assigneeNames.get(task.responsibleUid) ?? task.responsibleUid}`
+            : ''
         const contentPart = `; content=${task.content}`
-        lines.push(`${indent}- ${idPart}${duePart}${contentPart}`)
+        lines.push(`${indent}- ${idPart}${duePart}${assigneePart}${contentPart}`)
         if (task.children.length > 0) {
-            lines.push(...renderTaskTreeMarkdown(task.children, `${indent}  `))
+            lines.push(...renderTaskTreeMarkdown(task.children, assigneeNames, `${indent}  `))
         }
     }
     return lines
@@ -376,6 +384,7 @@ async function generateProjectOverview(
         getProjectSections(client, projectId),
         getAllTasksForProject(client, projectId),
     ])
+    const assigneeNames = await getAssigneeShortNames(client, allTasks)
 
     // Group tasks by sectionId
     const tasksBySection: Record<string, MappedTask[]> = {}
@@ -395,7 +404,7 @@ async function generateProjectOverview(
     if (tasksWithoutSection.length > 0) {
         lines.push('')
         const tree = buildTaskTree(tasksWithoutSection)
-        lines.push(...renderTaskTreeMarkdown(tree))
+        lines.push(...renderTaskTreeMarkdown(tree, assigneeNames))
     }
     for (const section of sections) {
         lines.push('')
@@ -405,7 +414,7 @@ async function generateProjectOverview(
             continue
         }
         const tree = buildTaskTree(sectionTasks)
-        lines.push(...renderTaskTreeMarkdown(tree))
+        lines.push(...renderTaskTreeMarkdown(tree, assigneeNames))
     }
     const textContent = lines.join('\n')
 

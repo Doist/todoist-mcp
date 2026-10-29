@@ -7,6 +7,7 @@ import { ActivityEventSchema } from '../utils/output-schemas.js'
 import { summarizeList } from '../utils/response-builders.js'
 import { optionalString } from '../utils/schema-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
+import { userResolver } from '../utils/user-resolver.js'
 
 const IsoDateOrDateTime = z.union([z.iso.date(), z.iso.datetime({ offset: true })])
 
@@ -113,8 +114,16 @@ const findActivity = {
         // Fetch activity logs from API
         const { results, nextCursor } = await client.getActivityLogs(apiArgs)
         const events = results.map(mapActivityEvent)
+        // An initiator is named from the collaborators of the project the event
+        // happened in; events outside a project keep the bare user ID.
+        const initiatorNames = await userResolver.getUserShortNames(
+            client,
+            events.flatMap((event) =>
+                event.initiatorId && event.parentProjectId ? [event.parentProjectId] : [],
+            ),
+        )
 
-        const textContent = generateTextContent({ events, args, nextCursor })
+        const textContent = generateTextContent({ events, args, nextCursor, initiatorNames })
         return {
             textContent,
             structuredContent: {
@@ -132,10 +141,12 @@ function generateTextContent({
     events,
     args,
     nextCursor,
+    initiatorNames,
 }: {
     events: ReturnType<typeof mapActivityEvent>[]
     args: z.infer<z.ZodObject<typeof ArgsSchema>>
     nextCursor: string | null
+    initiatorNames: ReadonlyMap<string, string>
 }) {
     // Generate subject description
     let subject = 'Activity events'
@@ -199,7 +210,11 @@ function generateTextContent({
         limit: args.limit,
         nextCursor: nextCursor ?? undefined,
         filterHints,
-        previewLines: previewActivityEvents(events, Math.min(events.length, args.limit)),
+        previewLines: previewActivityEvents(
+            events,
+            initiatorNames,
+            Math.min(events.length, args.limit),
+        ),
         zeroReasonHints,
     })
 }
@@ -207,9 +222,15 @@ function generateTextContent({
 /**
  * Formats activity events into readable preview lines
  */
-function previewActivityEvents(events: ReturnType<typeof mapActivityEvent>[], limit = 10): string {
+function previewActivityEvents(
+    events: ReturnType<typeof mapActivityEvent>[],
+    initiatorNames: ReadonlyMap<string, string>,
+    limit = 10,
+): string {
     const previewEvents = events.slice(0, limit)
-    const lines = previewEvents.map(formatActivityEventPreview).join('\n')
+    const lines = previewEvents
+        .map((event) => formatActivityEventPreview(event, initiatorNames))
+        .join('\n')
 
     // If we're showing fewer events than the total, add an indicator
     if (events.length > limit) {
@@ -223,7 +244,10 @@ function previewActivityEvents(events: ReturnType<typeof mapActivityEvent>[], li
 /**
  * Formats a single activity event into a readable preview line
  */
-function formatActivityEventPreview(event: ReturnType<typeof mapActivityEvent>): string {
+function formatActivityEventPreview(
+    event: ReturnType<typeof mapActivityEvent>,
+    initiatorNames: ReadonlyMap<string, string>,
+): string {
     const date = formatEventDate(event.eventDate)
     const eventLabel = `${event.eventType} ${event.objectType}`
 
@@ -240,7 +264,11 @@ function formatActivityEventPreview(event: ReturnType<typeof mapActivityEvent>):
     }
 
     const objectId = event.objectId ? ` • id=${event.objectId}` : ''
-    const initiator = event.initiatorId ? ` • by=${event.initiatorId}` : ' • system'
+    let initiator = ' • system'
+    if (event.initiatorId) {
+        const initiatorName = initiatorNames.get(event.initiatorId)
+        initiator = initiatorName ? ` • by ${initiatorName}` : ` • by=${event.initiatorId}`
+    }
     const projectInfo = event.parentProjectId ? ` • project=${event.parentProjectId}` : ''
 
     return `    [${date}] ${eventLabel}${contentInfo}${objectId}${initiator}${projectInfo}`

@@ -12,6 +12,7 @@ import {
     TEST_IDS,
 } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
+import { userResolver } from '../utils/user-resolver.js'
 import { type AccountOverviewStructured, getOverview } from './get-overview.js'
 
 // Mock the Todoist API
@@ -21,6 +22,7 @@ const mockTodoistApi = {
     getSections: vi.fn(),
     getTasks: vi.fn(),
     getUser: vi.fn(),
+    getProjectCollaborators: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { GET_OVERVIEW } = ToolNames
@@ -28,6 +30,7 @@ const { GET_OVERVIEW } = ToolNames
 describe(`${GET_OVERVIEW} tool`, () => {
     beforeEach(() => {
         vi.clearAllMocks()
+        userResolver.clearCache()
     })
 
     describe('account overview (no projectId)', () => {
@@ -235,6 +238,11 @@ describe(`${GET_OVERVIEW} tool`, () => {
                 results: mockTasks,
                 nextCursor: null,
             })
+            mockTodoistApi.getUser.mockResolvedValue(createMockUser({ id: TEST_IDS.USER_ID }))
+            mockTodoistApi.getProjectCollaborators.mockResolvedValue({
+                results: [{ id: TEST_IDS.USER_ID, name: 'Ada Lovelace', email: 'ada@example.com' }],
+                nextCursor: null,
+            })
 
             const result = await getOverview.execute(
                 { projectId: TEST_IDS.PROJECT_TEST },
@@ -242,6 +250,7 @@ describe(`${GET_OVERVIEW} tool`, () => {
             )
 
             expect(mockTodoistApi.getProject).toHaveBeenCalledWith(TEST_IDS.PROJECT_TEST)
+            expect(result.textContent).toContain('; assignee=Ada L.; content=Task without section')
             expect(mockTodoistApi.getSections).toHaveBeenCalledWith({
                 projectId: TEST_IDS.PROJECT_TEST,
             })

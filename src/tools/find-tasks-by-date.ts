@@ -13,7 +13,7 @@ import { generateLabelsFilter, LabelsSchema } from '../utils/labels.js'
 import { TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import { getDateString, previewTasks, summarizeList } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
-import { SELF_USER_KEYWORD } from '../utils/user-resolver.js'
+import { getAssigneeShortNames, SELF_USER_KEYWORD } from '../utils/user-resolver.js'
 
 /**
  * Parse a YYYY-MM-DD string as local midnight (not UTC)
@@ -162,7 +162,13 @@ const findTasksByDate = {
         // No need for post-fetch filtering since it's handled in the query
         // const filteredTasks = result.tasks
 
-        const textContent = generateTextContent({ tasks, args, nextCursor, assigneeEmail })
+        const textContent = generateTextContent({
+            tasks,
+            args,
+            nextCursor,
+            assigneeEmail,
+            assigneeNames: await getAssigneeShortNames(client, tasks),
+        })
 
         return {
             textContent,
@@ -182,11 +188,13 @@ function generateTextContent({
     args,
     nextCursor,
     assigneeEmail,
+    assigneeNames,
 }: {
     tasks: Awaited<ReturnType<typeof getTasksByFilter>>['tasks']
     args: z.infer<z.ZodObject<typeof ArgsSchema>>
     nextCursor: string | null
     assigneeEmail?: string
+    assigneeNames: ReadonlyMap<string, string>
 }) {
     // Generate filter description
     const filterHints: string[] = []
@@ -259,7 +267,7 @@ function generateTextContent({
         limit: args.limit,
         nextCursor: nextCursor ?? undefined,
         filterHints,
-        previewLines: previewTasks(tasks, Math.min(tasks.length, args.limit)),
+        previewLines: previewTasks(tasks, Math.min(tasks.length, args.limit), assigneeNames),
         zeroReasonHints,
     })
 }

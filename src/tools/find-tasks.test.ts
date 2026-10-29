@@ -11,7 +11,7 @@ import {
     TODAY,
 } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
-import { resolveUserNameToId } from '../utils/user-resolver.js'
+import { getAssigneeShortNames, resolveUserNameToId } from '../utils/user-resolver.js'
 import { findTasks } from './find-tasks.js'
 
 vi.mock('../tool-helpers', async () => {
@@ -28,6 +28,7 @@ vi.mock('../tool-helpers', async () => {
 
 vi.mock('../utils/user-resolver', () => ({
     resolveUserNameToId: vi.fn(),
+    getAssigneeShortNames: vi.fn(async () => new Map<string, string>()),
 }))
 
 vi.mock('../utils/filter-resolver', () => ({
@@ -64,6 +65,40 @@ describe(`${FIND_TASKS} tool`, () => {
     })
 
     describe('searching tasks', () => {
+        it('shows assigned tasks with their assignee by short name', async () => {
+            const mockTasks = [
+                createMappedTask({
+                    id: TEST_IDS.TASK_1,
+                    content: 'Assigned task',
+                    responsibleUid: 'user-ada',
+                }),
+                createMappedTask({
+                    id: TEST_IDS.TASK_2,
+                    content: 'Assigned to someone unknown',
+                    responsibleUid: 'user-unknown',
+                }),
+                createMappedTask({ id: TEST_IDS.TASK_3, content: 'Unassigned task' }),
+            ]
+            mockGetTasksByFilter.mockResolvedValue({ tasks: mockTasks, nextCursor: null })
+            vi.mocked(getAssigneeShortNames).mockResolvedValueOnce(
+                new Map([['user-ada', 'Ada L.']]),
+            )
+
+            const result = await findTasks.execute(
+                { searchText: 'task', limit: 10 },
+                mockTodoistApi,
+            )
+
+            expect(getAssigneeShortNames).toHaveBeenCalledWith(mockTodoistApi, mockTasks)
+            expect(result.textContent).toContain('Assigned task • P4 • +Ada L. • id=')
+            expect(result.textContent).toContain(
+                'Assigned to someone unknown • P4 • +user-unknown • id=',
+            )
+            expect(result.textContent).toMatch(/Unassigned task • P4 • id=/)
+            // Structured output keeps the raw user IDs.
+            expect(result.structuredContent.tasks[0]?.responsibleUid).toBe('user-ada')
+        })
+
         it('should search tasks and return results', async () => {
             const mockTasks = [
                 createMappedTask({

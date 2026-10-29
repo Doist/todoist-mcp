@@ -15,7 +15,7 @@ import { CommentSchema as CommentOutputSchema, FailureSchema } from '../utils/ou
 import { appendFailureSummary } from '../utils/response-builders.js'
 import { executeCreateWithRetry, executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
-import { resolveUserRefs } from '../utils/user-resolver.js'
+import { resolveUserRefs, userResolver } from '../utils/user-resolver.js'
 
 const CommentSchema = z.object({
     taskId: z.string().optional().describe('The ID of the task to comment on.'),
@@ -149,8 +149,9 @@ const addComments = {
 
         logBatchFailures(ToolNames.ADD_COMMENTS, comments.length, failures, { redactItems: true })
 
+        const notifiedNames = await getNotifiedNames(client, mappedComments)
         const textContent = appendFailureSummary(
-            generateTextContent({ comments: mappedComments }),
+            generateTextContent({ comments: mappedComments, notifiedNames }),
             failures,
         )
 
@@ -195,7 +196,50 @@ async function resolveTarget(
     return { projectId } as CommentTarget
 }
 
-function generateTextContent({ comments }: { comments: ReturnType<typeof mapComment>[] }): string {
+/**
+ * Short names for everyone the posted comments notified, from the collaborators
+ * of each comment's project. Naming people is a nicety: a failed lookup leaves
+ * them shown by user ID rather than failing comments that were already posted.
+ */
+async function getNotifiedNames(
+    client: TodoistApi,
+    comments: ReturnType<typeof mapComment>[],
+): Promise<ReadonlyMap<string, string>> {
+    // A task comment carries no project, so each task is read once to find it.
+    const projectIdsByTask = new Map<string, Promise<string>>()
+    function getTaskProjectId(taskId: string): Promise<string> {
+        let projectId = projectIdsByTask.get(taskId)
+        if (!projectId) {
+            projectId = executeWithRetry(() => client.getTask(taskId)).then(
+                (task) => task.projectId,
+            )
+            projectIdsByTask.set(taskId, projectId)
+        }
+        return projectId
+    }
+
+    try {
+        const projectIds = await Promise.all(
+            comments
+                .filter((comment) => comment.notifiedUserIds)
+                .flatMap(({ projectId, taskId }): (string | Promise<string>)[] => {
+                    if (projectId) return [projectId]
+                    return taskId ? [getTaskProjectId(taskId)] : []
+                }),
+        )
+        return await userResolver.getUserShortNames(client, projectIds)
+    } catch {
+        return new Map()
+    }
+}
+
+function generateTextContent({
+    comments,
+    notifiedNames,
+}: {
+    comments: ReturnType<typeof mapComment>[]
+    notifiedNames: ReadonlyMap<string, string>
+}): string {
     // Group comments by entity type and count
     const taskComments = comments.filter((c) => c.taskId).length
     const projectComments = comments.filter((c) => c.projectId).length
@@ -212,12 +256,11 @@ function generateTextContent({ comments }: { comments: ReturnType<typeof mapComm
     }
     const summary = parts.length > 0 ? `Added ${parts.join(' and ')}` : 'No comments added'
 
-    const notified = new Set(comments.flatMap((c) => c.notifiedUserIds ?? []))
-    if (notified.size === 0) {
+    const notified = [...new Set(comments.flatMap((c) => c.notifiedUserIds ?? []))]
+    if (notified.length === 0) {
         return summary
     }
-    const peopleLabel = notified.size > 1 ? 'people' : 'person'
-    return `${summary}. Notified ${notified.size} ${peopleLabel}`
+    return `${summary}. Notified: ${notified.map((id) => notifiedNames.get(id) ?? id).join(', ')}`
 }
 
 export { addComments }
