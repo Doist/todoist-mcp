@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { ApiLimits } from '../utils/constants.js'
 import { createMockTask, createMockUser } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
-import { resolveUserRefs } from '../utils/user-resolver.js'
+import { resolveUserRefs, userResolver } from '../utils/user-resolver.js'
 import { addComments } from './add-comments.js'
 
 vi.mock('../utils/user-resolver.js', async (importOriginal) => {
@@ -18,6 +18,7 @@ const mockTodoistApi = {
     getUser: vi.fn(),
     getComments: vi.fn(),
     getTask: vi.fn(),
+    getProjectCollaborators: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { ADD_COMMENTS } = ToolNames
@@ -58,6 +59,8 @@ describe(`${ADD_COMMENTS} tool`, () => {
         // nobody is notified unless a test says otherwise.
         mockTodoistApi.getComments.mockResolvedValue({ results: [], nextCursor: null })
         mockTodoistApi.getTask.mockResolvedValue(createMockTaskWithUids())
+        mockTodoistApi.getProjectCollaborators.mockResolvedValue({ results: [], nextCursor: null })
+        userResolver.clearCache()
     })
 
     describe('adding comments to tasks', () => {
@@ -363,7 +366,60 @@ describe(`${ADD_COMMENTS} tool`, () => {
             })
             // Explicit recipients mean the thread never needs reading.
             expect(mockTodoistApi.getComments).not.toHaveBeenCalled()
-            expect(result.textContent).toContain('Notified 3 people')
+            expect(result.textContent).toContain('Notified: 111, 222, 333')
+        })
+
+        it('should name notified collaborators by short name, falling back to the user ID', async () => {
+            mockResolveUserRefs.mockResolvedValue([
+                { userId: '111', displayName: '111', email: '111' },
+                { userId: '222', displayName: '222', email: '222' },
+                { userId: '333', displayName: '333', email: '333' },
+            ])
+            mockTodoistApi.getProjectCollaborators.mockResolvedValue({
+                results: [
+                    { id: '111', name: 'Ana Silva', email: 'ana@example.com' },
+                    { id: '222', name: 'Bo Berg (OOO Friday)', email: 'bo@example.com' },
+                ],
+                nextCursor: null,
+            })
+            mockAddedComment(['111', '222', '333'])
+
+            const result = await addComments.execute(
+                {
+                    comments: [
+                        {
+                            taskId: 'task456',
+                            content: 'Please review',
+                            notifyUsers: ['111', '222', '333'],
+                        },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            // A task comment has no project of its own, so the task is read to find it.
+            expect(mockTodoistApi.getTask).toHaveBeenCalledWith('task456')
+            expect(mockTodoistApi.getProjectCollaborators).toHaveBeenCalledWith(
+                createMockTask().projectId,
+                expect.objectContaining({ cursor: null }),
+            )
+            expect(result.textContent).toContain('Notified: Ana S., Bo B., 333')
+        })
+
+        it('should still report a posted comment when its recipients cannot be named', async () => {
+            mockResolveUserRefs.mockResolvedValue([
+                { userId: '111', displayName: '111', email: '111' },
+            ])
+            mockTodoistApi.getTask.mockRejectedValue(new Error('Task lookup failed'))
+            mockAddedComment(['111'])
+
+            const result = await addComments.execute(
+                { comments: [{ taskId: 'task456', content: 'Ping', notifyUsers: ['111'] }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.successCount).toBe(1)
+            expect(result.textContent).toContain('Added 1 task comment. Notified: 111')
         })
 
         it('should report an unresolvable user as a failure without posting', async () => {
@@ -435,6 +491,90 @@ describe(`${ADD_COMMENTS} tool`, () => {
             })
         })
 
+        it('should read a task once to find both its default recipients and their names', async () => {
+            mockTodoistApi.getTask.mockResolvedValue(
+                createMockTaskWithUids({ responsibleUid: 'assignee' }),
+            )
+            mockTodoistApi.getProjectCollaborators.mockResolvedValue({
+                results: [{ id: 'assignee', name: 'Ada Lovelace', email: 'ada@example.com' }],
+                nextCursor: null,
+            })
+            mockAddedComment(['assignee'])
+
+            const result = await addComments.execute(
+                { comments: [{ taskId: 'task456', content: 'First comment' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getTask).toHaveBeenCalledTimes(1)
+            // The current user was already fetched, so it is not fetched again to name people.
+            expect(mockTodoistApi.getUser).toHaveBeenCalledTimes(1)
+            expect(result.textContent).toContain('Notified: Ada L.')
+        })
+
+        it('should name the recipients of a project comment without reading any task', async () => {
+            mockResolveUserRefs.mockResolvedValue([
+                { userId: '111', displayName: '111', email: '111' },
+            ])
+            mockTodoistApi.addComment.mockResolvedValue(
+                createMockComment({
+                    taskId: undefined,
+                    projectId: 'project789',
+                    uidsToNotify: ['111'],
+                }),
+            )
+            mockTodoistApi.getProjectCollaborators.mockResolvedValue({
+                results: [{ id: '111', name: 'Ana Silva', email: 'ana@example.com' }],
+                nextCursor: null,
+            })
+
+            const result = await addComments.execute(
+                { comments: [{ projectId: 'project789', content: 'Ping', notifyUsers: ['111'] }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getTask).not.toHaveBeenCalled()
+            expect(mockTodoistApi.getProjectCollaborators).toHaveBeenCalledWith(
+                'project789',
+                expect.objectContaining({ cursor: null }),
+            )
+            expect(result.textContent).toContain('Notified: Ana S.')
+        })
+
+        it('should still name the other comments when one task cannot be read', async () => {
+            mockResolveUserRefs.mockImplementation(async (_client, refs) =>
+                refs.map((ref) => ({ userId: ref, displayName: ref, email: ref })),
+            )
+            mockTodoistApi.getTask.mockRejectedValue(new Error('Task lookup failed'))
+            mockTodoistApi.addComment
+                .mockResolvedValueOnce(createMockComment({ taskId: 'gone', uidsToNotify: ['111'] }))
+                .mockResolvedValueOnce(
+                    createMockComment({
+                        id: '67890',
+                        taskId: undefined,
+                        projectId: 'project789',
+                        uidsToNotify: ['222'],
+                    }),
+                )
+            mockTodoistApi.getProjectCollaborators.mockResolvedValue({
+                results: [{ id: '222', name: 'Bo Berg', email: 'bo@example.com' }],
+                nextCursor: null,
+            })
+
+            const result = await addComments.execute(
+                {
+                    comments: [
+                        { taskId: 'gone', content: 'First', notifyUsers: ['111'] },
+                        { projectId: 'project789', content: 'Second', notifyUsers: ['222'] },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.successCount).toBe(2)
+            expect(result.textContent).toContain('Notified: 111, Bo B.')
+        })
+
         it('should exclude the comment author and drop unset uids from the defaults', async () => {
             mockTodoistApi.getTask.mockResolvedValue(
                 createMockTaskWithUids({
@@ -473,6 +613,9 @@ describe(`${ADD_COMMENTS} tool`, () => {
                 ],
                 nextCursor: null,
             })
+            mockTodoistApi.getTask.mockResolvedValue(
+                createMockTaskWithUids({ responsibleUid: 'task-assignee' }),
+            )
             mockAddedComment(['participant', 'previous-author'])
 
             await addComments.execute(
@@ -480,14 +623,13 @@ describe(`${ADD_COMMENTS} tool`, () => {
                 mockTodoistApi,
             )
 
+            // A thread that already has comments settles the recipients, so the
+            // task's own assignee is not added to them.
             expect(mockTodoistApi.addComment).toHaveBeenCalledWith({
                 content: 'Reply',
                 taskId: 'task456',
                 uidsToNotify: ['participant', 'previous-author'],
             })
-            // A thread that already has comments settles the recipients, so the
-            // task's own assignee/creator are never consulted.
-            expect(mockTodoistApi.getTask).not.toHaveBeenCalled()
         })
 
         it('should notify nobody on a first project comment', async () => {

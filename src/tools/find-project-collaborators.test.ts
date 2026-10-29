@@ -67,6 +67,22 @@ describe(`${FIND_PROJECT_COLLABORATORS} tool`, () => {
             expect(result.structuredContent.totalAvailable).toBe(2)
         })
 
+        it('lists collaborators by short name in text but keeps full names in structured output', async () => {
+            const away = { ...carrie, name: 'Carrie Anderson (OOO Friday)' }
+            mockTodoistApi.getProject.mockResolvedValue(sharedProject)
+            vi.mocked(userResolver.getProjectCollaborators).mockResolvedValue([away, ernesto])
+
+            const result = await findProjectCollaborators.execute(
+                { projectId: sharedProject.id },
+                mockTodoistApi,
+            )
+
+            expect(result.textContent).toContain('• Carrie A. (carrie@example.com) - ID: user-1')
+            expect(result.textContent).toContain('• Ernesto G. (ernesto@doist.com) - ID: user-2')
+            expect(result.textContent).not.toContain('Anderson')
+            expect(result.structuredContent.collaborators).toEqual([away, ernesto])
+        })
+
         it('filters collaborators by searchTerm (case-insensitive, partial)', async () => {
             mockTodoistApi.getProject.mockResolvedValue(sharedProject)
             vi.mocked(userResolver.getProjectCollaborators).mockResolvedValue([

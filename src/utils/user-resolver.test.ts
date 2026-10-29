@@ -2,6 +2,7 @@ import type { TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import {
     BoundedTtlCache,
+    getAssigneeShortNames,
     SELF_USER_KEYWORD,
     UserResolver,
     resolveUserRefs,
@@ -194,7 +195,91 @@ describe('UserResolver', () => {
             ])
 
             expect(clientB.getProjects).toHaveBeenCalledOnce()
-            expect(clientB.getProjectCollaborators).toHaveBeenCalledWith('project-b')
+            expect(clientB.getProjectCollaborators).toHaveBeenCalledWith(
+                'project-b',
+                expect.objectContaining({ cursor: null }),
+            )
+        })
+    })
+
+    describe('getProjectCollaborators', () => {
+        it('collects collaborators from every page', async () => {
+            mockClient.getProjectCollaborators = vi
+                .fn()
+                .mockResolvedValueOnce({
+                    results: [{ id: 'user-1', name: 'Ada Lovelace', email: 'ada@example.com' }],
+                    nextCursor: 'page-2',
+                })
+                .mockResolvedValueOnce({
+                    results: [{ id: 'user-2', name: 'Grace Hopper', email: 'grace@example.com' }],
+                    nextCursor: null,
+                })
+
+            const collaborators = await resolver.getProjectCollaborators(mockClient, 'project-1')
+
+            expect(collaborators.map((c) => c.id)).toEqual(['user-1', 'user-2'])
+            expect(mockClient.getProjectCollaborators).toHaveBeenLastCalledWith(
+                'project-1',
+                expect.objectContaining({ cursor: 'page-2' }),
+            )
+        })
+    })
+
+    describe('getUserShortNames', () => {
+        it('maps the collaborators of every project to their short names', async () => {
+            mockClient.getProjectCollaborators = vi.fn((projectId: string) =>
+                Promise.resolve({
+                    results:
+                        projectId === 'project-1'
+                            ? [
+                                  {
+                                      id: 'user-1',
+                                      name: 'Ada Lovelace (OOO Friday)',
+                                      email: 'a@x.com',
+                                  },
+                              ]
+                            : [{ id: 'user-2', name: 'Grace Hopper', email: 'g@x.com' }],
+                    nextCursor: null,
+                }),
+            ) as unknown as typeof mockClient.getProjectCollaborators
+
+            const names = await resolver.getUserShortNames(mockClient, [
+                'project-1',
+                'project-2',
+                'project-1',
+            ])
+
+            expect(names).toEqual(
+                new Map([
+                    ['user-1', 'Ada L.'],
+                    ['user-2', 'Grace H.'],
+                ]),
+            )
+            // Each project is looked up once, however many times it is asked for.
+            expect(mockClient.getProjectCollaborators).toHaveBeenCalledTimes(2)
+        })
+
+        it('makes no requests when there are no projects to look up', async () => {
+            mockClient.getProjectCollaborators = vi.fn()
+
+            await expect(resolver.getUserShortNames(mockClient, [])).resolves.toEqual(new Map())
+            expect(mockClient.getUser).not.toHaveBeenCalled()
+            expect(mockClient.getProjectCollaborators).not.toHaveBeenCalled()
+        })
+
+        it('skips a project whose collaborators cannot be fetched', async () => {
+            mockClient.getProjectCollaborators = vi.fn((projectId: string) =>
+                projectId === 'broken'
+                    ? Promise.reject(new Error('Forbidden'))
+                    : Promise.resolve({
+                          results: [{ id: 'user-1', name: 'Ada Lovelace', email: 'a@x.com' }],
+                          nextCursor: null,
+                      }),
+            ) as unknown as typeof mockClient.getProjectCollaborators
+
+            const names = await resolver.getUserShortNames(mockClient, ['broken', 'project-1'])
+
+            expect(names).toEqual(new Map([['user-1', 'Ada L.']]))
         })
     })
 
@@ -323,5 +408,33 @@ describe('resolveUserRefs', () => {
 
         expect(mockClient.getProjects).toHaveBeenCalledTimes(1)
         expect(mockClient.getProjectCollaborators).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('getAssigneeShortNames', () => {
+    beforeEach(() => {
+        userResolver.clearCache()
+    })
+
+    it('looks up only the projects of assigned tasks', async () => {
+        const client = {
+            getUser: vi.fn().mockResolvedValue({ id: 'me', fullName: 'Me', email: 'me@x.com' }),
+            getProjectCollaborators: vi.fn().mockResolvedValue({
+                results: [{ id: 'user-1', name: 'Ada Lovelace', email: 'ada@example.com' }],
+                nextCursor: null,
+            }),
+        } as unknown as Mocked<TodoistApi>
+
+        const names = await getAssigneeShortNames(client, [
+            { projectId: 'assigned', responsibleUid: 'user-1' },
+            { projectId: 'unassigned' },
+        ])
+
+        expect(names).toEqual(new Map([['user-1', 'Ada L.']]))
+        expect(client.getProjectCollaborators).toHaveBeenCalledTimes(1)
+        expect(client.getProjectCollaborators).toHaveBeenCalledWith(
+            'assigned',
+            expect.objectContaining({ cursor: null }),
+        )
     })
 })

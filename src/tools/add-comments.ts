@@ -1,4 +1,4 @@
-import type { AddCommentArgs, TodoistApi } from '@doist/todoist-sdk'
+import type { AddCommentArgs, Task, TodoistApi } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
@@ -15,7 +15,7 @@ import { CommentSchema as CommentOutputSchema, FailureSchema } from '../utils/ou
 import { appendFailureSummary } from '../utils/response-builders.js'
 import { executeCreateWithRetry, executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
-import { resolveUserRefs } from '../utils/user-resolver.js'
+import { resolveUserRefs, userResolver } from '../utils/user-resolver.js'
 
 const CommentSchema = z.object({
     taskId: z.string().optional().describe('The ID of the task to comment on.'),
@@ -79,6 +79,18 @@ const addComments = {
         let currentUser: Promise<TodoistUser> | undefined
         const getCurrentUser = () => (currentUser ??= executeWithRetry(() => client.getUser()))
 
+        // A task may be read for its default recipients and again to name them, so
+        // each task is fetched at most once.
+        const tasksById = new Map<string, Promise<Task>>()
+        function getTask(taskId: string): Promise<Task> {
+            let task = tasksById.get(taskId)
+            if (!task) {
+                task = executeWithRetry(() => client.getTask(taskId))
+                tasksById.set(taskId, task)
+            }
+            return task
+        }
+
         // Two comments on the same target within one call are a single conversation,
         // so they notify the same people: each target's thread is read only once.
         const defaultRecipientsByTarget = new Map<string, Promise<string[]>>()
@@ -97,7 +109,7 @@ const addComments = {
             const key = target.taskId ? `task:${target.taskId}` : `project:${target.projectId}`
             let pending = defaultRecipientsByTarget.get(key)
             if (!pending) {
-                pending = getDefaultCommentRecipients(client, target, currentUserId)
+                pending = getDefaultCommentRecipients(client, target, currentUserId, getTask)
                 defaultRecipientsByTarget.set(key, pending)
             }
             return await pending
@@ -149,8 +161,12 @@ const addComments = {
 
         logBatchFailures(ToolNames.ADD_COMMENTS, comments.length, failures, { redactItems: true })
 
+        const notifiedNames = await getNotifiedNames(client, mappedComments, {
+            getTask,
+            getCurrentUser,
+        })
         const textContent = appendFailureSummary(
-            generateTextContent({ comments: mappedComments }),
+            generateTextContent({ comments: mappedComments, notifiedNames }),
             failures,
         )
 
@@ -195,7 +211,54 @@ async function resolveTarget(
     return { projectId } as CommentTarget
 }
 
-function generateTextContent({ comments }: { comments: ReturnType<typeof mapComment>[] }): string {
+/**
+ * Short names for everyone the posted comments notified, from the collaborators
+ * of each comment's project. Naming people is a nicety: anyone whose comment's
+ * project can't be found is shown by user ID, and nothing here can fail
+ * comments that were already posted.
+ */
+async function getNotifiedNames(
+    client: TodoistApi,
+    comments: ReturnType<typeof mapComment>[],
+    {
+        getTask,
+        getCurrentUser,
+    }: {
+        getTask: (taskId: string) => Promise<Task>
+        getCurrentUser: () => Promise<TodoistUser>
+    },
+): Promise<ReadonlyMap<string, string>> {
+    const notifying = comments.filter((comment) => comment.notifiedUserIds)
+    if (notifying.length === 0) return new Map()
+
+    // A task comment carries no project, so its task is read to find it. Each
+    // lookup settles on its own, so one missing task leaves the others named.
+    const projectIds = await Promise.allSettled(
+        notifying.flatMap(({ projectId, taskId }): Promise<string>[] => {
+            if (projectId) return [Promise.resolve(projectId)]
+            return taskId ? [getTask(taskId).then((task) => task.projectId)] : []
+        }),
+    )
+    const cacheScope = await getCurrentUser().then(
+        (user) => user.id,
+        () => null,
+    )
+    return userResolver
+        .getUserShortNames(
+            client,
+            projectIds.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : [])),
+            cacheScope,
+        )
+        .catch(() => new Map())
+}
+
+function generateTextContent({
+    comments,
+    notifiedNames,
+}: {
+    comments: ReturnType<typeof mapComment>[]
+    notifiedNames: ReadonlyMap<string, string>
+}): string {
     // Group comments by entity type and count
     const taskComments = comments.filter((c) => c.taskId).length
     const projectComments = comments.filter((c) => c.projectId).length
@@ -212,12 +275,11 @@ function generateTextContent({ comments }: { comments: ReturnType<typeof mapComm
     }
     const summary = parts.length > 0 ? `Added ${parts.join(' and ')}` : 'No comments added'
 
-    const notified = new Set(comments.flatMap((c) => c.notifiedUserIds ?? []))
-    if (notified.size === 0) {
+    const notified = [...new Set(comments.flatMap((c) => c.notifiedUserIds ?? []))]
+    if (notified.length === 0) {
         return summary
     }
-    const peopleLabel = notified.size > 1 ? 'people' : 'person'
-    return `${summary}. Notified ${notified.size} ${peopleLabel}`
+    return `${summary}. Notified: ${notified.map((id) => notifiedNames.get(id) ?? id).join(', ')}`
 }
 
 export { addComments }

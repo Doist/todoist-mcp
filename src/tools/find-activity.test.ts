@@ -1,12 +1,17 @@
 import type { ACTIVITY_EVENT_TYPES, ActivityEvent, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
+import { createMockUser } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
+import { userResolver } from '../utils/user-resolver.js'
 import { findActivity } from './find-activity.js'
 
-// Mock the Todoist API
+// Mock the Todoist API. Initiators are named from project collaborators, which
+// default to none, so events show the initiator's user ID.
 const mockTodoistApi = {
     getActivityLogs: vi.fn(),
+    getUser: vi.fn(),
+    getProjectCollaborators: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { FIND_ACTIVITY } = ToolNames
@@ -32,6 +37,9 @@ function createMockActivityEvent(overrides: Partial<ActivityEvent> = {}): Activi
 describe(`${FIND_ACTIVITY} tool`, () => {
     beforeEach(() => {
         vi.clearAllMocks()
+        userResolver.clearCache()
+        mockTodoistApi.getUser.mockResolvedValue(createMockUser())
+        mockTodoistApi.getProjectCollaborators.mockResolvedValue({ results: [], nextCursor: null })
     })
 
     describe('basic functionality', () => {
@@ -379,6 +387,71 @@ describe(`${FIND_ACTIVITY} tool`, () => {
 
             expect(result.textContent).toContain('...')
             expect(result.textContent).not.toContain(longContent)
+        })
+    })
+
+    describe('initiator names', () => {
+        function createClientWithCollaborators(
+            collaborators: { id: string; name: string; email: string }[],
+        ): Mocked<TodoistApi> {
+            return {
+                getActivityLogs: vi.fn(),
+                getUser: vi.fn().mockResolvedValue({ id: 'me', fullName: 'Me', email: 'me@x.com' }),
+                getProjectCollaborators: vi
+                    .fn()
+                    .mockResolvedValue({ results: collaborators, nextCursor: null }),
+            } as unknown as Mocked<TodoistApi>
+        }
+
+        it('names initiators by short name from the collaborators of the event project', async () => {
+            const client = createClientWithCollaborators([
+                { id: 'user-001', name: 'Ada Lovelace (OOO Friday)', email: 'ada@example.com' },
+            ])
+            client.getActivityLogs.mockResolvedValue({
+                results: [createMockActivityEvent()],
+                nextCursor: null,
+            })
+
+            const result = await findActivity.execute({ limit: 20 }, client)
+
+            expect(client.getProjectCollaborators).toHaveBeenCalledWith(
+                'project-789',
+                expect.objectContaining({ cursor: null }),
+            )
+            expect(result.textContent).toContain(' • by Ada L.')
+            expect(result.textContent).not.toContain('by=user-001')
+            expect(result.structuredContent.events[0]?.initiatorId).toBe('user-001')
+        })
+
+        it('falls back to the user ID when the initiator is not a collaborator', async () => {
+            const client = createClientWithCollaborators([
+                { id: 'someone-else', name: 'Grace Hopper', email: 'grace@example.com' },
+            ])
+            client.getActivityLogs.mockResolvedValue({
+                results: [createMockActivityEvent({ initiatorId: 'user-002' })],
+                nextCursor: null,
+            })
+
+            const result = await findActivity.execute({ limit: 20 }, client)
+
+            expect(result.textContent).toContain(' • by=user-002')
+        })
+
+        it('does not look up collaborators for events outside a project or without an initiator', async () => {
+            const client = createClientWithCollaborators([])
+            client.getActivityLogs.mockResolvedValue({
+                results: [
+                    createMockActivityEvent({ parentProjectId: null }),
+                    createMockActivityEvent({ initiatorId: null }),
+                ],
+                nextCursor: null,
+            })
+
+            const result = await findActivity.execute({ limit: 20 }, client)
+
+            expect(client.getProjectCollaborators).not.toHaveBeenCalled()
+            expect(result.textContent).toContain(' • by=user-001')
+            expect(result.textContent).toContain(' • system')
         })
     })
 })

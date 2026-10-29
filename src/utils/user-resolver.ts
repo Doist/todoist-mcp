@@ -1,4 +1,9 @@
-import type { PersonalProject, TodoistApi, WorkspaceProject } from '@doist/todoist-sdk'
+import {
+    formatUserShortName,
+    type PersonalProject,
+    type TodoistApi,
+    type WorkspaceProject,
+} from '@doist/todoist-sdk'
 import { fetchAllPages } from '../tool-helpers.js'
 
 export type ResolvedUser = {
@@ -268,9 +273,12 @@ export class UserResolver {
         if (cached !== undefined) return cached
 
         try {
-            const response = await client.getProjectCollaborators(projectId)
-            // API returns { results: [...], nextCursor: null } or just array
-            const collaborators = Array.isArray(response) ? response : response.results || []
+            // Paginated: a large project's later collaborators would otherwise be
+            // missing, so they could neither be validated as assignees nor named.
+            const collaborators: ProjectCollaborator[] = await fetchAllPages({
+                apiMethod: (args: { cursor?: string | null; limit?: number }) =>
+                    client.getProjectCollaborators(projectId, args),
+            })
 
             const validCollaborators = collaborators.filter((c) => c?.id && c.name && c.email)
 
@@ -349,6 +357,39 @@ export class UserResolver {
         }
     }
 
+    /**
+     * Short display names ("Ada L."), keyed by user ID, for the collaborators of
+     * the given projects, abbreviated the same way the Todoist CLI shows them. A
+     * project whose collaborators can't be fetched contributes no names, so
+     * naming people never fails the tool that asked.
+     *
+     * Pass the current user's ID as `cacheScope` when it is already known, to
+     * save fetching the user again.
+     */
+    async getUserShortNames(
+        client: TodoistApi,
+        projectIds: Iterable<string>,
+        cacheScope?: string | null,
+    ): Promise<Map<string, string>> {
+        const names = new Map<string, string>()
+        const uniqueProjectIds = [...new Set(projectIds)]
+        if (uniqueProjectIds.length === 0) return names
+
+        const resolvedCacheScope =
+            cacheScope === undefined ? await this.getCacheScope(client) : cacheScope
+        const collaboratorLists = await Promise.all(
+            uniqueProjectIds.map((projectId) =>
+                this.getProjectCollaborators(client, projectId, resolvedCacheScope),
+            ),
+        )
+        for (const collaborator of collaboratorLists.flat()) {
+            if (!names.has(collaborator.id)) {
+                names.set(collaborator.id, formatUserShortName(collaborator.name))
+            }
+        }
+        return names
+    }
+
     private async getCacheScope(client: TodoistApi): Promise<string | null> {
         try {
             const currentUser = await client.getUser()
@@ -373,6 +414,24 @@ export class UserResolver {
 
 // Export singleton instance
 export const userResolver = new UserResolver()
+
+/**
+ * Short display names for the assignees of `tasks`, keyed by user ID. Only
+ * projects with an assigned task are looked up, so a list without assignees
+ * costs no extra requests. `cacheScope` is as for
+ * {@link UserResolver.getUserShortNames}.
+ */
+export function getAssigneeShortNames(
+    client: TodoistApi,
+    tasks: { projectId: string; responsibleUid?: string }[],
+    cacheScope?: string | null,
+): Promise<Map<string, string>> {
+    return userResolver.getUserShortNames(
+        client,
+        tasks.filter((task) => task.responsibleUid).map((task) => task.projectId),
+        cacheScope,
+    )
+}
 
 // Legacy function for backwards compatibility
 export async function resolveUserNameToId(

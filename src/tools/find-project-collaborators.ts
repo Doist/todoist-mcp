@@ -1,4 +1,4 @@
-import type { TodoistApi } from '@doist/todoist-sdk'
+import { formatUserShortName, type TodoistApi } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { type Project } from '../tool-helpers.js'
@@ -246,7 +246,7 @@ function generateTextContent({
     let previewLines: string[] = []
     if (collaborators.length > 0) {
         previewLines = collaborators.slice(0, 10).map((collaborator) => {
-            const displayName = collaborator.name || 'Unknown Name'
+            const displayName = formatUserShortName(collaborator.name) || 'Unknown Name'
             const email = collaborator.email || 'No email'
             return `• ${displayName} (${email}) - ID: ${collaborator.id}`
         })

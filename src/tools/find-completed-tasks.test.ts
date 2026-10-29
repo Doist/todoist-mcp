@@ -45,6 +45,47 @@ describe(`${FIND_COMPLETED_TASKS} tool`, () => {
     })
 
     describe('getting completed tasks by completion date (default)', () => {
+        it('should show the assignee of a completed task by short name', async () => {
+            mockTodoistApi.getCompletedTasksByCompletionDate.mockResolvedValue({
+                items: [
+                    createMockTask({
+                        id: '8485093748',
+                        content: 'Shipped the release',
+                        projectId: 'shared-project',
+                        responsibleUid: 'user-ada',
+                        completedAt: new Date('2024-01-01T00:00:00Z'),
+                    }),
+                ],
+                nextCursor: null,
+            })
+            mockTodoistApi.getProjectCollaborators.mockResolvedValue({
+                results: [
+                    { id: 'user-ada', name: 'Ada Lovelace (OOO Friday)', email: 'ada@x.com' },
+                ],
+                nextCursor: null,
+            })
+
+            const result = await findCompletedTasks.execute(
+                {
+                    getBy: 'completion',
+                    limit: 50,
+                    since: '2024-01-01',
+                    until: '2024-01-02',
+                    labels: [],
+                    labelsOperator: 'or' as const,
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getProjectCollaborators).toHaveBeenCalledWith(
+                'shared-project',
+                expect.objectContaining({ cursor: null }),
+            )
+            expect(result.textContent).toContain(
+                'Shipped the release • P4 • +Ada L. • id=8485093748',
+            )
+        })
+
         it('should get completed tasks by completion date', async () => {
             const mockCompletedTasks: Task[] = [
                 createMockTask({

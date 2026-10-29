@@ -8,6 +8,7 @@ import { generateLabelsFilter, LabelsSchema } from '../utils/labels.js'
 import { TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import { previewTasks, summarizeList } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
+import { getAssigneeShortNames } from '../utils/user-resolver.js'
 
 // No ToolNames constants needed - we only use cursor-based pagination
 const DEFAULT_DATE_WINDOW_DAYS = 7
@@ -205,6 +206,7 @@ const findCompletedTasks = {
             args: effectiveArgs,
             nextCursor,
             assigneeEmail,
+            assigneeNames: await getAssigneeShortNames(client, mappedTasks, user.id),
         })
 
         return {
@@ -228,11 +230,13 @@ function generateTextContent({
     args,
     nextCursor,
     assigneeEmail,
+    assigneeNames,
 }: {
     tasks: ReturnType<typeof mapTask>[]
     args: ResolvedFindCompletedTasksArgs
     nextCursor: string | null
     assigneeEmail?: string
+    assigneeNames: ReadonlyMap<string, string>
 }) {
     // Generate subject description
     const getByText = args.getBy === 'completion' ? 'completed' : 'due'
@@ -279,7 +283,7 @@ function generateTextContent({
         limit: args.limit,
         nextCursor: nextCursor ?? undefined,
         filterHints,
-        previewLines: previewTasks(tasks, Math.min(tasks.length, args.limit)),
+        previewLines: previewTasks(tasks, Math.min(tasks.length, args.limit), assigneeNames),
         zeroReasonHints,
     })
 }

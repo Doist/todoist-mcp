@@ -21,6 +21,7 @@ import { generateLabelsFilter, LabelsSchema } from '../utils/labels.js'
 import { TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import { previewTasks, summarizeList } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
+import { getAssigneeShortNames } from '../utils/user-resolver.js'
 
 const { FIND_COMPLETED_TASKS, ADD_TASKS } = ToolNames
 
@@ -202,6 +203,7 @@ const findTasks = {
                 nextCursor,
                 isContainerSearch: true,
                 assigneeEmail,
+                assigneeNames: await getAssigneeShortNames(client, filteredTasks, todoistUser.id),
             })
 
             return {
@@ -239,6 +241,7 @@ const findTasks = {
                 nextCursor,
                 isContainerSearch: false,
                 assigneeEmail,
+                assigneeNames: await getAssigneeShortNames(client, mappedTasks, todoistUser.id),
             })
 
             return {
@@ -295,6 +298,7 @@ const findTasks = {
             nextCursor,
             isContainerSearch: false,
             assigneeEmail,
+            assigneeNames: await getAssigneeShortNames(client, filteredTasks, todoistUser.id),
         })
 
         return {
@@ -346,12 +350,14 @@ function generateTextContent({
     nextCursor,
     isContainerSearch,
     assigneeEmail,
+    assigneeNames,
 }: {
     tasks: MappedTask[]
     args: z.infer<z.ZodObject<typeof ArgsSchema>>
     nextCursor: string | null
     isContainerSearch: boolean
     assigneeEmail?: string
+    assigneeNames: ReadonlyMap<string, string>
 }) {
     // Generate subject and filter descriptions based on search type
     let subject = 'Tasks'
@@ -474,7 +480,7 @@ function generateTextContent({
         limit: args.limit,
         nextCursor: nextCursor ?? undefined,
         filterHints,
-        previewLines: previewTasks(tasks, Math.min(tasks.length, args.limit)),
+        previewLines: previewTasks(tasks, Math.min(tasks.length, args.limit), assigneeNames),
         zeroReasonHints,
     })
 }
