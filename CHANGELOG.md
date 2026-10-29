@@ -1,3 +1,9 @@
+## [13.8.0](https://github.com/Doist/todoist-mcp/compare/v13.7.2...v13.8.0) (2026-10-29)
+
+### Features
+
+* show people by short name, matching the Todoist CLI ([#652](https://github.com/Doist/todoist-mcp/issues/652)) ([acaeb61](https://github.com/Doist/todoist-mcp/commit/acaeb615848ce2ae882a6e6e7c5aa84594e55b85))
+
 ## [13.7.2](https://github.com/Doist/todoist-mcp/compare/v13.7.1...v13.7.2) (2026-10-28)
 
 ### Bug Fixes
