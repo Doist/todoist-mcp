@@ -203,7 +203,7 @@ const findTasks = {
                 nextCursor,
                 isContainerSearch: true,
                 assigneeEmail,
-                assigneeNames: await getAssigneeShortNames(client, filteredTasks),
+                assigneeNames: await getAssigneeShortNames(client, filteredTasks, todoistUser.id),
             })
 
             return {
@@ -241,7 +241,7 @@ const findTasks = {
                 nextCursor,
                 isContainerSearch: false,
                 assigneeEmail,
-                assigneeNames: await getAssigneeShortNames(client, mappedTasks),
+                assigneeNames: await getAssigneeShortNames(client, mappedTasks, todoistUser.id),
             })
 
             return {
@@ -298,7 +298,7 @@ const findTasks = {
             nextCursor,
             isContainerSearch: false,
             assigneeEmail,
-            assigneeNames: await getAssigneeShortNames(client, filteredTasks),
+            assigneeNames: await getAssigneeShortNames(client, filteredTasks, todoistUser.id),
         })
 
         return {

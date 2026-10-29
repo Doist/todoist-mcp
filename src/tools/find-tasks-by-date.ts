@@ -167,7 +167,7 @@ const findTasksByDate = {
             args,
             nextCursor,
             assigneeEmail,
-            assigneeNames: await getAssigneeShortNames(client, tasks),
+            assigneeNames: await getAssigneeShortNames(client, tasks, currentUserId),
         })
 
         return {

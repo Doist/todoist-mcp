@@ -206,7 +206,7 @@ const findCompletedTasks = {
             args: effectiveArgs,
             nextCursor,
             assigneeEmail,
-            assigneeNames: await getAssigneeShortNames(client, mappedTasks),
+            assigneeNames: await getAssigneeShortNames(client, mappedTasks, user.id),
         })
 
         return {

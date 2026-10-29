@@ -628,7 +628,11 @@ describe(`${FIND_TASKS_BY_DATE} tool`, () => {
 
             const textContent = result.textContent
             expect(textContent).toContain('assigned to john@example.com')
-            expect(getAssigneeShortNames).toHaveBeenCalledWith(mockTodoistApi, mockTasks)
+            expect(getAssigneeShortNames).toHaveBeenCalledWith(
+                mockTodoistApi,
+                mockTasks,
+                mockTodoistUser.id,
+            )
             expect(textContent).toContain(' • +John D. • ')
             expect(textContent).toMatchSnapshot()
         })

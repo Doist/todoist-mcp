@@ -89,7 +89,11 @@ describe(`${FIND_TASKS} tool`, () => {
                 mockTodoistApi,
             )
 
-            expect(getAssigneeShortNames).toHaveBeenCalledWith(mockTodoistApi, mockTasks)
+            expect(getAssigneeShortNames).toHaveBeenCalledWith(
+                mockTodoistApi,
+                mockTasks,
+                mockTodoistUser.id,
+            )
             expect(result.textContent).toContain('Assigned task • P4 • +Ada L. • id=')
             expect(result.textContent).toContain(
                 'Assigned to someone unknown • P4 • +user-unknown • id=',

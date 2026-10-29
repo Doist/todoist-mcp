@@ -1,4 +1,4 @@
-import type { Comment, GetTaskCommentsArgs, TodoistApi } from '@doist/todoist-sdk'
+import type { Comment, GetTaskCommentsArgs, Task, TodoistApi } from '@doist/todoist-sdk'
 
 /** Value that tells `add-comments` to post without notifying anyone. */
 export const NO_NOTIFY_KEYWORD = 'none'
@@ -29,12 +29,15 @@ export function isNoNotifyList(notifyUsers: string[]): boolean {
  * @param client - Todoist API client
  * @param target - The task or project being commented on
  * @param currentUserId - The authenticated user, excluded from the result
+ * @param getTask - Reads the task being commented on, so a caller that also
+ * needs it can share the one request
  * @returns User IDs to notify, deduplicated
  */
 export async function getDefaultCommentRecipients(
     client: TodoistApi,
     target: CommentTarget,
     currentUserId: string,
+    getTask: (taskId: string) => Promise<Task> = (taskId) => client.getTask(taskId),
 ): Promise<string[]> {
     const previousComment = await getLatestComment(client, target)
 
@@ -49,7 +52,7 @@ export async function getDefaultCommentRecipients(
         return []
     }
 
-    const task = await client.getTask(target.taskId)
+    const task = await getTask(target.taskId)
     return dedupe([task.responsibleUid, task.assignedByUid, task.addedByUid], currentUserId)
 }
 

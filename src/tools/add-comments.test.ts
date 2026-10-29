@@ -491,6 +491,90 @@ describe(`${ADD_COMMENTS} tool`, () => {
             })
         })
 
+        it('should read a task once to find both its default recipients and their names', async () => {
+            mockTodoistApi.getTask.mockResolvedValue(
+                createMockTaskWithUids({ responsibleUid: 'assignee' }),
+            )
+            mockTodoistApi.getProjectCollaborators.mockResolvedValue({
+                results: [{ id: 'assignee', name: 'Ada Lovelace', email: 'ada@example.com' }],
+                nextCursor: null,
+            })
+            mockAddedComment(['assignee'])
+
+            const result = await addComments.execute(
+                { comments: [{ taskId: 'task456', content: 'First comment' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getTask).toHaveBeenCalledTimes(1)
+            // The current user was already fetched, so it is not fetched again to name people.
+            expect(mockTodoistApi.getUser).toHaveBeenCalledTimes(1)
+            expect(result.textContent).toContain('Notified: Ada L.')
+        })
+
+        it('should name the recipients of a project comment without reading any task', async () => {
+            mockResolveUserRefs.mockResolvedValue([
+                { userId: '111', displayName: '111', email: '111' },
+            ])
+            mockTodoistApi.addComment.mockResolvedValue(
+                createMockComment({
+                    taskId: undefined,
+                    projectId: 'project789',
+                    uidsToNotify: ['111'],
+                }),
+            )
+            mockTodoistApi.getProjectCollaborators.mockResolvedValue({
+                results: [{ id: '111', name: 'Ana Silva', email: 'ana@example.com' }],
+                nextCursor: null,
+            })
+
+            const result = await addComments.execute(
+                { comments: [{ projectId: 'project789', content: 'Ping', notifyUsers: ['111'] }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getTask).not.toHaveBeenCalled()
+            expect(mockTodoistApi.getProjectCollaborators).toHaveBeenCalledWith(
+                'project789',
+                expect.objectContaining({ cursor: null }),
+            )
+            expect(result.textContent).toContain('Notified: Ana S.')
+        })
+
+        it('should still name the other comments when one task cannot be read', async () => {
+            mockResolveUserRefs.mockImplementation(async (_client, refs) =>
+                refs.map((ref) => ({ userId: ref, displayName: ref, email: ref })),
+            )
+            mockTodoistApi.getTask.mockRejectedValue(new Error('Task lookup failed'))
+            mockTodoistApi.addComment
+                .mockResolvedValueOnce(createMockComment({ taskId: 'gone', uidsToNotify: ['111'] }))
+                .mockResolvedValueOnce(
+                    createMockComment({
+                        id: '67890',
+                        taskId: undefined,
+                        projectId: 'project789',
+                        uidsToNotify: ['222'],
+                    }),
+                )
+            mockTodoistApi.getProjectCollaborators.mockResolvedValue({
+                results: [{ id: '222', name: 'Bo Berg', email: 'bo@example.com' }],
+                nextCursor: null,
+            })
+
+            const result = await addComments.execute(
+                {
+                    comments: [
+                        { taskId: 'gone', content: 'First', notifyUsers: ['111'] },
+                        { projectId: 'project789', content: 'Second', notifyUsers: ['222'] },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.successCount).toBe(2)
+            expect(result.textContent).toContain('Notified: 111, Bo B.')
+        })
+
         it('should exclude the comment author and drop unset uids from the defaults', async () => {
             mockTodoistApi.getTask.mockResolvedValue(
                 createMockTaskWithUids({

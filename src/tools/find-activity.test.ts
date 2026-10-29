@@ -1,13 +1,17 @@
 import type { ACTIVITY_EVENT_TYPES, ActivityEvent, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
+import { createMockUser } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { userResolver } from '../utils/user-resolver.js'
 import { findActivity } from './find-activity.js'
 
-// Mock the Todoist API
+// Mock the Todoist API. Initiators are named from project collaborators, which
+// default to none, so events show the initiator's user ID.
 const mockTodoistApi = {
     getActivityLogs: vi.fn(),
+    getUser: vi.fn(),
+    getProjectCollaborators: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { FIND_ACTIVITY } = ToolNames
@@ -33,6 +37,9 @@ function createMockActivityEvent(overrides: Partial<ActivityEvent> = {}): Activi
 describe(`${FIND_ACTIVITY} tool`, () => {
     beforeEach(() => {
         vi.clearAllMocks()
+        userResolver.clearCache()
+        mockTodoistApi.getUser.mockResolvedValue(createMockUser())
+        mockTodoistApi.getProjectCollaborators.mockResolvedValue({ results: [], nextCursor: null })
     })
 
     describe('basic functionality', () => {
@@ -395,10 +402,6 @@ describe(`${FIND_ACTIVITY} tool`, () => {
                     .mockResolvedValue({ results: collaborators, nextCursor: null }),
             } as unknown as Mocked<TodoistApi>
         }
-
-        beforeEach(() => {
-            userResolver.clearCache()
-        })
 
         it('names initiators by short name from the collaborators of the event project', async () => {
             const client = createClientWithCollaborators([
