@@ -1,7 +1,6 @@
-import type { GetProjectsArgs, GetProjectsResponse, Project, TodoistApi } from '@doist/todoist-sdk'
+import type { TodoistApi } from '@doist/todoist-sdk'
 import { z } from 'zod'
-import { fetchAllPages, isPersonalProject } from '../tool-helpers.js'
-import { ApiLimits } from './constants.js'
+import { fetchAllActiveProjects, isPersonalProject } from '../tool-helpers.js'
 import { executeWithRetry } from './retry.js'
 import type { ToolName } from './tool-names.js'
 
@@ -37,12 +36,7 @@ async function loadPersonalProjectCapacity(
             executeWithRetry(() =>
                 client.sync({ resourceTypes: ['user_plan_limits'], syncToken: '*' }),
             ),
-            // Retry each page on its own so a transient failure part-way through
-            // does not refetch the pages already read.
-            fetchAllPages<GetProjectsArgs, GetProjectsResponse, Project>({
-                apiMethod: (args) => executeWithRetry(() => client.getProjects(args)),
-                limit: ApiLimits.PROJECTS_MAX,
-            }),
+            fetchAllActiveProjects(client),
         ])
         // The SDK preserves this field via a loose schema, so validate it before use.
         const maxProjects = PersonalProjectLimitSchema.parse(

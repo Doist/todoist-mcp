@@ -5,7 +5,7 @@ import type {
 } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { mapProject } from '../tool-helpers.js'
+import { isWorkspaceProject, mapProject } from '../tool-helpers.js'
 import { ProjectSchema } from '../utils/output-schemas.js'
 import {
     assertPersonalProjectCapacity,
@@ -71,10 +71,16 @@ const projectMove = {
 
             project = await client.moveProjectToWorkspace(moveArgs)
         } else {
-            assertPersonalProjectCapacity(
-                await loadPersonalProjectCapacity(client, ToolNames.PROJECT_MOVE),
-                'This project was not moved.',
-            )
+            // Moving an active workspace project makes it count towards the personal
+            // limit. A project that is already personal (a retried move that went
+            // through) has nothing left to check.
+            const current = await client.getProject(args.projectId)
+            if (isWorkspaceProject(current) && !current.isArchived) {
+                assertPersonalProjectCapacity(
+                    await loadPersonalProjectCapacity(client, ToolNames.PROJECT_MOVE),
+                    'This project was not moved.',
+                )
+            }
             project = await client.moveProjectToPersonal({ projectId: args.projectId })
         }
 

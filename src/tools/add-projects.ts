@@ -5,14 +5,14 @@ import { formatBatchItemError } from '../tool-execution-error.js'
 import { mapProject } from '../tool-helpers.js'
 import { logBatchFailures } from '../utils/batch-failures.js'
 import { ColorSchema } from '../utils/colors.js'
-import { createLimiter } from '../utils/concurrency.js'
 import { FailureSchema, ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
 import {
     assertPersonalProjectCapacity,
     loadPersonalProjectCapacity,
+    type PersonalProjectCapacity,
 } from '../utils/personal-project-limit.js'
 import { appendFailureSummary } from '../utils/response-builders.js'
-import { executeCreateWithRetry, executeWithRetry } from '../utils/retry.js'
+import { executeCreateWithRetry, executeWithRetry, extractHttpStatusCode } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { workspaceResolver } from '../utils/workspace-resolver.js'
 
@@ -69,8 +69,9 @@ const addProjects = {
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     async execute({ projects }, client) {
         const workspaceResolutions = new Map<string, Promise<string>>()
-        const limitPersonalCreation = createLimiter(1)
-        let personalCapacity: ReturnType<typeof loadPersonalProjectCapacity> | undefined
+        const admitPersonalProject = createPersonalProjectGate(() =>
+            loadPersonalProjectCapacity(client, ToolNames.ADD_PROJECTS),
+        )
 
         const resolveWorkspaceId = (workspace: string | undefined) => {
             if (!workspace) {
@@ -105,17 +106,7 @@ const addProjects = {
                     return await createProject()
                 }
 
-                // The quota snapshot and successful writes share one lane within this
-                // batch. Other tool executions and clients can still change capacity.
-                return await limitPersonalCreation(async () => {
-                    personalCapacity ??= loadPersonalProjectCapacity(client, ToolNames.ADD_PROJECTS)
-                    const capacity = await personalCapacity
-                    assertPersonalProjectCapacity(capacity, 'This project was not created.')
-
-                    const project = await createProject()
-                    capacity.activeCount++
-                    return project
-                })
+                return await admitPersonalProject(createProject)
             }),
         )
 
@@ -151,6 +142,61 @@ const addProjects = {
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
+
+/**
+ * Admits a batch's personal project creations while the account has room for them.
+ *
+ * Creates run concurrently while there are free slots. Once every free slot is held
+ * by a create still in flight, later items wait for one to settle instead of failing
+ * straight away: a create the API definitely rejected frees its slot for them. Other
+ * tool calls and clients can still change the count; this only keeps one batch from
+ * taking the account past its limit.
+ */
+function createPersonalProjectGate(
+    loadCapacity: () => Promise<PersonalProjectCapacity | undefined>,
+) {
+    let capacity: Promise<PersonalProjectCapacity | undefined> | undefined
+    let inFlight = 0
+    let waiting: Array<() => void> = []
+
+    return async function admit<T>(create: () => Promise<T>): Promise<T> {
+        capacity ??= loadCapacity()
+        const current = await capacity
+        while (current && inFlight > 0 && current.activeCount + inFlight >= current.maxProjects) {
+            await new Promise<void>((resolve) => waiting.push(resolve))
+        }
+        assertPersonalProjectCapacity(current, 'This project was not created.')
+
+        inFlight++
+        try {
+            const project = await create()
+            current.activeCount++
+            return project
+        } catch (error) {
+            if (mayHaveCreated(error)) {
+                current.activeCount++
+            }
+            throw error
+        } finally {
+            inFlight--
+            const woken = waiting
+            waiting = []
+            for (const wake of woken) {
+                wake()
+            }
+        }
+    }
+}
+
+/**
+ * Whether a failed create may still have saved the project. Only a 4xx or a 503 (the
+ * server turning the request away) rules it out: a 502/504 or a dropped connection
+ * can arrive after the project was created.
+ */
+function mayHaveCreated(error: unknown): boolean {
+    const statusCode = extractHttpStatusCode(error)
+    return statusCode === undefined || (statusCode >= 500 && statusCode !== 503)
+}
 
 function generateTextContent({
     projects,

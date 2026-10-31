@@ -6,8 +6,10 @@ import type {
     Section,
     SyncCommand,
     Task,
+    TodoistApi,
     WorkspaceProject,
 } from '@doist/todoist-sdk'
+import type { Mocked } from 'vitest'
 import { type MappedTask } from '../tool-helpers'
 import { convertPriorityToNumber, type Priority } from './priorities'
 
@@ -178,6 +180,33 @@ export function createMockFilter(overrides: Partial<Filter> = {}): Filter {
  */
 export function allApplied(commands: SyncCommand[] = []): Record<string, 'ok'> {
     return Object.fromEntries(commands.map((command) => [command.uuid, 'ok' as const]))
+}
+
+/**
+ * Creates `count` active personal projects, e.g. the projects that count towards
+ * the account's personal project limit.
+ */
+export function createMockPersonalProjects(count: number): PersonalProject[] {
+    return Array.from({ length: count }, (_, index) =>
+        createMockProject({ id: `existing-${index}` }),
+    )
+}
+
+/**
+ * Mocks the two reads behind the personal project limit check: the plan limit (from
+ * Sync) and the account's active projects. The next plan's limit is set higher so a
+ * check that reads it by mistake does not pass unnoticed.
+ */
+export function mockPersonalProjectCapacity(
+    client: Mocked<TodoistApi>,
+    { maxProjects, activeCount }: { maxProjects: number; activeCount: number },
+): void {
+    client.sync.mockResolvedValue({
+        userPlanLimits: { current: { maxProjects }, next: { maxProjects: maxProjects + 100 } },
+    })
+    client.getProjects.mockResolvedValue(
+        createMockApiResponse(createMockPersonalProjects(activeCount)),
+    )
 }
 
 /**

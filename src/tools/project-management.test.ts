@@ -1,9 +1,9 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import {
-    createMockApiResponse,
     createMockProject,
     createMockWorkspaceProject,
+    mockPersonalProjectCapacity,
 } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { projectManagement } from './project-management.js'
@@ -16,32 +16,13 @@ const mockTodoistApi = {
     sync: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
-function mockPersonalProjectCapacity({
-    maxProjects,
-    activeCount,
-}: {
-    maxProjects: number
-    activeCount: number
-}) {
-    mockTodoistApi.sync.mockResolvedValue({
-        userPlanLimits: { current: { maxProjects }, next: { maxProjects: 300 } },
-    })
-    mockTodoistApi.getProjects.mockResolvedValue(
-        createMockApiResponse(
-            Array.from({ length: activeCount }, (_, index) =>
-                createMockProject({ id: `existing-${index}` }),
-            ),
-        ),
-    )
-}
-
 const { PROJECT_MANAGEMENT } = ToolNames
 
 describe(`${PROJECT_MANAGEMENT} tool`, () => {
     beforeEach(() => {
         vi.resetAllMocks()
         mockTodoistApi.getProject.mockResolvedValue(createMockProject({ isArchived: true }))
-        mockPersonalProjectCapacity({ maxProjects: 5, activeCount: 4 })
+        mockPersonalProjectCapacity(mockTodoistApi, { maxProjects: 5, activeCount: 4 })
     })
 
     describe('archiving projects', () => {
@@ -128,7 +109,7 @@ describe(`${PROJECT_MANAGEMENT} tool`, () => {
 
     describe('personal project limit', () => {
         it('does not unarchive a personal project when the account is at its limit', async () => {
-            mockPersonalProjectCapacity({ maxProjects: 5, activeCount: 5 })
+            mockPersonalProjectCapacity(mockTodoistApi, { maxProjects: 5, activeCount: 5 })
 
             await expect(
                 projectManagement.execute(
@@ -172,7 +153,7 @@ describe(`${PROJECT_MANAGEMENT} tool`, () => {
                 project: createMockProject({ isArchived: false }),
             },
         ])('does not check the limit when unarchiving $kind', async ({ project }) => {
-            mockPersonalProjectCapacity({ maxProjects: 5, activeCount: 5 })
+            mockPersonalProjectCapacity(mockTodoistApi, { maxProjects: 5, activeCount: 5 })
             mockTodoistApi.getProject.mockResolvedValue(project)
             mockTodoistApi.unarchiveProject.mockResolvedValue(project)
 
@@ -186,7 +167,7 @@ describe(`${PROJECT_MANAGEMENT} tool`, () => {
         })
 
         it('does not check the limit when archiving', async () => {
-            mockPersonalProjectCapacity({ maxProjects: 5, activeCount: 5 })
+            mockPersonalProjectCapacity(mockTodoistApi, { maxProjects: 5, activeCount: 5 })
             mockTodoistApi.archiveProject.mockResolvedValue(createMockProject())
 
             await projectManagement.execute(
