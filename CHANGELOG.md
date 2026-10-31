@@ -1,3 +1,9 @@
+## [13.8.1](https://github.com/Doist/todoist-mcp/compare/v13.8.0...v13.8.1) (2026-10-31)
+
+### Bug Fixes
+
+* enforce personal project limits when adding, unarchiving or moving projects ([#643](https://github.com/Doist/todoist-mcp/issues/643)) ([7c4d870](https://github.com/Doist/todoist-mcp/commit/7c4d870e7123647d91df849e939fabb41b334227))
+
 ## [13.8.0](https://github.com/Doist/todoist-mcp/compare/v13.7.2...v13.8.0) (2026-10-29)
 
 ### Features
