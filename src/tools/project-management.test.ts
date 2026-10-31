@@ -1,19 +1,28 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
-import { createMockProject } from '../utils/test-helpers.js'
+import {
+    createMockProject,
+    createMockWorkspaceProject,
+    mockPersonalProjectCapacity,
+} from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { projectManagement } from './project-management.js'
 
 const mockTodoistApi = {
     archiveProject: vi.fn(),
     unarchiveProject: vi.fn(),
+    getProject: vi.fn(),
+    getProjects: vi.fn(),
+    sync: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { PROJECT_MANAGEMENT } = ToolNames
 
 describe(`${PROJECT_MANAGEMENT} tool`, () => {
     beforeEach(() => {
-        vi.clearAllMocks()
+        vi.resetAllMocks()
+        mockTodoistApi.getProject.mockResolvedValue(createMockProject({ isArchived: true }))
+        mockPersonalProjectCapacity(mockTodoistApi, { maxProjects: 5, activeCount: 4 })
     })
 
     describe('archiving projects', () => {
@@ -95,6 +104,79 @@ describe(`${PROJECT_MANAGEMENT} tool`, () => {
                     mockTodoistApi,
                 ),
             ).rejects.toThrow('API Error: Cannot unarchive project')
+        })
+    })
+
+    describe('personal project limit', () => {
+        it('does not unarchive a personal project when the account is at its limit', async () => {
+            mockPersonalProjectCapacity(mockTodoistApi, { maxProjects: 5, activeCount: 5 })
+
+            await expect(
+                projectManagement.execute(
+                    { action: 'unarchive', projectId: 'proj-archived' },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow(
+                'Your account has reached its limit of 5 active personal projects. This project was not unarchived.',
+            )
+            expect(mockTodoistApi.getProject).toHaveBeenCalledWith('proj-archived')
+            expect(mockTodoistApi.unarchiveProject).not.toHaveBeenCalled()
+        })
+
+        it('does not unarchive a personal project when the limit cannot be verified', async () => {
+            mockTodoistApi.sync.mockResolvedValue({ userPlanLimits: { current: {}, next: null } })
+            const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+            await expect(
+                projectManagement.execute(
+                    { action: 'unarchive', projectId: 'proj-archived' },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow(
+                'Could not verify your personal project limit. This project was not unarchived. Retry later.',
+            )
+            expect(consoleErrorSpy).toHaveBeenCalledWith(
+                `${PROJECT_MANAGEMENT}: could not load personal project limit`,
+                expect.any(Error),
+            )
+            consoleErrorSpy.mockRestore()
+            expect(mockTodoistApi.unarchiveProject).not.toHaveBeenCalled()
+        })
+
+        it.each([
+            {
+                kind: 'a workspace project',
+                project: createMockWorkspaceProject({ isArchived: true }),
+            },
+            {
+                kind: 'an active personal project',
+                project: createMockProject({ isArchived: false }),
+            },
+        ])('does not check the limit when unarchiving $kind', async ({ project }) => {
+            mockPersonalProjectCapacity(mockTodoistApi, { maxProjects: 5, activeCount: 5 })
+            mockTodoistApi.getProject.mockResolvedValue(project)
+            mockTodoistApi.unarchiveProject.mockResolvedValue(project)
+
+            await projectManagement.execute(
+                { action: 'unarchive', projectId: project.id },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.sync).not.toHaveBeenCalled()
+            expect(mockTodoistApi.unarchiveProject).toHaveBeenCalledWith(project.id)
+        })
+
+        it('does not check the limit when archiving', async () => {
+            mockPersonalProjectCapacity(mockTodoistApi, { maxProjects: 5, activeCount: 5 })
+            mockTodoistApi.archiveProject.mockResolvedValue(createMockProject())
+
+            await projectManagement.execute(
+                { action: 'archive', projectId: 'proj-active' },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getProject).not.toHaveBeenCalled()
+            expect(mockTodoistApi.sync).not.toHaveBeenCalled()
         })
     })
 })

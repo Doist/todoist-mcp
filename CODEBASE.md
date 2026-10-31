@@ -137,6 +137,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; add
 - `reminder-schemas.ts` — reminder-specific shapes
 - `assignment-validator.ts` — validate collaborator assignments
 - `user-resolver.ts` / `workspace-resolver.ts` — resolve user/workspace refs. `userResolver.getUserShortNames` and `getAssigneeShortNames` name people by short name (`Ada L.`), as the Todoist CLI does, for tool text output
+- `personal-project-limit.ts` — `loadPersonalProjectCapacity`/`assertPersonalProjectCapacity`: check the plan's personal project limit before any write that adds an active personal project (create, unarchive, move to personal). The API accepts a couple of projects past the limit as an offline-sync buffer, so it won't refuse these itself
 - `batch-failures.ts` — `logBatchFailures`, the one log line a batch tool writes for the items it could not act on
 - `response-builders.ts` — `summarizeTaskOperation`, `summarizeBatch`, `appendFailureSummary`, `previewTasks` (keep output messages consistent)
 - `retry.ts` — `executeWithRetry()` used inside `registerTool`; exponential backoff with full jitter

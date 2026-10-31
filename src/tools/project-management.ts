@@ -1,7 +1,11 @@
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { mapProject } from '../tool-helpers.js'
+import { isPersonalProject, mapProject } from '../tool-helpers.js'
 import { ProjectSchema } from '../utils/output-schemas.js'
+import {
+    assertPersonalProjectCapacity,
+    loadPersonalProjectCapacity,
+} from '../utils/personal-project-limit.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const ArgsSchema = {
@@ -21,6 +25,17 @@ const projectManagement = {
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     async execute(args, client) {
+        if (args.action === 'unarchive') {
+            // Unarchiving a personal project makes it count towards the plan limit again.
+            const archived = await client.getProject(args.projectId)
+            if (isPersonalProject(archived) && archived.isArchived) {
+                assertPersonalProjectCapacity(
+                    await loadPersonalProjectCapacity(client, ToolNames.PROJECT_MANAGEMENT),
+                    'This project was not unarchived.',
+                )
+            }
+        }
+
         const project =
             args.action === 'archive'
                 ? await client.archiveProject(args.projectId)

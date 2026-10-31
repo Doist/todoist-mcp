@@ -5,6 +5,8 @@ import {
     type ColorKey,
     type Comment,
     type CurrentUser,
+    type GetProjectsArgs,
+    type GetProjectsResponse,
     type Label,
     type MoveTaskArgs,
     type PersonalProject,
@@ -18,6 +20,7 @@ import z from 'zod'
 import { ApiLimits } from './utils/constants.js'
 import { formatDuration } from './utils/duration-parser.js'
 import { convertNumberToPriority } from './utils/priorities.js'
+import { executeWithRetry } from './utils/retry.js'
 
 // Re-export filter helpers for backward compatibility
 export {
@@ -157,12 +160,15 @@ export async function searchAllProjects(client: TodoistApi, query: string): Prom
 /**
  * Fetches all active (non-archived) projects across every page.
  *
+ * Each page is retried on its own, so a transient failure part-way through does
+ * not refetch the pages already read.
+ *
  * @param client - The Todoist API client
  * @returns Promise resolving to array of active projects
  */
 export async function fetchAllActiveProjects(client: TodoistApi): Promise<Project[]> {
-    return fetchAllPages({
-        apiMethod: client.getProjects.bind(client),
+    return fetchAllPages<GetProjectsArgs, GetProjectsResponse, Project>({
+        apiMethod: (args) => executeWithRetry(() => client.getProjects(args)),
         args: {},
         limit: ApiLimits.PROJECTS_MAX,
     })

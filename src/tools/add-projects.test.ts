@@ -2,7 +2,15 @@ import type { PersonalProject, TodoistApi, Workspace, WorkspaceProject } from '@
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
 import { ProjectSchema } from '../utils/output-schemas.js'
-import { createMockProject, createMockWorkspaceProject, TEST_IDS } from '../utils/test-helpers.js'
+import {
+    createApiError,
+    createMockApiResponse,
+    createMockPersonalProjects,
+    createMockProject,
+    createMockWorkspaceProject,
+    mockPersonalProjectCapacity,
+    TEST_IDS,
+} from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { workspaceResolver } from '../utils/workspace-resolver.js'
 import { addProjects } from './add-projects.js'
@@ -11,17 +19,21 @@ import { addProjects } from './add-projects.js'
 const mockTodoistApi = {
     addProject: vi.fn(),
     getWorkspaces: vi.fn(),
+    getProjects: vi.fn(),
+    sync: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { ADD_PROJECTS } = ToolNames
 
 describe(`${ADD_PROJECTS} tool`, () => {
     beforeEach(() => {
-        vi.clearAllMocks()
+        vi.resetAllMocks()
+        mockPersonalProjectCapacity(mockTodoistApi, { maxProjects: 5, activeCount: 0 })
     })
 
     describe('creating a single project', () => {
         it('should create a project and return mapped result', async () => {
+            mockPersonalProjectCapacity(mockTodoistApi, { maxProjects: 5, activeCount: 4 })
             const mockApiResponse = createMockProject({
                 id: TEST_IDS.PROJECT_TEST,
                 name: 'test-abc123def456-project',
@@ -284,6 +296,273 @@ describe(`${ADD_PROJECTS} tool`, () => {
         })
     })
 
+    describe('personal project limits', () => {
+        it.each([
+            { maxProjects: 0, activeCount: 0 },
+            { maxProjects: 5, activeCount: 5 },
+            { maxProjects: 5, activeCount: 6 },
+        ])(
+            'blocks creation with $activeCount active projects and a limit of $maxProjects',
+            async ({ maxProjects, activeCount }) => {
+                mockPersonalProjectCapacity(mockTodoistApi, { maxProjects, activeCount })
+                mockTodoistApi.addProject.mockResolvedValue(
+                    createMockProject({ name: 'Over limit' }),
+                )
+
+                const result = await addProjects.execute(
+                    { projects: [{ name: 'Over limit' }] },
+                    mockTodoistApi,
+                )
+
+                expect(mockTodoistApi.addProject).not.toHaveBeenCalled()
+                expect(result.structuredContent.failures).toEqual([
+                    {
+                        item: 'Over limit',
+                        error:
+                            `Your account has reached its limit of ${maxProjects} active personal projects. ` +
+                            'This project was not created. Archive or delete a personal project, or upgrade to a plan with a higher limit, then retry.',
+                    },
+                ])
+            },
+        )
+
+        it.each([5, 300])(
+            'creates only the remaining slot in input order for a current limit of %i',
+            async (maxProjects) => {
+                mockPersonalProjectCapacity(mockTodoistApi, {
+                    maxProjects,
+                    activeCount: maxProjects - 1,
+                })
+                mockTodoistApi.addProject.mockResolvedValue(
+                    createMockProject({ id: 'created', name: 'First' }),
+                )
+
+                const result = await addProjects.execute(
+                    { projects: [{ name: 'First' }, { name: 'Second' }, { name: 'Third' }] },
+                    mockTodoistApi,
+                )
+
+                expect(mockTodoistApi.addProject).toHaveBeenCalledExactlyOnceWith({ name: 'First' })
+                expect(mockTodoistApi.sync).toHaveBeenCalledExactlyOnceWith({
+                    resourceTypes: ['user_plan_limits'],
+                    syncToken: '*',
+                })
+                expect(mockTodoistApi.getProjects).toHaveBeenCalledTimes(1)
+                expect(result.structuredContent).toEqual({
+                    projects: [expect.objectContaining({ id: 'created', name: 'First' })],
+                    totalCount: 1,
+                    totalRequested: 3,
+                    successCount: 1,
+                    failureCount: 2,
+                    failures: ['Second', 'Third'].map((item) => ({
+                        item,
+                        error: expect.stringContaining(
+                            `limit of ${maxProjects} active personal projects`,
+                        ),
+                    })),
+                })
+                expect(result.textContent).toContain('Failed (2)')
+            },
+        )
+
+        it('counts only active non-inbox personal projects across all pages', async () => {
+            mockTodoistApi.getProjects
+                .mockResolvedValueOnce(
+                    createMockApiResponse(
+                        [
+                            createMockProject({ id: 'personal-1' }),
+                            createMockProject({ id: 'inbox', inboxProject: true }),
+                            createMockWorkspaceProject(),
+                            createMockProject({ id: 'archived', isArchived: true }),
+                            createMockProject({ id: 'deleted', isDeleted: true }),
+                        ],
+                        'next-page',
+                    ),
+                )
+                .mockResolvedValueOnce(
+                    createMockApiResponse([
+                        createMockProject({ id: 'personal-2' }),
+                        createMockProject({ id: 'shared', isShared: true }),
+                        createMockProject({ id: 'child', parentId: 'personal-1' }),
+                    ]),
+                )
+            mockTodoistApi.addProject.mockResolvedValue(createMockProject({ name: 'Fits' }))
+
+            const result = await addProjects.execute(
+                { projects: [{ name: 'Fits' }, { name: 'Over limit' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getProjects).toHaveBeenNthCalledWith(
+                2,
+                expect.objectContaining({ cursor: 'next-page' }),
+            )
+            expect(mockTodoistApi.addProject).toHaveBeenCalledExactlyOnceWith({ name: 'Fits' })
+            expect(result.structuredContent.successCount).toBe(1)
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'Over limit', error: expect.stringContaining('limit of 5') },
+            ])
+        })
+
+        it.each([undefined, '5'])(
+            'fails closed when the current maxProjects is %s',
+            async (maxProjects) => {
+                mockTodoistApi.sync.mockResolvedValue({
+                    userPlanLimits: { current: { maxProjects }, next: { maxProjects: 300 } },
+                })
+                mockTodoistApi.addProject.mockResolvedValue(createMockProject())
+                const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+                const result = await addProjects.execute(
+                    { projects: [{ name: 'First' }, { name: 'Second' }] },
+                    mockTodoistApi,
+                )
+
+                expect(consoleErrorSpy).toHaveBeenCalledWith(
+                    `${ADD_PROJECTS}: could not load personal project limit`,
+                    expect.any(z.ZodError),
+                )
+                consoleErrorSpy.mockRestore()
+                expect(mockTodoistApi.addProject).not.toHaveBeenCalled()
+                expect(mockTodoistApi.sync).toHaveBeenCalledTimes(1)
+                expect(result.structuredContent.failures).toEqual(
+                    ['First', 'Second'].map((item) => ({
+                        item,
+                        error: 'Could not verify your personal project limit. This project was not created. Retry later.',
+                    })),
+                )
+            },
+        )
+
+        it.each(['sync', 'getProjects'] as const)(
+            'retries a transient %s read before creating any personal projects',
+            async (method) => {
+                vi.useFakeTimers()
+                try {
+                    mockTodoistApi.getProjects.mockResolvedValue(
+                        createMockApiResponse(createMockPersonalProjects(4)),
+                    )
+                    mockTodoistApi[method].mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    mockTodoistApi.addProject.mockResolvedValue(createMockProject({ name: 'Fits' }))
+
+                    const promise = addProjects.execute(
+                        { projects: [{ name: 'Fits' }, { name: 'Over limit' }] },
+                        mockTodoistApi,
+                    )
+                    await vi.runAllTimersAsync()
+                    const result = await promise
+
+                    expect(mockTodoistApi[method]).toHaveBeenCalledTimes(2)
+                    expect(mockTodoistApi.addProject).toHaveBeenCalledExactlyOnceWith({
+                        name: 'Fits',
+                    })
+                    expect(result.structuredContent.successCount).toBe(1)
+                    expect(result.structuredContent.failureCount).toBe(1)
+                } finally {
+                    vi.useRealTimers()
+                }
+            },
+        )
+
+        it('retries a failed project page without refetching the pages before it', async () => {
+            vi.useFakeTimers()
+            try {
+                mockTodoistApi.getProjects
+                    .mockResolvedValueOnce(
+                        createMockApiResponse(createMockPersonalProjects(2), 'next-page'),
+                    )
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    .mockResolvedValueOnce(createMockApiResponse(createMockPersonalProjects(2)))
+                mockTodoistApi.addProject.mockResolvedValue(createMockProject({ name: 'Fits' }))
+
+                const promise = addProjects.execute(
+                    { projects: [{ name: 'Fits' }, { name: 'Over limit' }] },
+                    mockTodoistApi,
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.getProjects).toHaveBeenCalledTimes(3)
+                expect(mockTodoistApi.getProjects).toHaveBeenNthCalledWith(
+                    1,
+                    expect.objectContaining({ cursor: null }),
+                )
+                for (const call of [2, 3]) {
+                    expect(mockTodoistApi.getProjects).toHaveBeenNthCalledWith(
+                        call,
+                        expect.objectContaining({ cursor: 'next-page' }),
+                    )
+                }
+                expect(mockTodoistApi.addProject).toHaveBeenCalledExactlyOnceWith({ name: 'Fits' })
+                expect(result.structuredContent.failures).toEqual([
+                    { item: 'Over limit', error: expect.stringContaining('limit of 5') },
+                ])
+            } finally {
+                vi.useRealTimers()
+            }
+        })
+        it('counts a create that may have gone through against the limit', async () => {
+            mockPersonalProjectCapacity(mockTodoistApi, { maxProjects: 5, activeCount: 4 })
+            mockTodoistApi.addProject
+                .mockRejectedValueOnce(
+                    Object.assign(new Error('Bad Gateway'), { httpStatusCode: 502 }),
+                )
+                .mockResolvedValue(createMockProject({ name: 'Over limit' }))
+
+            const result = await addProjects.execute(
+                { projects: [{ name: 'Ambiguous' }, { name: 'Over limit' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.addProject).toHaveBeenCalledExactlyOnceWith({
+                name: 'Ambiguous',
+            })
+            expect(result.structuredContent.successCount).toBe(0)
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'Ambiguous', error: expect.any(String) },
+                { item: 'Over limit', error: expect.stringContaining('limit of 5') },
+            ])
+        })
+
+        it('creates personal projects concurrently while there are free slots', async () => {
+            mockPersonalProjectCapacity(mockTodoistApi, { maxProjects: 5, activeCount: 2 })
+            const pending: Array<() => void> = []
+            mockTodoistApi.addProject.mockImplementation(
+                ({ name }) =>
+                    new Promise((resolve) => {
+                        pending.push(() => resolve(createMockProject({ name })))
+                    }),
+            )
+
+            const promise = addProjects.execute(
+                {
+                    projects: [
+                        { name: 'One' },
+                        { name: 'Two' },
+                        { name: 'Three' },
+                        { name: 'Over limit' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+            await vi.waitFor(() => expect(mockTodoistApi.addProject).toHaveBeenCalledTimes(3))
+            for (const resolve of pending) {
+                resolve()
+            }
+            const result = await promise
+
+            expect(mockTodoistApi.addProject).toHaveBeenCalledTimes(3)
+            expect(result.structuredContent.successCount).toBe(3)
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'Over limit', error: expect.stringContaining('limit of 5') },
+            ])
+        })
+    })
+
     describe('output schema validation', () => {
         it('should return structured content that strictly matches ProjectSchema (no extra API properties)', async () => {
             // Mock API response includes ALL properties from Todoist API
@@ -444,6 +723,8 @@ describe(`${ADD_PROJECTS} tool`, () => {
                 name: 'WS Project',
                 workspaceId: '111',
             })
+            expect(mockTodoistApi.sync).not.toHaveBeenCalled()
+            expect(mockTodoistApi.getProjects).not.toHaveBeenCalled()
         })
 
         it('should resolve workspace by name and pass workspaceId', async () => {
@@ -479,23 +760,89 @@ describe(`${ADD_PROJECTS} tool`, () => {
                 workspaceId: '333',
             })
 
-            mockTodoistApi.addProject
-                .mockResolvedValueOnce(personalProject)
-                .mockResolvedValueOnce(wsProject)
+            mockTodoistApi.addProject.mockImplementation(async ({ workspaceId }) =>
+                workspaceId ? wsProject : personalProject,
+            )
 
-            await addProjects.execute(
+            const result = await addProjects.execute(
                 {
                     projects: [{ name: 'Personal' }, { name: 'Work', workspace: 'Engineering' }],
                 },
                 mockTodoistApi,
             )
 
-            expect(mockTodoistApi.addProject).toHaveBeenNthCalledWith(1, { name: 'Personal' })
-            expect(mockTodoistApi.addProject).toHaveBeenNthCalledWith(2, {
+            expect(mockTodoistApi.addProject).toHaveBeenCalledWith({ name: 'Personal' })
+            expect(mockTodoistApi.addProject).toHaveBeenCalledWith({
                 name: 'Work',
                 workspaceId: '333',
             })
+            expect(result.structuredContent.projects.map((project) => project.id)).toEqual([
+                'p-1',
+                'ws-1',
+            ])
         })
+
+        it.each(['exhausted quota', 'sync failure', 'project read failure'])(
+            'keeps workspace successes and invalid-workspace failures with %s',
+            async (scenario) => {
+                mockTodoistApi.getWorkspaces.mockResolvedValue([
+                    createMockWorkspace({ id: '333', name: 'Engineering' }),
+                ])
+                mockTodoistApi.getProjects.mockResolvedValue(
+                    createMockApiResponse(createMockPersonalProjects(5)),
+                )
+                if (scenario === 'sync failure') {
+                    mockTodoistApi.sync.mockRejectedValue(new Error('Could not load limits'))
+                } else if (scenario === 'project read failure') {
+                    mockTodoistApi.getProjects.mockRejectedValue(
+                        new Error('Could not load projects'),
+                    )
+                }
+                mockTodoistApi.addProject.mockResolvedValue(
+                    createMockWorkspaceProject({ id: 'ws-1', name: 'Work', workspaceId: '333' }),
+                )
+
+                const result = await addProjects.execute(
+                    {
+                        projects: [
+                            { name: 'Personal A' },
+                            { name: 'Work', workspace: 'Engineering' },
+                            { name: 'Personal B' },
+                            { name: 'Invalid workspace', workspace: 'Nonexistent' },
+                        ],
+                    },
+                    mockTodoistApi,
+                )
+
+                expect(mockTodoistApi.addProject).toHaveBeenCalledExactlyOnceWith({
+                    name: 'Work',
+                    workspaceId: '333',
+                })
+                expect(mockTodoistApi.sync).toHaveBeenCalledTimes(1)
+                expect(mockTodoistApi.getProjects).toHaveBeenCalledTimes(1)
+                expect(result.structuredContent).toEqual({
+                    projects: [expect.objectContaining({ id: 'ws-1' })],
+                    totalCount: 1,
+                    totalRequested: 4,
+                    successCount: 1,
+                    failureCount: 3,
+                    failures: [
+                        ...['Personal A', 'Personal B'].map((item) => ({
+                            item,
+                            error: expect.stringContaining(
+                                scenario === 'exhausted quota'
+                                    ? 'limit of 5 active personal projects'
+                                    : 'Could not verify your personal project limit. This project was not created.',
+                            ),
+                        })),
+                        {
+                            item: 'Invalid workspace',
+                            error: expect.stringContaining('Workspace "Nonexistent" not found'),
+                        },
+                    ],
+                })
+            },
+        )
 
         it('should resolve the same workspace name only once for multiple projects', async () => {
             const mockWorkspaces = [createMockWorkspace({ id: '444', name: 'Engineering' })]
@@ -635,40 +982,52 @@ describe(`${ADD_PROJECTS} tool`, () => {
             }
         })
 
-        it('should keep successful projects when one in the batch fails', async () => {
+        it('keeps successes and leaves capacity available after a rejected project', async () => {
+            mockPersonalProjectCapacity(mockTodoistApi, { maxProjects: 5, activeCount: 4 })
             const mockProject = createMockProject({
                 id: 'project-1',
                 name: 'First Project',
             })
-
+            const apiError = createApiError({
+                status: 403,
+                error: 'Maximum number of projects exceeded',
+                tag: 'MAX_PROJECTS_LIMIT_REACHED',
+            })
             mockTodoistApi.addProject
+                .mockRejectedValueOnce(apiError)
                 .mockResolvedValueOnce(mockProject)
-                .mockRejectedValueOnce(new Error('API Error: Invalid project name'))
 
             const result = await addProjects.execute(
                 {
-                    projects: [{ name: 'First Project' }, { name: 'Invalid' }],
+                    projects: [
+                        { name: 'Rejected' },
+                        { name: 'First Project' },
+                        { name: 'Over limit' },
+                    ],
                 },
                 mockTodoistApi,
             )
 
-            // The successful project is preserved instead of being discarded by the failure.
+            expect(mockTodoistApi.addProject).toHaveBeenCalledTimes(2)
+            expect(mockTodoistApi.addProject).toHaveBeenNthCalledWith(2, { name: 'First Project' })
             const { structuredContent } = result
-            expect(structuredContent.projects).toHaveLength(1)
+            expect(structuredContent.projects).toEqual([
+                expect.objectContaining({ id: 'project-1' }),
+            ])
             expect(structuredContent.totalCount).toBe(1)
             expect(structuredContent.successCount).toBe(1)
-            expect(structuredContent.totalRequested).toBe(2)
-
-            // The failure is reported per-item with the offending project identified by name.
-            expect(structuredContent.failureCount).toBe(1)
-            expect(structuredContent.failures).toHaveLength(1)
-            expect(structuredContent.failures[0]?.item).toBe('Invalid')
-            expect(structuredContent.failures[0]?.error).toContain(
-                'API Error: Invalid project name',
-            )
+            expect(structuredContent.totalRequested).toBe(3)
+            expect(structuredContent.failureCount).toBe(2)
+            expect(structuredContent.failures).toEqual([
+                {
+                    item: 'Rejected',
+                    error: 'Maximum number of projects exceeded (HTTP 403, tag MAX_PROJECTS_LIMIT_REACHED)',
+                },
+                { item: 'Over limit', error: expect.stringContaining('limit of 5') },
+            ])
 
             expect(result.textContent).toContain('Added 1 project:')
-            expect(result.textContent).toContain('Failed (1)')
+            expect(result.textContent).toContain('Failed (2)')
             expect(result.textContent).toContain('address or drop these items')
         })
 
