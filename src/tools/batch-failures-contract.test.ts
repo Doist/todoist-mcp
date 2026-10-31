@@ -16,8 +16,6 @@ const EXCEPTIONS: Partial<Record<string, string>> = {
         "reports each task's outcome in its own results and throws only when every task failed, so no write is hidden",
     [ToolNames.RESCHEDULE_TASKS]:
         'not converted yet: it sends one Sync request and throws on the first failed command, hiding the ones that were applied',
-    [ToolNames.REORDER_OBJECTS]:
-        'not converted yet: it sends one Sync request and throws on the first failed command, hiding the ones that were applied',
 }
 
 type JsonSchemaObject = { properties?: Record<string, { type?: unknown }> }
