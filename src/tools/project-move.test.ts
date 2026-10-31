@@ -13,8 +13,7 @@ const mockTodoistApi = {
     moveProjectToWorkspace: vi.fn(),
     moveProjectToPersonal: vi.fn(),
     getProject: vi.fn(),
-    getProjects: vi.fn(),
-    sync: vi.fn(),
+    getPersonalProjectCapacity: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { PROJECT_MOVE } = ToolNames
@@ -210,7 +209,9 @@ describe(`${PROJECT_MOVE} tool`, () => {
         })
 
         it('does not move a project to personal when the limit cannot be verified', async () => {
-            mockTodoistApi.sync.mockRejectedValue(new Error('Could not load limits'))
+            mockTodoistApi.getPersonalProjectCapacity.mockRejectedValue(
+                new Error('Could not load limits'),
+            )
             const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
             await expect(
@@ -242,7 +243,7 @@ describe(`${PROJECT_MOVE} tool`, () => {
                 mockTodoistApi,
             )
 
-            expect(mockTodoistApi.sync).not.toHaveBeenCalled()
+            expect(mockTodoistApi.getPersonalProjectCapacity).not.toHaveBeenCalled()
             expect(mockTodoistApi.moveProjectToPersonal).toHaveBeenCalledWith({
                 projectId: '6cfCcrrCFg2xP94Q',
             })
@@ -263,8 +264,7 @@ describe(`${PROJECT_MOVE} tool`, () => {
                 mockTodoistApi,
             )
 
-            expect(mockTodoistApi.sync).not.toHaveBeenCalled()
-            expect(mockTodoistApi.getProjects).not.toHaveBeenCalled()
+            expect(mockTodoistApi.getPersonalProjectCapacity).not.toHaveBeenCalled()
         })
     })
 
