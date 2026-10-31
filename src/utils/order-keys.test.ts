@@ -1,3 +1,4 @@
+import { generateNKeysBetween } from 'fractional-indexing'
 import { describe, expect, it } from 'vitest'
 import { computeOrderKeys, type OrderedSibling, type Placement } from './order-keys.js'
 
@@ -65,12 +66,49 @@ describe('computeOrderKeys', () => {
     })
 
     it('compares keys by code unit rather than by locale', () => {
-        // Uppercase sorts before lowercase by code unit, the reverse of most locales.
+        // 'Zz' sorts before 'a0' by code unit but after it by locale, so the anchors'
+        // order, and so the neighbours 'placed' lands between, depends on the comparison.
         const siblings: OrderedSibling[] = [
             { id: 'lower', key: 'a0', legacyOrder: 0 },
             { id: 'upper', key: 'Zz', legacyOrder: 1 },
+            { id: 'placed', key: 'a1', legacyOrder: 2 },
         ]
-        expect(orderAfter(siblings, [{ id: 'upper', position: 1 }])).toEqual(['lower', 'upper'])
+        expect(orderAfter(siblings, [{ id: 'placed', position: 1 }])).toEqual([
+            'upper',
+            'placed',
+            'lower',
+        ])
+    })
+
+    it('keeps placements that ask for the same position together, in the order given', () => {
+        expect(
+            orderAfter(keyed('a', 'b', 'c', 'd'), [
+                { id: 'd', position: 0 },
+                { id: 'c', position: 0 },
+            ]),
+        ).toEqual(['d', 'c', 'a', 'b'])
+    })
+
+    it('only re-keys the siblings that moved when every sibling is placed', () => {
+        // With no unplaced anchors the whole list is one run between open ends, which
+        // regenerates the same keys for the siblings that kept their place.
+        const keys = generateNKeysBetween(null, null, 4)
+        const siblings: OrderedSibling[] = ['a', 'b', 'c', 'd'].map((id, index) => ({
+            id,
+            key: keys[index] ?? null,
+            legacyOrder: index,
+        }))
+        const placements: Placement[] = [
+            { id: 'a', position: 0 },
+            { id: 'b', position: 1 },
+            { id: 'd', position: 2 },
+            { id: 'c', position: 3 },
+        ]
+
+        const newKeys = computeOrderKeys(siblings, placements)
+
+        expect([...newKeys.keys()].sort()).toEqual(['c', 'd'])
+        expect(orderAfter(siblings, placements)).toEqual(['a', 'b', 'd', 'c'])
     })
 
     it('re-keys the whole list in legacy order when a sibling has no key', () => {

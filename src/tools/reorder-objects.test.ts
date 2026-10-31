@@ -45,6 +45,19 @@ function sentCommands(): Array<{ type: string; args: unknown }> {
         .map(({ type, args }) => ({ type, args }))
 }
 
+/** The args of a sent command, failing the test when no such command was sent. */
+function sentArgs<T>(match: number | string): T {
+    const commands = sentCommands()
+    const command =
+        typeof match === 'number'
+            ? commands[match]
+            : commands.find(({ args }) => (args as { id: string }).id === match)
+    if (!command) {
+        throw new Error(`No command was sent for ${match}`)
+    }
+    return command.args as T
+}
+
 function forbidden(): CommandStatus {
     return {
         error: 'Insufficient permissions',
@@ -107,7 +120,7 @@ describe(`${REORDER_OBJECTS} tool`, () => {
             expect(commands).toEqual([
                 { type: 'project_update', args: { id: 'c', orderKey: expect.any(String) } },
             ])
-            const { orderKey } = commands[0]?.args as { orderKey: string }
+            const { orderKey } = sentArgs<{ orderKey: string }>(0)
             // Placed before 'a'; the Inbox, archived and other lists' projects are not its siblings.
             expect(orderKey < 'a0').toBe(true)
             expect(result.structuredContent).toEqual({
@@ -137,7 +150,7 @@ describe(`${REORDER_OBJECTS} tool`, () => {
             expect(commands).toEqual([
                 { type: 'project_update', args: { id: 'y', defaultOrderKey: expect.any(String) } },
             ])
-            const { defaultOrderKey } = commands[0]?.args as { defaultOrderKey: string }
+            const { defaultOrderKey } = sentArgs<{ defaultOrderKey: string }>(0)
             expect(defaultOrderKey < 'a0').toBe(true)
         })
 
@@ -205,7 +218,7 @@ describe(`${REORDER_OBJECTS} tool`, () => {
                 type: 'project_move',
                 args: { id: 'mover', parentId: 'parent' },
             })
-            const { orderKey } = sentCommands()[1]?.args as { orderKey: string }
+            const { orderKey } = sentArgs<{ orderKey: string }>(1)
             expect(orderKey < 'a0').toBe(true)
             expect(result.structuredContent).toMatchObject({
                 movedCount: 1,
@@ -338,7 +351,7 @@ describe(`${REORDER_OBJECTS} tool`, () => {
         })
 
         it('reports every item when the moved projects cannot be read back', async () => {
-            state.projects = [personal('a', 'a0')]
+            state.projects = [personal('a', 'a0'), personal('b', 'a1')]
             let reads = 0
             mockTodoistApi.sync.mockImplementation(async (request: SyncRequest) => {
                 if (request.commands) {
@@ -352,7 +365,13 @@ describe(`${REORDER_OBJECTS} tool`, () => {
             })
 
             const result = await reorderObjects.execute(
-                { type: 'project', items: [{ id: 'a', parentId: 'parent', order: 0 }] },
+                {
+                    type: 'project',
+                    items: [
+                        { id: 'a', parentId: 'parent', order: 0 },
+                        { id: 'b', order: 0 },
+                    ],
+                },
                 mockTodoistApi,
             )
 
@@ -365,9 +384,69 @@ describe(`${REORDER_OBJECTS} tool`, () => {
             expect(result.structuredContent.failures).toEqual([
                 {
                     item: 'a',
-                    error: expect.stringContaining('Moved, but the new siblings could not be read'),
+                    error: expect.stringMatching(/^Moved, but its new siblings could not be read/),
+                },
+                {
+                    item: 'b',
+                    error: expect.stringMatching(/^Its siblings could not be read/),
                 },
             ])
+        })
+
+        it('does not count a moved project as reordered when it is missing after the move', async () => {
+            state.projects = [personal('a', 'a0'), personal('mover', 'a1')]
+            state.projectsAfterWrite = [personal('a', 'a0')]
+
+            const result = await reorderObjects.execute(
+                { type: 'project', items: [{ id: 'mover', parentId: 'parent', order: 0 }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent).toMatchObject({
+                movedCount: 1,
+                reorderedCount: 0,
+                affectedIds: ['mover'],
+                success: false,
+            })
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'mover', error: 'Project not found after moving it.' },
+            ])
+        })
+
+        it('re-keys the whole list when a sibling has no key, reporting siblings under their own IDs', async () => {
+            state.projects = [
+                personal('a', null, { childOrder: 1 }),
+                personal('b', 'a5', { childOrder: 2 }),
+                personal('c', 'a1', { childOrder: 3 }),
+            ]
+            state.statusFor = (command) =>
+                (command.args as { id: string }).id === 'a' ? forbidden() : 'ok'
+
+            const result = await reorderObjects.execute(
+                { type: 'project', items: [{ id: 'c', order: 0 }] },
+                mockTodoistApi,
+            )
+
+            const commands = sentCommands()
+            expect(commandRequests()).toHaveLength(1)
+            expect(commands.map((command) => (command.args as { id: string }).id).sort()).toEqual([
+                'a',
+                'b',
+                'c',
+            ])
+            // Read back in the legacy order with c moved to the front.
+            const keyOf = (id: string) => sentArgs<{ orderKey: string }>(id).orderKey
+            expect(keyOf('c') < keyOf('a') && keyOf('a') < keyOf('b')).toBe(true)
+            expect(result.structuredContent).toEqual({
+                type: 'project',
+                movedCount: 0,
+                reorderedCount: 1,
+                affectedIds: ['c'],
+                failures: [
+                    { item: 'a', error: expect.stringContaining('Insufficient permissions') },
+                ],
+                success: false,
+            })
         })
 
         it('fails the whole call when the projects cannot be read before any write', async () => {
@@ -399,7 +478,7 @@ describe(`${REORDER_OBJECTS} tool`, () => {
             expect(commands).toEqual([
                 { type: 'section_update', args: { id: 's2', orderKey: expect.any(String) } },
             ])
-            const { orderKey } = commands[0]?.args as { orderKey: string }
+            const { orderKey } = sentArgs<{ orderKey: string }>(0)
             expect(orderKey < 'a0').toBe(true)
             expect(result.structuredContent).toEqual({
                 type: 'section',

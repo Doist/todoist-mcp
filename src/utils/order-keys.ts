@@ -20,7 +20,8 @@ type Placement = {
  *
  * Positions are 0-based indexes into the list as it reads after the reorder, and
  * one past the end (or beyond) appends. Placements are applied lowest position
- * first, so several can be given at once and each lands where it asked.
+ * first, so several can be given at once and each lands where it asked. Placements
+ * that ask for the same position are kept together, in the order they were given.
  *
  * Only placed siblings get new keys: each run of them is keyed between the
  * unplaced neighbours around it, so every other sibling keeps its key. A placed
@@ -50,11 +51,14 @@ function computeOrderKeys(
 
     const reordered = current.filter((sibling) => !placedIds.has(sibling.id))
     const byPosition = [...placements].sort((a, b) => a.position - b.position)
+    let previous: { position: number; index: number } | undefined
     for (const { id, position } of byPosition) {
         const sibling = byId.get(id)
-        if (sibling) {
-            reordered.splice(Math.min(position, reordered.length), 0, sibling)
-        }
+        if (!sibling) continue
+        const target = previous?.position === position ? previous.index + 1 : position
+        const index = Math.min(target, reordered.length)
+        reordered.splice(index, 0, sibling)
+        previous = { position, index }
     }
 
     if (!allKeyed || !anchorsAscend(reordered, placedIds)) {
@@ -90,7 +94,7 @@ function keyRun(
     const keys = generateNKeysBetween(lower, upper, run.length)
     run.forEach((sibling, index) => {
         const key = keys[index]
-        if (key !== undefined) {
+        if (key !== undefined && key !== sibling.key) {
             newKeys.set(sibling.id, key)
         }
     })

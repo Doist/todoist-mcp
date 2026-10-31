@@ -1,10 +1,4 @@
-import type {
-    PersonalProject,
-    Section,
-    SyncCommand,
-    TodoistApi,
-    WorkspaceProject,
-} from '@doist/todoist-sdk'
+import type { Project, Section, SyncCommand, TodoistApi } from '@doist/todoist-sdk'
 import { createCommand } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
@@ -66,7 +60,7 @@ const OutputSchema = {
 
 type Item = z.infer<typeof ReorderItemSchema>
 type Failure = { item: string; error: string }
-type Project = PersonalProject | WorkspaceProject
+type OrderedItem = Item & { order: number }
 
 /** One key change to send, and the ID of the entity it re-keys. */
 type KeyUpdate = { id: string; command: SyncCommand }
@@ -191,8 +185,7 @@ async function reorderProjects(client: TodoistApi, items: Item[]): Promise<Reord
     }
 
     const toReorder = usable.filter(
-        (item): item is Item & { order: number } =>
-            item.order !== undefined && !failedMoves.has(item.id),
+        (item): item is OrderedItem => item.order !== undefined && !failedMoves.has(item.id),
     )
     if (toReorder.length === 0) {
         return { movedIds, reorderedIds, failures }
@@ -204,37 +197,38 @@ async function reorderProjects(client: TodoistApi, items: Item[]): Promise<Reord
         try {
             projects = await readProjects(client)
         } catch (error) {
-            const reason = `Moved, but the new siblings could not be read to reorder it: ${formatBatchItemError(error)}`
+            const reason = formatBatchItemError(error)
             for (const item of toReorder) {
-                failures.push({ item: item.id, error: reason })
+                failures.push({
+                    item: item.id,
+                    error: movedIds.has(item.id)
+                        ? `Moved, but its new siblings could not be read to reorder it: ${reason}`
+                        : `Its siblings could not be read to reorder it: ${reason}`,
+                })
             }
             return { movedIds, reorderedIds, failures }
         }
     }
 
-    const scopes = new Map<string, { siblings: Project[]; placements: Placement[] }>()
+    const siblingsByScope = groupBy([...projects.values()].filter(isOrderable), projectScope)
+    const placementsByScope = new Map<string, Placement[]>()
+    const placed: OrderedItem[] = []
     for (const item of toReorder) {
         const project = projects.get(item.id)
         if (!project) {
             failures.push({ item: item.id, error: 'Project not found after moving it.' })
             continue
         }
+        placed.push(item)
         const scope = projectScope(project)
-        let entry = scopes.get(scope)
-        if (!entry) {
-            entry = {
-                siblings: [...projects.values()].filter(
-                    (sibling) => isOrderable(sibling) && projectScope(sibling) === scope,
-                ),
-                placements: [],
-            }
-            scopes.set(scope, entry)
-        }
-        entry.placements.push({ id: item.id, position: item.order })
+        const placements = placementsByScope.get(scope) ?? []
+        placements.push({ id: item.id, position: item.order })
+        placementsByScope.set(scope, placements)
     }
 
     const updates: KeyUpdate[] = []
-    for (const { siblings, placements } of scopes.values()) {
+    for (const [scope, placements] of placementsByScope) {
+        const siblings = siblingsByScope.get(scope) ?? []
         const newKeys = computeOrderKeys(siblings.map(toOrderedProject), placements)
         for (const [id, key] of newKeys) {
             const project = projects.get(id)
@@ -250,7 +244,7 @@ async function reorderProjects(client: TodoistApi, items: Item[]): Promise<Reord
         }
     }
 
-    await applyKeyUpdates(client, updates, toReorder, reorderedIds, failures)
+    await applyKeyUpdates(client, updates, placed, reorderedIds, failures)
     return { movedIds, reorderedIds, failures }
 }
 
@@ -259,10 +253,16 @@ async function reorderSections(client: TodoistApi, items: Item[]): Promise<Reord
     const failures: Failure[] = []
 
     const sections = await readSections(client)
+    const siblingsByProject = groupBy(
+        [...sections.values()].filter((section) => !section.isDeleted && !section.isArchived),
+        (section) => section.projectId,
+    )
 
-    const scopes = new Map<string, Placement[]>()
-    const toReorder: Array<Item & { order: number }> = []
-    for (const item of items) {
+    // Validation guarantees every section item has an order: sections take no parentId.
+    const ordered = items.filter((item): item is OrderedItem => item.order !== undefined)
+    const placementsByProject = new Map<string, Placement[]>()
+    const placed: OrderedItem[] = []
+    for (const item of ordered) {
         const section = sections.get(item.id)
         if (!section || section.isDeleted) {
             failures.push({
@@ -275,19 +275,15 @@ async function reorderSections(client: TodoistApi, items: Item[]): Promise<Reord
             failures.push({ item: item.id, error: 'Archived sections cannot be reordered.' })
             continue
         }
-        if (item.order === undefined) continue
-        toReorder.push({ ...item, order: item.order })
-        const placements = scopes.get(section.projectId) ?? []
+        placed.push(item)
+        const placements = placementsByProject.get(section.projectId) ?? []
         placements.push({ id: item.id, position: item.order })
-        scopes.set(section.projectId, placements)
+        placementsByProject.set(section.projectId, placements)
     }
 
     const updates: KeyUpdate[] = []
-    for (const [projectId, placements] of scopes) {
-        const siblings = [...sections.values()].filter(
-            (section) =>
-                section.projectId === projectId && !section.isDeleted && !section.isArchived,
-        )
+    for (const [projectId, placements] of placementsByProject) {
+        const siblings = siblingsByProject.get(projectId) ?? []
         const newKeys = computeOrderKeys(
             siblings.map((section) => ({
                 id: section.id,
@@ -301,8 +297,19 @@ async function reorderSections(client: TodoistApi, items: Item[]): Promise<Reord
         }
     }
 
-    await applyKeyUpdates(client, updates, toReorder, reorderedIds, failures)
+    await applyKeyUpdates(client, updates, placed, reorderedIds, failures)
     return { movedIds: new Set(), reorderedIds, failures }
+}
+
+function groupBy<T>(values: readonly T[], keyOf: (value: T) => string): Map<string, T[]> {
+    const groups = new Map<string, T[]>()
+    for (const value of values) {
+        const key = keyOf(value)
+        const group = groups.get(key) ?? []
+        group.push(value)
+        groups.set(key, group)
+    }
+    return groups
 }
 
 /**
