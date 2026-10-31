@@ -183,30 +183,18 @@ export function allApplied(commands: SyncCommand[] = []): Record<string, 'ok'> {
 }
 
 /**
- * Creates `count` active personal projects, e.g. the projects that count towards
- * the account's personal project limit.
- */
-export function createMockPersonalProjects(count: number): PersonalProject[] {
-    return Array.from({ length: count }, (_, index) =>
-        createMockProject({ id: `existing-${index}` }),
-    )
-}
-
-/**
- * Mocks the two reads behind the personal project limit check: the plan limit (from
- * Sync) and the account's active projects. The next plan's limit is set higher so a
- * check that reads it by mistake does not pass unnoticed.
+ * Mocks the personal project limit check: the plan allows `maxProjects` active
+ * personal projects and the account has `activeCount` of them.
  */
 export function mockPersonalProjectCapacity(
     client: Mocked<TodoistApi>,
     { maxProjects, activeCount }: { maxProjects: number; activeCount: number },
 ): void {
-    client.sync.mockResolvedValue({
-        userPlanLimits: { current: { maxProjects }, next: { maxProjects: maxProjects + 100 } },
+    client.getPersonalProjectCapacity.mockResolvedValue({
+        maxProjects,
+        activeCount,
+        remaining: Math.max(0, maxProjects - activeCount),
     })
-    client.getProjects.mockResolvedValue(
-        createMockApiResponse(createMockPersonalProjects(activeCount)),
-    )
 }
 
 /**

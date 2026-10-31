@@ -1,7 +1,6 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import {
-    createMockApiResponse,
     createMockProject,
     createMockTask,
     createMockUser,
@@ -248,11 +247,11 @@ describe('batch tools log the items they could not act on', () => {
             updateSection: vi.fn(),
             addReminder: vi.fn(),
             updateReminder: vi.fn(),
+            sync: vi.fn(),
             getProject: vi.fn().mockResolvedValue(createMockProject()),
-            getProjects: vi.fn().mockResolvedValue(createMockApiResponse([])),
-            sync: vi.fn().mockResolvedValue({
-                userPlanLimits: { current: { maxProjects: 5 }, next: null },
-            }),
+            getPersonalProjectCapacity: vi
+                .fn()
+                .mockResolvedValue({ maxProjects: 5, activeCount: 0, remaining: 5 }),
             getWorkspaces: vi.fn().mockResolvedValue([]),
             getUser: vi.fn().mockResolvedValue(createMockUser()),
         } as unknown as Mocked<TodoistApi>

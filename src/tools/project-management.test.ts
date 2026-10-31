@@ -12,8 +12,7 @@ const mockTodoistApi = {
     archiveProject: vi.fn(),
     unarchiveProject: vi.fn(),
     getProject: vi.fn(),
-    getProjects: vi.fn(),
-    sync: vi.fn(),
+    getPersonalProjectCapacity: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { PROJECT_MANAGEMENT } = ToolNames
@@ -124,7 +123,9 @@ describe(`${PROJECT_MANAGEMENT} tool`, () => {
         })
 
         it('does not unarchive a personal project when the limit cannot be verified', async () => {
-            mockTodoistApi.sync.mockResolvedValue({ userPlanLimits: { current: {}, next: null } })
+            mockTodoistApi.getPersonalProjectCapacity.mockRejectedValue(
+                new Error('Could not load limits'),
+            )
             const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
             await expect(
@@ -162,7 +163,7 @@ describe(`${PROJECT_MANAGEMENT} tool`, () => {
                 mockTodoistApi,
             )
 
-            expect(mockTodoistApi.sync).not.toHaveBeenCalled()
+            expect(mockTodoistApi.getPersonalProjectCapacity).not.toHaveBeenCalled()
             expect(mockTodoistApi.unarchiveProject).toHaveBeenCalledWith(project.id)
         })
 
@@ -176,7 +177,7 @@ describe(`${PROJECT_MANAGEMENT} tool`, () => {
             )
 
             expect(mockTodoistApi.getProject).not.toHaveBeenCalled()
-            expect(mockTodoistApi.sync).not.toHaveBeenCalled()
+            expect(mockTodoistApi.getPersonalProjectCapacity).not.toHaveBeenCalled()
         })
     })
 })

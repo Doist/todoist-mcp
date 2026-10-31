@@ -1,10 +1,6 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
-import { z } from 'zod'
-import { fetchAllActiveProjects, isPersonalProject } from '../tool-helpers.js'
 import { executeWithRetry } from './retry.js'
 import type { ToolName } from './tool-names.js'
-
-const PersonalProjectLimitSchema = z.number().int().nonnegative()
 
 type PersonalProjectCapacity = {
     /** The account's current plan limit on active personal projects. */
@@ -19,37 +15,21 @@ type PersonalProjectCapacity = {
  * The API accepts a couple of projects beyond the plan limit, so offline clients
  * can sync at the boundary. It therefore does not reject a create, unarchive or
  * move-to-personal that the Todoist apps refuse; a tool that adds an active
- * personal project checks this capacity first, as the apps do.
+ * personal project checks this capacity first, as the apps do. The SDK applies the
+ * apps' counting rule: every active personal project except the Inbox.
  *
- * Counts every active personal project except the Inbox, matching the Todoist apps.
- *
- * @returns The capacity, or `undefined` when either read fails or the limit is
- * missing or malformed. The underlying error is logged under `toolName`, since
- * the message the caller reports is deliberately generic.
+ * @returns The capacity, or `undefined` when the read fails or the plan has no
+ * project limit. The underlying error is logged under `toolName`, since the message
+ * the caller reports is deliberately generic.
  */
 async function loadPersonalProjectCapacity(
     client: TodoistApi,
     toolName: ToolName,
 ): Promise<PersonalProjectCapacity | undefined> {
     try {
-        const [limits, projects] = await Promise.all([
-            executeWithRetry(() =>
-                client.sync({ resourceTypes: ['user_plan_limits'], syncToken: '*' }),
-            ),
-            fetchAllActiveProjects(client),
-        ])
-        // The SDK preserves this field via a loose schema, so validate it before use.
-        const maxProjects = PersonalProjectLimitSchema.parse(
-            limits.userPlanLimits?.current?.maxProjects,
+        const { maxProjects, activeCount } = await executeWithRetry(() =>
+            client.getPersonalProjectCapacity(),
         )
-        const activeCount = projects.filter(
-            (project) =>
-                isPersonalProject(project) &&
-                !project.inboxProject &&
-                !project.isArchived &&
-                !project.isDeleted,
-        ).length
-
         return { maxProjects, activeCount }
     } catch (error) {
         console.error(`${toolName}: could not load personal project limit`, error)
