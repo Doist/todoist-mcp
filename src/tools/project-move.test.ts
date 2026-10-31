@@ -1,19 +1,46 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
-import { createMockProject, createMockWorkspaceProject, TEST_IDS } from '../utils/test-helpers.js'
+import {
+    createMockApiResponse,
+    createMockProject,
+    createMockWorkspaceProject,
+    TEST_IDS,
+} from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { projectMove } from './project-move.js'
 
 const mockTodoistApi = {
     moveProjectToWorkspace: vi.fn(),
     moveProjectToPersonal: vi.fn(),
+    getProjects: vi.fn(),
+    sync: vi.fn(),
 } as unknown as Mocked<TodoistApi>
+
+function mockPersonalProjectCapacity({
+    maxProjects,
+    activeCount,
+}: {
+    maxProjects: number
+    activeCount: number
+}) {
+    mockTodoistApi.sync.mockResolvedValue({
+        userPlanLimits: { current: { maxProjects }, next: { maxProjects: 300 } },
+    })
+    mockTodoistApi.getProjects.mockResolvedValue(
+        createMockApiResponse(
+            Array.from({ length: activeCount }, (_, index) =>
+                createMockProject({ id: `existing-${index}` }),
+            ),
+        ),
+    )
+}
 
 const { PROJECT_MOVE } = ToolNames
 
 describe(`${PROJECT_MOVE} tool`, () => {
     beforeEach(() => {
-        vi.clearAllMocks()
+        vi.resetAllMocks()
+        mockPersonalProjectCapacity({ maxProjects: 5, activeCount: 4 })
     })
 
     describe('move to workspace', () => {
@@ -181,6 +208,61 @@ describe(`${PROJECT_MOVE} tool`, () => {
                 }),
                 success: true,
             })
+        })
+    })
+
+    describe('personal project limit', () => {
+        it('does not move a project to personal when the account is at its limit', async () => {
+            mockPersonalProjectCapacity({ maxProjects: 5, activeCount: 5 })
+
+            await expect(
+                projectMove.execute(
+                    { action: 'move-to-personal', projectId: '6cfCcrrCFg2xP94Q' },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow(
+                'Your account has reached its limit of 5 active personal projects. This project was not moved.',
+            )
+            expect(mockTodoistApi.moveProjectToPersonal).not.toHaveBeenCalled()
+        })
+
+        it('does not move a project to personal when the limit cannot be verified', async () => {
+            mockTodoistApi.sync.mockRejectedValue(new Error('Could not load limits'))
+            const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+            await expect(
+                projectMove.execute(
+                    { action: 'move-to-personal', projectId: '6cfCcrrCFg2xP94Q' },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow(
+                'Could not verify your personal project limit. This project was not moved. Retry later.',
+            )
+            expect(consoleErrorSpy).toHaveBeenCalledWith(
+                `${PROJECT_MOVE}: could not load personal project limit`,
+                expect.any(Error),
+            )
+            consoleErrorSpy.mockRestore()
+            expect(mockTodoistApi.moveProjectToPersonal).not.toHaveBeenCalled()
+        })
+
+        it('does not check the personal limit when moving to a workspace', async () => {
+            mockPersonalProjectCapacity({ maxProjects: 5, activeCount: 5 })
+            mockTodoistApi.moveProjectToWorkspace.mockResolvedValue(
+                createMockWorkspaceProject({ workspaceId: TEST_IDS.WORKSPACE_1 }),
+            )
+
+            await projectMove.execute(
+                {
+                    action: 'move-to-workspace',
+                    projectId: '6cfCcrrCFg2xP94Q',
+                    workspaceId: TEST_IDS.WORKSPACE_1,
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.sync).not.toHaveBeenCalled()
+            expect(mockTodoistApi.getProjects).not.toHaveBeenCalled()
         })
     })
 

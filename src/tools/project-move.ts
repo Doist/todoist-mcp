@@ -7,6 +7,10 @@ import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { mapProject } from '../tool-helpers.js'
 import { ProjectSchema } from '../utils/output-schemas.js'
+import {
+    assertPersonalProjectCapacity,
+    loadPersonalProjectCapacity,
+} from '../utils/personal-project-limit.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const ArgsSchema = {
@@ -67,6 +71,10 @@ const projectMove = {
 
             project = await client.moveProjectToWorkspace(moveArgs)
         } else {
+            assertPersonalProjectCapacity(
+                await loadPersonalProjectCapacity(client, ToolNames.PROJECT_MOVE),
+                'This project was not moved.',
+            )
             project = await client.moveProjectToPersonal({ projectId: args.projectId })
         }
 

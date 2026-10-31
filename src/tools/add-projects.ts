@@ -1,20 +1,16 @@
-import type {
-    GetProjectsArgs,
-    GetProjectsResponse,
-    PersonalProject,
-    Project,
-    TodoistApi,
-    WorkspaceProject,
-} from '@doist/todoist-sdk'
+import type { PersonalProject, WorkspaceProject } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
-import { fetchAllPages, isPersonalProject, mapProject } from '../tool-helpers.js'
+import { mapProject } from '../tool-helpers.js'
 import { logBatchFailures } from '../utils/batch-failures.js'
 import { ColorSchema } from '../utils/colors.js'
 import { createLimiter } from '../utils/concurrency.js'
-import { ApiLimits } from '../utils/constants.js'
 import { FailureSchema, ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
+import {
+    assertPersonalProjectCapacity,
+    loadPersonalProjectCapacity,
+} from '../utils/personal-project-limit.js'
 import { appendFailureSummary } from '../utils/response-builders.js'
 import { executeCreateWithRetry, executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -65,18 +61,12 @@ const OutputSchema = {
     failureCount: z.number(),
 }
 
-const PersonalProjectLimitSchema = z.number().int().nonnegative()
-
 const addProjects = {
     name: ToolNames.ADD_PROJECTS,
     description: 'Add one or more new projects.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
-    annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     async execute({ projects }, client) {
         const workspaceResolutions = new Map<string, Promise<string>>()
         const limitPersonalCreation = createLimiter(1)
@@ -108,10 +98,7 @@ const addProjects = {
                 const workspaceId = await resolveWorkspaceId(workspace)
                 const createProject = () =>
                     executeCreateWithRetry(() =>
-                        client.addProject({
-                            ...rest,
-                            ...(workspaceId ? { workspaceId } : {}),
-                        }),
+                        client.addProject({ ...rest, ...(workspaceId ? { workspaceId } : {}) }),
                     )
 
                 if (workspace) {
@@ -121,14 +108,9 @@ const addProjects = {
                 // The quota snapshot and successful writes share one lane within this
                 // batch. Other tool executions and clients can still change capacity.
                 return await limitPersonalCreation(async () => {
-                    personalCapacity ??= loadPersonalProjectCapacity(client)
+                    personalCapacity ??= loadPersonalProjectCapacity(client, ToolNames.ADD_PROJECTS)
                     const capacity = await personalCapacity
-                    if (capacity.activeCount >= capacity.maxProjects) {
-                        throw new Error(
-                            `Your account has reached its limit of ${capacity.maxProjects} active personal projects. ` +
-                                'This project was not created. Archive or delete a personal project, or upgrade to a plan with a higher limit, then retry this item.',
-                        )
-                    }
+                    assertPersonalProjectCapacity(capacity, 'This project was not created.')
 
                     const project = await createProject()
                     capacity.activeCount++
@@ -152,14 +134,9 @@ const addProjects = {
         })
 
         const mappedProjects = newProjects.map(mapProject)
-        logBatchFailures(ToolNames.ADD_PROJECTS, projects.length, failures, {
-            redactItems: true,
-        })
+        logBatchFailures(ToolNames.ADD_PROJECTS, projects.length, failures, { redactItems: true })
 
-        const textContent = generateTextContent({
-            projects: newProjects,
-            failures,
-        })
+        const textContent = generateTextContent({ projects: newProjects, failures })
 
         return {
             textContent,
@@ -174,42 +151,6 @@ const addProjects = {
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
-
-async function loadPersonalProjectCapacity(client: TodoistApi) {
-    try {
-        const [limits, projects] = await Promise.all([
-            executeWithRetry(() =>
-                client.sync({ resourceTypes: ['user_plan_limits'], syncToken: '*' }),
-            ),
-            // Retry each page on its own so a transient failure part-way through
-            // does not refetch the pages already read.
-            fetchAllPages<GetProjectsArgs, GetProjectsResponse, Project>({
-                apiMethod: (args) => executeWithRetry(() => client.getProjects(args)),
-                limit: ApiLimits.PROJECTS_MAX,
-            }),
-        ])
-        // The SDK preserves this field via a loose schema, so validate it before use.
-        const maxProjects = PersonalProjectLimitSchema.parse(
-            limits.userPlanLimits?.current?.maxProjects,
-        )
-        const activeCount = projects.filter(
-            (project) =>
-                isPersonalProject(project) &&
-                !project.inboxProject &&
-                !project.isArchived &&
-                !project.isDeleted,
-        ).length
-
-        return { maxProjects, activeCount }
-    } catch (error) {
-        // The thrown message is deliberately generic, so record what actually failed
-        // (a read error or an invalid limit) for diagnosis.
-        console.error(`${ToolNames.ADD_PROJECTS}: could not load personal project limit`, error)
-        throw new Error(
-            'Could not verify your personal project limit. This project was not created. Retry this item later.',
-        )
-    }
-}
 
 function generateTextContent({
     projects,

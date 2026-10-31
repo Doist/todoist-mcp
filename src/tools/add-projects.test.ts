@@ -334,7 +334,7 @@ describe(`${ADD_PROJECTS} tool`, () => {
                         item: 'Over limit',
                         error:
                             `Your account has reached its limit of ${maxProjects} active personal projects. ` +
-                            'This project was not created. Archive or delete a personal project, or upgrade to a plan with a higher limit, then retry this item.',
+                            'This project was not created. Archive or delete a personal project, or upgrade to a plan with a higher limit, then retry.',
                     },
                 ])
             },
@@ -447,7 +447,7 @@ describe(`${ADD_PROJECTS} tool`, () => {
                 expect(result.structuredContent.failures).toEqual(
                     ['First', 'Second'].map((item) => ({
                         item,
-                        error: 'Could not verify your personal project limit. This project was not created. Retry this item later.',
+                        error: 'Could not verify your personal project limit. This project was not created. Retry later.',
                     })),
                 )
             },
