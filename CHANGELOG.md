@@ -1,3 +1,9 @@
+## [13.8.2](https://github.com/Doist/todoist-mcp/compare/v13.8.1...v13.8.2) (2026-10-31)
+
+### Bug Fixes
+
+* reorder projects and sections by fractional order keys ([#654](https://github.com/Doist/todoist-mcp/issues/654)) ([3e7fdc3](https://github.com/Doist/todoist-mcp/commit/3e7fdc39e2eb59e0742e75979f76879fc57773e1))
+
 ## [13.8.1](https://github.com/Doist/todoist-mcp/compare/v13.8.0...v13.8.1) (2026-10-31)
 
 ### Bug Fixes
