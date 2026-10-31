@@ -1,11 +1,19 @@
-import type { PersonalProject, TodoistApi, WorkspaceProject } from '@doist/todoist-sdk'
+import type {
+    GetProjectsArgs,
+    GetProjectsResponse,
+    PersonalProject,
+    Project,
+    TodoistApi,
+    WorkspaceProject,
+} from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
-import { fetchAllActiveProjects, isPersonalProject, mapProject } from '../tool-helpers.js'
+import { fetchAllPages, isPersonalProject, mapProject } from '../tool-helpers.js'
 import { logBatchFailures } from '../utils/batch-failures.js'
 import { ColorSchema } from '../utils/colors.js'
 import { createLimiter } from '../utils/concurrency.js'
+import { ApiLimits } from '../utils/constants.js'
 import { FailureSchema, ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js'
 import { appendFailureSummary } from '../utils/response-builders.js'
 import { executeCreateWithRetry, executeWithRetry } from '../utils/retry.js'
@@ -64,7 +72,11 @@ const addProjects = {
     description: 'Add one or more new projects.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+    },
     async execute({ projects }, client) {
         const workspaceResolutions = new Map<string, Promise<string>>()
         const limitPersonalCreation = createLimiter(1)
@@ -96,7 +108,10 @@ const addProjects = {
                 const workspaceId = await resolveWorkspaceId(workspace)
                 const createProject = () =>
                     executeCreateWithRetry(() =>
-                        client.addProject({ ...rest, ...(workspaceId ? { workspaceId } : {}) }),
+                        client.addProject({
+                            ...rest,
+                            ...(workspaceId ? { workspaceId } : {}),
+                        }),
                     )
 
                 if (workspace) {
@@ -137,9 +152,14 @@ const addProjects = {
         })
 
         const mappedProjects = newProjects.map(mapProject)
-        logBatchFailures(ToolNames.ADD_PROJECTS, projects.length, failures, { redactItems: true })
+        logBatchFailures(ToolNames.ADD_PROJECTS, projects.length, failures, {
+            redactItems: true,
+        })
 
-        const textContent = generateTextContent({ projects: newProjects, failures })
+        const textContent = generateTextContent({
+            projects: newProjects,
+            failures,
+        })
 
         return {
             textContent,
@@ -161,7 +181,12 @@ async function loadPersonalProjectCapacity(client: TodoistApi) {
             executeWithRetry(() =>
                 client.sync({ resourceTypes: ['user_plan_limits'], syncToken: '*' }),
             ),
-            executeWithRetry(() => fetchAllActiveProjects(client)),
+            // Retry each page on its own so a transient failure part-way through
+            // does not refetch the pages already read.
+            fetchAllPages<GetProjectsArgs, GetProjectsResponse, Project>({
+                apiMethod: (args) => executeWithRetry(() => client.getProjects(args)),
+                limit: ApiLimits.PROJECTS_MAX,
+            }),
         ])
         // The SDK preserves this field via a loose schema, so validate it before use.
         const maxProjects = PersonalProjectLimitSchema.parse(
@@ -176,7 +201,10 @@ async function loadPersonalProjectCapacity(client: TodoistApi) {
         ).length
 
         return { maxProjects, activeCount }
-    } catch {
+    } catch (error) {
+        // The thrown message is deliberately generic, so record what actually failed
+        // (a read error or an invalid limit) for diagnosis.
+        console.error(`${ToolNames.ADD_PROJECTS}: could not load personal project limit`, error)
         throw new Error(
             'Could not verify your personal project limit. This project was not created. Retry this item later.',
         )

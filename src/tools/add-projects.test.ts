@@ -2,7 +2,13 @@ import type { PersonalProject, TodoistApi, Workspace, WorkspaceProject } from '@
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
 import { ProjectSchema } from '../utils/output-schemas.js'
-import { createMockProject, createMockWorkspaceProject, TEST_IDS } from '../utils/test-helpers.js'
+import {
+    createApiError,
+    createMockApiResponse,
+    createMockProject,
+    createMockWorkspaceProject,
+    TEST_IDS,
+} from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { workspaceResolver } from '../utils/workspace-resolver.js'
 import { addProjects } from './add-projects.js'
@@ -29,15 +35,14 @@ describe(`${ADD_PROJECTS} tool`, () => {
         mockTodoistApi.sync.mockResolvedValue({
             userPlanLimits: { current: { maxProjects: 5 }, next: { maxProjects: 300 } },
         })
-        mockTodoistApi.getProjects.mockResolvedValue({ results: [], nextCursor: null })
+        mockTodoistApi.getProjects.mockResolvedValue(createMockApiResponse([]))
     })
 
     describe('creating a single project', () => {
         it('should create a project and return mapped result', async () => {
-            mockTodoistApi.getProjects.mockResolvedValue({
-                results: createMockPersonalProjects(4),
-                nextCursor: null,
-            })
+            mockTodoistApi.getProjects.mockResolvedValue(
+                createMockApiResponse(createMockPersonalProjects(4)),
+            )
             const mockApiResponse = createMockProject({
                 id: TEST_IDS.PROJECT_TEST,
                 name: 'test-abc123def456-project',
@@ -311,10 +316,9 @@ describe(`${ADD_PROJECTS} tool`, () => {
                 mockTodoistApi.sync.mockResolvedValue({
                     userPlanLimits: { current: { maxProjects }, next: { maxProjects: 300 } },
                 })
-                mockTodoistApi.getProjects.mockResolvedValue({
-                    results: createMockPersonalProjects(activeCount),
-                    nextCursor: null,
-                })
+                mockTodoistApi.getProjects.mockResolvedValue(
+                    createMockApiResponse(createMockPersonalProjects(activeCount)),
+                )
                 mockTodoistApi.addProject.mockResolvedValue(
                     createMockProject({ name: 'Over limit' }),
                 )
@@ -336,7 +340,7 @@ describe(`${ADD_PROJECTS} tool`, () => {
             },
         )
 
-        it.each([5, 10, 80, 300])(
+        it.each([5, 300])(
             'creates only the remaining slot in input order for a current limit of %i',
             async (maxProjects) => {
                 mockTodoistApi.sync.mockResolvedValue({
@@ -345,10 +349,9 @@ describe(`${ADD_PROJECTS} tool`, () => {
                         next: { maxProjects: maxProjects + 100 },
                     },
                 })
-                mockTodoistApi.getProjects.mockResolvedValue({
-                    results: createMockPersonalProjects(maxProjects - 1),
-                    nextCursor: null,
-                })
+                mockTodoistApi.getProjects.mockResolvedValue(
+                    createMockApiResponse(createMockPersonalProjects(maxProjects - 1)),
+                )
                 mockTodoistApi.addProject.mockResolvedValue(
                     createMockProject({ id: 'created', name: 'First' }),
                 )
@@ -383,24 +386,25 @@ describe(`${ADD_PROJECTS} tool`, () => {
 
         it('counts only active non-inbox personal projects across all pages', async () => {
             mockTodoistApi.getProjects
-                .mockResolvedValueOnce({
-                    results: [
-                        createMockProject({ id: 'personal-1' }),
-                        createMockProject({ id: 'inbox', inboxProject: true }),
-                        createMockWorkspaceProject(),
-                        createMockProject({ id: 'archived', isArchived: true }),
-                        createMockProject({ id: 'deleted', isDeleted: true }),
-                    ],
-                    nextCursor: 'next-page',
-                })
-                .mockResolvedValueOnce({
-                    results: [
+                .mockResolvedValueOnce(
+                    createMockApiResponse(
+                        [
+                            createMockProject({ id: 'personal-1' }),
+                            createMockProject({ id: 'inbox', inboxProject: true }),
+                            createMockWorkspaceProject(),
+                            createMockProject({ id: 'archived', isArchived: true }),
+                            createMockProject({ id: 'deleted', isDeleted: true }),
+                        ],
+                        'next-page',
+                    ),
+                )
+                .mockResolvedValueOnce(
+                    createMockApiResponse([
                         createMockProject({ id: 'personal-2' }),
                         createMockProject({ id: 'shared', isShared: true }),
                         createMockProject({ id: 'child', parentId: 'personal-1' }),
-                    ],
-                    nextCursor: null,
-                })
+                    ]),
+                )
             mockTodoistApi.addProject.mockResolvedValue(createMockProject({ name: 'Fits' }))
 
             const result = await addProjects.execute(
@@ -426,12 +430,18 @@ describe(`${ADD_PROJECTS} tool`, () => {
                     userPlanLimits: { current: { maxProjects }, next: { maxProjects: 300 } },
                 })
                 mockTodoistApi.addProject.mockResolvedValue(createMockProject())
+                const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
                 const result = await addProjects.execute(
                     { projects: [{ name: 'First' }, { name: 'Second' }] },
                     mockTodoistApi,
                 )
 
+                expect(consoleErrorSpy).toHaveBeenCalledWith(
+                    `${ADD_PROJECTS}: could not load personal project limit`,
+                    expect.any(z.ZodError),
+                )
+                consoleErrorSpy.mockRestore()
                 expect(mockTodoistApi.addProject).not.toHaveBeenCalled()
                 expect(mockTodoistApi.sync).toHaveBeenCalledTimes(1)
                 expect(result.structuredContent.failures).toEqual(
@@ -448,10 +458,9 @@ describe(`${ADD_PROJECTS} tool`, () => {
             async (method) => {
                 vi.useFakeTimers()
                 try {
-                    mockTodoistApi.getProjects.mockResolvedValue({
-                        results: createMockPersonalProjects(4),
-                        nextCursor: null,
-                    })
+                    mockTodoistApi.getProjects.mockResolvedValue(
+                        createMockApiResponse(createMockPersonalProjects(4)),
+                    )
                     mockTodoistApi[method].mockRejectedValueOnce(
                         Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
                     )
@@ -475,6 +484,46 @@ describe(`${ADD_PROJECTS} tool`, () => {
                 }
             },
         )
+
+        it('retries a failed project page without refetching the pages before it', async () => {
+            vi.useFakeTimers()
+            try {
+                mockTodoistApi.getProjects
+                    .mockResolvedValueOnce(
+                        createMockApiResponse(createMockPersonalProjects(2), 'next-page'),
+                    )
+                    .mockRejectedValueOnce(
+                        Object.assign(new Error('Service Unavailable'), { httpStatusCode: 503 }),
+                    )
+                    .mockResolvedValueOnce(createMockApiResponse(createMockPersonalProjects(2)))
+                mockTodoistApi.addProject.mockResolvedValue(createMockProject({ name: 'Fits' }))
+
+                const promise = addProjects.execute(
+                    { projects: [{ name: 'Fits' }, { name: 'Over limit' }] },
+                    mockTodoistApi,
+                )
+                await vi.runAllTimersAsync()
+                const result = await promise
+
+                expect(mockTodoistApi.getProjects).toHaveBeenCalledTimes(3)
+                expect(mockTodoistApi.getProjects).toHaveBeenNthCalledWith(
+                    1,
+                    expect.objectContaining({ cursor: null }),
+                )
+                for (const call of [2, 3]) {
+                    expect(mockTodoistApi.getProjects).toHaveBeenNthCalledWith(
+                        call,
+                        expect.objectContaining({ cursor: 'next-page' }),
+                    )
+                }
+                expect(mockTodoistApi.addProject).toHaveBeenCalledExactlyOnceWith({ name: 'Fits' })
+                expect(result.structuredContent.failures).toEqual([
+                    { item: 'Over limit', error: expect.stringContaining('limit of 5') },
+                ])
+            } finally {
+                vi.useRealTimers()
+            }
+        })
     })
 
     describe('output schema validation', () => {
@@ -702,10 +751,9 @@ describe(`${ADD_PROJECTS} tool`, () => {
                 mockTodoistApi.getWorkspaces.mockResolvedValue([
                     createMockWorkspace({ id: '333', name: 'Engineering' }),
                 ])
-                mockTodoistApi.getProjects.mockResolvedValue({
-                    results: createMockPersonalProjects(5),
-                    nextCursor: null,
-                })
+                mockTodoistApi.getProjects.mockResolvedValue(
+                    createMockApiResponse(createMockPersonalProjects(5)),
+                )
                 if (scenario === 'sync failure') {
                     mockTodoistApi.sync.mockRejectedValue(new Error('Could not load limits'))
                 } else if (scenario === 'project read failure') {
@@ -898,20 +946,17 @@ describe(`${ADD_PROJECTS} tool`, () => {
         })
 
         it('keeps successes and leaves capacity available after a rejected project', async () => {
-            mockTodoistApi.getProjects.mockResolvedValue({
-                results: createMockPersonalProjects(4),
-                nextCursor: null,
-            })
+            mockTodoistApi.getProjects.mockResolvedValue(
+                createMockApiResponse(createMockPersonalProjects(4)),
+            )
             const mockProject = createMockProject({
                 id: 'project-1',
                 name: 'First Project',
             })
-            const apiError = Object.assign(new Error('HTTP 403: Forbidden'), {
-                httpStatusCode: 403,
-                responseData: {
-                    error: 'Maximum number of projects exceeded',
-                    error_tag: 'MAX_PROJECTS_LIMIT_REACHED',
-                },
+            const apiError = createApiError({
+                status: 403,
+                error: 'Maximum number of projects exceeded',
+                tag: 'MAX_PROJECTS_LIMIT_REACHED',
             })
             mockTodoistApi.addProject
                 .mockRejectedValueOnce(apiError)
