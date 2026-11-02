@@ -191,7 +191,8 @@ const setUserStatus = {
         // and the read-back, so report a mismatch rather than present another status as this one.
         // Every error from here on follows a write that applied. None may quote another error or
         // the held status, because the retry around the tool reads an HTTP status out of the text
-        // (and a `cause`) and would run the tool, and so the write, again.
+        // and would run the tool, and so the write, again. Nor may one carry a `cause`, which the
+        // error formatter reports as a failed request to retry.
         const held = await fetchUserStatus(client).catch(() => {
             throw new Error(
                 `The status was written, but reading it back failed, so it is unconfirmed. Use ${ToolNames.GET_USER_STATUS} to check it.`,
