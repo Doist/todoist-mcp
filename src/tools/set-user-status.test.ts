@@ -8,6 +8,7 @@ import {
 } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
+import { executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { setUserStatus } from './set-user-status.js'
 
@@ -22,7 +23,7 @@ const NOW = new Date('2026-11-02T12:00:00Z')
 type CommandResult =
     | 'ok'
     | 'unreported'
-    | { error: string; http_code: number; error_code: number; error_tag: string }
+    | { error: string; httpCode: number; errorCode: number; errorTag: string }
 
 /** What the mocked Sync API answers: the command's result, then the status it holds afterwards. */
 let server: { commandResult: CommandResult; held: UserStatus | null | undefined }
@@ -58,6 +59,8 @@ function answer(request: SyncRequest): SyncResponse {
     }
     return (server.held === undefined ? {} : { user: { status: server.held } }) as SyncResponse
 }
+
+const ALL_SCOPE = { scope: { mode: 'all' } }
 
 const AWAY: UserStatus = { message: 'Away', emoji: null, activeUntil: null, effects: {} }
 
@@ -95,7 +98,7 @@ describe(`${SET_USER_STATUS} tool`, () => {
             message: 'On holiday',
             emoji: '🏝️',
             activeUntil: '2026-11-10T00:00:00.000Z',
-            effects: { pauseNotifications: {}, pauseActivity: null },
+            effects: { pauseNotifications: ALL_SCOPE, pauseActivity: null },
         })
         const [write, read] = requests()
         expect(write?.resourceTypes).toBeUndefined()
@@ -135,7 +138,7 @@ describe(`${SET_USER_STATUS} tool`, () => {
         )
 
         expect(sentStatus()).toMatchObject({
-            effects: { pauseNotifications: null, pauseActivity: {} },
+            effects: { pauseNotifications: null, pauseActivity: ALL_SCOPE },
         })
         expect(result.structuredContent).toMatchObject({
             status: { pauseNotifications: false, pauseActivity: true },
@@ -151,7 +154,7 @@ describe(`${SET_USER_STATUS} tool`, () => {
         )
 
         expect(sentStatus()).toMatchObject({
-            effects: { pauseNotifications: {}, pauseActivity: {} },
+            effects: { pauseNotifications: ALL_SCOPE, pauseActivity: ALL_SCOPE },
         })
     })
 
@@ -164,6 +167,26 @@ describe(`${SET_USER_STATUS} tool`, () => {
         )
 
         expect(sentStatus()).toMatchObject({ activeUntil: '2026-11-10T07:00:00.000Z' })
+    })
+
+    it('accepts a lowercase z', async () => {
+        server.held = { ...AWAY, activeUntil: new Date('2026-11-10T00:00:00Z') }
+
+        await setUserStatus.execute(
+            { message: 'Away', activeUntil: '2026-11-10t00:00:00z' },
+            mockTodoistApi,
+        )
+
+        expect(sentStatus()).toMatchObject({ activeUntil: '2026-11-10T00:00:00.000Z' })
+    })
+
+    it('reports a year before 100 as in the past, not as malformed', async () => {
+        await expect(
+            setUserStatus.execute(
+                { message: 'Away', activeUntil: '0050-01-01T00:00:00Z' },
+                mockTodoistApi,
+            ),
+        ).rejects.toThrow('activeUntil must be in the future')
     })
 
     it('accepts the widest real offsets', async () => {
@@ -264,9 +287,9 @@ describe(`${SET_USER_STATUS} tool`, () => {
     it('fails with the error Todoist gave a rejected command, and reads nothing back', async () => {
         server.commandResult = {
             error: 'Insufficient token scope',
-            http_code: 403,
-            error_code: 403,
-            error_tag: 'AUTH_INSUFFICIENT_TOKEN_SCOPE',
+            httpCode: 403,
+            errorCode: 403,
+            errorTag: 'AUTH_INSUFFICIENT_TOKEN_SCOPE',
         }
 
         const error = await setUserStatus
@@ -275,8 +298,9 @@ describe(`${SET_USER_STATUS} tool`, () => {
 
         expect(error).toBeInstanceOf(TodoistRequestError)
         expect((error as TodoistRequestError).message).toBe('Insufficient token scope')
+        expect((error as TodoistRequestError).httpStatusCode).toBe(403)
         expect((error as TodoistRequestError).responseData).toMatchObject({
-            error_tag: 'AUTH_INSUFFICIENT_TOKEN_SCOPE',
+            errorTag: 'AUTH_INSUFFICIENT_TOKEN_SCOPE',
         })
         expect(requests()).toHaveLength(1)
     })
@@ -325,6 +349,37 @@ describe(`${SET_USER_STATUS} tool`, () => {
         )
     })
 
+    it('says the status was written when only the read-back fails', async () => {
+        mockTodoistApi.sync.mockImplementation(async (request) => {
+            if (request.commands) {
+                return answer(request)
+            }
+            throw new TodoistRequestError('Too many requests', 429)
+        })
+
+        await expect(setUserStatus.execute({ message: 'Away' }, mockTodoistApi)).rejects.toThrow(
+            'The status was written, but reading it back failed, so it is unconfirmed: Too many requests',
+        )
+    })
+
+    it('does not let a retry around the tool write again after a failed read-back', async () => {
+        mockTodoistApi.sync.mockImplementation(async (request) => {
+            if (request.commands) {
+                return answer(request)
+            }
+            throw new TodoistRequestError('Service unavailable', 503)
+        })
+
+        await expect(
+            executeWithRetry(() => setUserStatus.execute({ message: 'Away' }, mockTodoistApi), {
+                baseDelayMs: 0,
+                maxDelayMs: 0,
+            }),
+        ).rejects.toThrow('The status was written')
+
+        expect(requests().filter((request) => request.commands)).toHaveLength(1)
+    })
+
     it('fails rather than report no status when the read-back has no user', async () => {
         server.held = undefined
 
@@ -348,11 +403,14 @@ describe(`${SET_USER_STATUS} tool`, () => {
     describe('argument schema', () => {
         const schema = z.object(setUserStatus.parameters)
 
-        it('trims the message and emoji', () => {
-            expect(schema.parse({ message: '  Away  ', emoji: ' 🏝️ ' })).toEqual({
-                message: 'Away',
-                emoji: '🏝️',
-            })
+        it('trims the message, emoji and end', () => {
+            expect(
+                schema.parse({
+                    message: '  Away  ',
+                    emoji: ' 🏝️ ',
+                    activeUntil: ' 2026-11-10T00:00:00Z ',
+                }),
+            ).toEqual({ message: 'Away', emoji: '🏝️', activeUntil: '2026-11-10T00:00:00Z' })
         })
 
         it.each([

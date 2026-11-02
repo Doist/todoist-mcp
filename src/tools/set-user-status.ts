@@ -22,6 +22,7 @@ const ArgsSchema = {
     emoji: z.string().trim().min(1).optional().describe('A Unicode emoji, such as 🏝️.'),
     activeUntil: z
         .string()
+        .trim()
         .optional()
         .describe(
             'When it ends: a future ISO 8601 timestamp with Z or an offset, e.g. 2026-11-10T00:00:00+00:00. Omit for no end.',
@@ -45,7 +46,7 @@ type SetUserStatusArgs = {
 
 // An ISO 8601 timestamp that carries its own zone, so it never depends on the server's.
 const ZONED_TIMESTAMP =
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|([+-])(\d{2}):(\d{2}))$/
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|([+-])(\d{2}):(\d{2}))$/i
 
 // The offsets in use worldwide run from UTC-12:00 to UTC+14:00.
 const MIN_OFFSET_MINUTES = -12 * 60
@@ -74,8 +75,11 @@ function parseActiveUntil(value: string, now: Date): string {
     ]
 
     // `Date` rolls an impossible day or time over (31 November becomes 1 December), so build the
-    // wall-clock instant and require every part to survive the round trip.
-    const wallClock = new Date(Date.UTC(y, mo - 1, d, h, mi, s))
+    // wall-clock instant and require every part to survive the round trip. `setUTCFullYear` keeps
+    // the years 0 to 99, which `Date.UTC` would read as 1900 to 1999.
+    const wallClock = new Date(0)
+    wallClock.setUTCFullYear(y, mo - 1, d)
+    wallClock.setUTCHours(h, mi, s)
     const partsSurvive =
         wallClock.getUTCFullYear() === y &&
         wallClock.getUTCMonth() === mo - 1 &&
@@ -84,20 +88,16 @@ function parseActiveUntil(value: string, now: Date): string {
         wallClock.getUTCMinutes() === mi &&
         wallClock.getUTCSeconds() === s
     const offset =
-        zone === 'Z'
+        zone?.toUpperCase() === 'Z'
             ? 0
             : (sign === '-' ? -1 : 1) * (Number(offsetHours) * 60 + Number(offsetMinutes))
-    if (
-        !partsSurvive ||
-        Number(offsetMinutes ?? 0) > 59 ||
-        offset < MIN_OFFSET_MINUTES ||
-        offset > MAX_OFFSET_MINUTES
-    ) {
+    if (!partsSurvive || offset < MIN_OFFSET_MINUTES || offset > MAX_OFFSET_MINUTES) {
         throw invalidActiveUntil(value)
     }
 
-    // Sub-second precision is parsed by `Date` itself, now that the parts are known to be real.
-    const parsed = new Date(value)
+    // Sub-second precision and offset minutes are checked by `Date` itself, now that the date and
+    // time are known to be real.
+    const parsed = new Date(value.toUpperCase())
     if (Number.isNaN(parsed.getTime())) {
         throw invalidActiveUntil(value)
     }
@@ -106,6 +106,9 @@ function parseActiveUntil(value: string, now: Date): string {
     }
     return parsed.toISOString()
 }
+
+// An explicit scope, because `{}` keeps whatever scope another client stored for the effect.
+const ALL_SCOPE = { scope: { mode: 'all' } }
 
 /** The whole status to store, or `null` to remove it. Omitted fields are cleared, not kept. */
 function buildStatus(args: SetUserStatusArgs, now: Date): UserStatusArgs | null {
@@ -136,8 +139,8 @@ function buildStatus(args: SetUserStatusArgs, now: Date): UserStatusArgs | null 
         effects:
             pauseNotifications || pauseActivity
                 ? {
-                      pauseNotifications: pauseNotifications ? {} : null,
-                      pauseActivity: pauseActivity ? {} : null,
+                      pauseNotifications: pauseNotifications ? ALL_SCOPE : null,
+                      pauseActivity: pauseActivity ? ALL_SCOPE : null,
                   }
                 : null,
     }
@@ -183,7 +186,13 @@ const setUserStatus = {
 
         // Anything else that writes the status (Comms, another client) can land between the write
         // and the read-back, so report a mismatch rather than present another status as this one.
-        const held = await fetchUserStatus(client)
+        const held = await fetchUserStatus(client).catch((error: unknown) => {
+            // Not a request error any more, so nothing above retries it and writes a second time.
+            const reason = error instanceof Error ? error.message : String(error)
+            throw new Error(
+                `The status was written, but reading it back failed, so it is unconfirmed: ${reason}. Use ${ToolNames.GET_USER_STATUS} to check it.`,
+            )
+        })
         if (status === null) {
             if (held) {
                 throw new Error(
