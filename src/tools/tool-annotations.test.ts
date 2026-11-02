@@ -321,6 +321,21 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
         idempotentHint: true,
     },
     {
+        name: ToolNames.GET_USER_STATUS,
+        title: 'Todoist: Get User Status',
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+    },
+    {
+        name: ToolNames.SET_USER_STATUS,
+        title: 'Todoist: Set User Status',
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: true,
+    },
+    {
         name: ToolNames.LIST_WORKSPACES,
         title: 'Todoist: List Workspaces',
         readOnlyHint: true,

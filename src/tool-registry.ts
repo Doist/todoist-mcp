@@ -28,6 +28,7 @@ import { getOverview } from './tools/get-overview.js'
 import { getProductivityStats } from './tools/get-productivity-stats.js'
 import { getProjectActivityStats } from './tools/get-project-activity-stats.js'
 import { getProjectHealth } from './tools/get-project-health.js'
+import { getUserStatus } from './tools/get-user-status.js'
 import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
 import { importProjectTemplate } from './tools/import-project-template.js'
 import { listWorkspaces } from './tools/list-workspaces.js'
@@ -37,6 +38,7 @@ import { projectMove } from './tools/project-move.js'
 import { reorderObjects } from './tools/reorder-objects.js'
 import { rescheduleTasks } from './tools/reschedule-tasks.js'
 import { search } from './tools/search.js'
+import { setUserStatus } from './tools/set-user-status.js'
 import { uncompleteTasks } from './tools/uncomplete-tasks.js'
 import { updateComments } from './tools/update-comments.js'
 import { updateFilters } from './tools/update-filters.js'
@@ -136,6 +138,8 @@ const toolRegistry = {
     fetchObject,
     reorderObjects,
     userInfo,
+    getUserStatus,
+    setUserStatus,
 
     // Assignment and collaboration tools
     findProjectCollaborators,

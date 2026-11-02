@@ -61,6 +61,8 @@ export const ToolNames = {
     FETCH_OBJECT: 'fetch-object',
     REORDER_OBJECTS: 'reorder-objects',
     USER_INFO: 'user-info',
+    GET_USER_STATUS: 'get-user-status',
+    SET_USER_STATUS: 'set-user-status',
 
     // Label management tools
     ADD_LABELS: 'add-labels',
