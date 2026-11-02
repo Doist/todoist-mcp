@@ -1,3 +1,10 @@
+## [13.8.3](https://github.com/Doist/todoist-mcp/compare/v13.8.2...v13.8.3) (2026-11-02)
+
+### Bug Fixes
+
+* **deps:** update dependency @modelcontextprotocol/ext-apps to v2.0.4 ([#656](https://github.com/Doist/todoist-mcp/issues/656)) ([8aba0c3](https://github.com/Doist/todoist-mcp/commit/8aba0c3b0903096809ee230c954520b9039fd9af))
+* **deps:** update dependency zod to v4.6.7 ([#657](https://github.com/Doist/todoist-mcp/issues/657)) ([531486f](https://github.com/Doist/todoist-mcp/commit/531486f71c6542690eb43a136c87ed18e715f30d))
+
 ## [13.8.2](https://github.com/Doist/todoist-mcp/compare/v13.8.1...v13.8.2) (2026-10-31)
 
 ### Bug Fixes
