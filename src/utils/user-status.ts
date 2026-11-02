@@ -77,4 +77,4 @@ function buildUserStatusResult(
     }
 }
 
-export { buildUserStatusResult, fetchUserStatus, UserStatusOutputSchema, type UserStatusStructured }
+export { buildUserStatusResult, fetchUserStatus, UserStatusOutputSchema }

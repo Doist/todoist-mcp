@@ -8,6 +8,7 @@ import {
 } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
+import { formatToolExecutionError } from '../tool-execution-error.js'
 import { executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { setUserStatus } from './set-user-status.js'
@@ -327,7 +328,7 @@ describe(`${SET_USER_STATUS} tool`, () => {
 
         await expect(
             setUserStatus.execute({ message: 'Away', emoji: '🏝️' }, mockTodoistApi),
-        ).rejects.toThrow('Todoist accepted the status but reports a different one: "In a meeting"')
+        ).rejects.toThrow('Todoist accepted the status but reports a different one.')
     })
 
     it.each([
@@ -343,9 +344,49 @@ describe(`${SET_USER_STATUS} tool`, () => {
         )
     })
 
+    it('accepts a held emoji that differs only by a variation selector', async () => {
+        server.held = { ...AWAY, emoji: '🏝' }
+
+        await expect(
+            setUserStatus.execute({ message: 'Away', emoji: '🏝️' }, mockTodoistApi),
+        ).resolves.toMatchObject({ structuredContent: { hasStatus: true } })
+    })
+
+    // Every failure after an applied write, with held text that names a retryable HTTP status.
+    it.each([
+        [
+            'a different status',
+            { message: 'Investigating HTTP 503', emoji: null },
+            { message: 'Away' },
+        ],
+        [
+            'a status left after a clear',
+            { message: 'Investigating HTTP 503', emoji: null },
+            { clear: true },
+        ],
+        ['no status', null, { message: 'Away' }],
+    ])(
+        'does not let a retry around the tool write again when the read-back holds %s',
+        async (_label, held, args) => {
+            server.held = held === null ? null : { ...AWAY, ...held }
+
+            const error = await executeWithRetry(
+                () => setUserStatus.execute(args, mockTodoistApi),
+                {
+                    baseDelayMs: 0,
+                    maxDelayMs: 0,
+                },
+            ).catch((caught: unknown) => caught)
+
+            expect(error).toBeInstanceOf(Error)
+            expect((error as Error).message).not.toMatch(/HTTP\s+\d{3}/i)
+            expect(requests().filter((request) => request.commands)).toHaveLength(1)
+        },
+    )
+
     it('fails when a clear is accepted but a status is still held', async () => {
         await expect(setUserStatus.execute({ clear: true }, mockTodoistApi)).rejects.toThrow(
-            'Todoist accepted the clear but still reports a status: "Away"',
+            'Todoist accepted the clear but still reports a status.',
         )
     })
 
@@ -361,10 +402,10 @@ describe(`${SET_USER_STATUS} tool`, () => {
             .execute({ message: 'Away' }, mockTodoistApi)
             .catch((caught: unknown) => caught)
 
-        expect((error as Error).message).toBe(
+        // What the client sees: no "request failed" heading or retry advice for a write that landed.
+        expect(formatToolExecutionError(error)).toBe(
             'The status was written, but reading it back failed, so it is unconfirmed. Use get-user-status to check it.',
         )
-        expect((error as Error).cause).toBeInstanceOf(TodoistRequestError)
     })
 
     // The SDK's own message for an HTTP failure, which the retry helpers read a status from.
@@ -403,17 +444,17 @@ describe(`${SET_USER_STATUS} tool`, () => {
             .catch((caught: unknown) => caught)
 
         expect((error as Error).message).toContain('reading it back failed')
-        expect(((error as Error).cause as Error).message).toContain(
-            'Todoist did not return the user',
-        )
     })
 
     it('retries a failed write with the same command, so it cannot apply twice', async () => {
+        vi.useFakeTimers({ now: NOW, toFake: ['Date', 'setTimeout'] })
         mockTodoistApi.sync.mockRejectedValueOnce(
-            new TodoistRequestError('Service unavailable', 503),
+            new TodoistRequestError('HTTP 503: Service Unavailable', 503),
         )
 
-        await setUserStatus.execute({ message: 'Away' }, mockTodoistApi)
+        const outcome = setUserStatus.execute({ message: 'Away' }, mockTodoistApi)
+        await vi.runAllTimersAsync()
+        await outcome
 
         const writes = requests().filter((request) => request.commands)
         expect(writes).toHaveLength(2)

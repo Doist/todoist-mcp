@@ -1,6 +1,7 @@
 import { createCommand, type UserStatus, type UserStatusArgs } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { parseGmtOffsetToMinutes } from '../utils/date.js'
 import { settleSyncCommands } from '../utils/sync-commands.js'
 import { ToolNames } from '../utils/tool-names.js'
 import {
@@ -63,8 +64,7 @@ function parseActiveUntil(value: string, now: Date): string {
     if (!match) {
         throw invalidActiveUntil(value)
     }
-    const [, year, month, day, hour, minute, second = '0', zone, sign, offsetHours, offsetMinutes] =
-        match
+    const [, year, month, day, hour, minute, second = '0', zone = ''] = match
     const [y, mo, d, h, mi, s] = [year, month, day, hour, minute, second].map(Number) as [
         number,
         number,
@@ -87,10 +87,7 @@ function parseActiveUntil(value: string, now: Date): string {
         wallClock.getUTCHours() === h &&
         wallClock.getUTCMinutes() === mi &&
         wallClock.getUTCSeconds() === s
-    const offset =
-        zone?.toUpperCase() === 'Z'
-            ? 0
-            : (sign === '-' ? -1 : 1) * (Number(offsetHours) * 60 + Number(offsetMinutes))
+    const offset = zone.toUpperCase() === 'Z' ? 0 : parseGmtOffsetToMinutes(zone)
     if (!partsSurvive || offset < MIN_OFFSET_MINUTES || offset > MAX_OFFSET_MINUTES) {
         throw invalidActiveUntil(value)
     }
@@ -146,12 +143,18 @@ function buildStatus(args: SetUserStatusArgs, now: Date): UserStatusArgs | null 
     }
 }
 
+// Whether an emoji carries U+FE0F (🏝️ or 🏝) changes nothing on screen, so a server that adds or
+// drops it has not stored a different status.
+function withoutVariationSelectors(emoji: string | null | undefined): string | null {
+    return emoji ? emoji.replace(/\uFE0F/g, '') : null
+}
+
 function sameStatus(held: UserStatus, sent: UserStatusArgs): boolean {
     const heldUntil = held.activeUntil ? new Date(held.activeUntil).getTime() : null
     const sentUntil = sent.activeUntil ? new Date(sent.activeUntil).getTime() : null
     return (
         held.message === sent.message &&
-        (held.emoji || null) === (sent.emoji ?? null) &&
+        withoutVariationSelectors(held.emoji) === withoutVariationSelectors(sent.emoji) &&
         heldUntil === sentUntil &&
         Boolean(held.effects?.pauseNotifications) === Boolean(sent.effects?.pauseNotifications) &&
         Boolean(held.effects?.pauseActivity) === Boolean(sent.effects?.pauseActivity)
@@ -186,18 +189,18 @@ const setUserStatus = {
 
         // Anything else that writes the status (Comms, another client) can land between the write
         // and the read-back, so report a mismatch rather than present another status as this one.
-        const held = await fetchUserStatus(client).catch((error: unknown) => {
-            // The message carries no HTTP status, not even the cause's, because the retry around
-            // the tool reads one out of the text and would write again.
+        // Every error from here on follows a write that applied. None may quote another error or
+        // the held status, because the retry around the tool reads an HTTP status out of the text
+        // (and a `cause`) and would run the tool, and so the write, again.
+        const held = await fetchUserStatus(client).catch(() => {
             throw new Error(
                 `The status was written, but reading it back failed, so it is unconfirmed. Use ${ToolNames.GET_USER_STATUS} to check it.`,
-                { cause: error },
             )
         })
         if (status === null) {
             if (held) {
                 throw new Error(
-                    `Todoist accepted the clear but still reports a status: "${held.message}". Another app may have set it at the same moment.`,
+                    `Todoist accepted the clear but still reports a status. Another app may have set it at the same moment; use ${ToolNames.GET_USER_STATUS} to see it.`,
                 )
             }
             return buildUserStatusResult(null, 'Status cleared')
@@ -209,7 +212,7 @@ const setUserStatus = {
         }
         if (!sameStatus(held, status)) {
             throw new Error(
-                `Todoist accepted the status but reports a different one: "${held.message}". Another app may have changed it at the same moment.`,
+                `Todoist accepted the status but reports a different one. Another app may have changed it at the same moment; use ${ToolNames.GET_USER_STATUS} to see it.`,
             )
         }
         return buildUserStatusResult(held, 'Status set')
