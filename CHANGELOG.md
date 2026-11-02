@@ -1,3 +1,9 @@
+## [13.8.4](https://github.com/Doist/todoist-mcp/compare/v13.8.3...v13.8.4) (2026-11-02)
+
+### Bug Fixes
+
+* restore personal project writes with SDK 15.13.1 ([#660](https://github.com/Doist/todoist-mcp/issues/660)) ([3d5a7a5](https://github.com/Doist/todoist-mcp/commit/3d5a7a5486fb9097b86872f221f886c8837a4f9a))
+
 ## [13.8.3](https://github.com/Doist/todoist-mcp/compare/v13.8.2...v13.8.3) (2026-11-02)
 
 ### Bug Fixes
