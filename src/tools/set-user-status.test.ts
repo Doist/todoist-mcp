@@ -354,36 +354,56 @@ describe(`${SET_USER_STATUS} tool`, () => {
             if (request.commands) {
                 return answer(request)
             }
-            throw new TodoistRequestError('Too many requests', 429)
+            throw new TodoistRequestError('HTTP 429: Too Many Requests', 429)
         })
 
-        await expect(setUserStatus.execute({ message: 'Away' }, mockTodoistApi)).rejects.toThrow(
-            'The status was written, but reading it back failed, so it is unconfirmed: Too many requests',
+        const error = await setUserStatus
+            .execute({ message: 'Away' }, mockTodoistApi)
+            .catch((caught: unknown) => caught)
+
+        expect((error as Error).message).toBe(
+            'The status was written, but reading it back failed, so it is unconfirmed. Use get-user-status to check it.',
         )
+        expect((error as Error).cause).toBeInstanceOf(TodoistRequestError)
     })
 
-    it('does not let a retry around the tool write again after a failed read-back', async () => {
-        mockTodoistApi.sync.mockImplementation(async (request) => {
-            if (request.commands) {
-                return answer(request)
-            }
-            throw new TodoistRequestError('Service unavailable', 503)
-        })
+    // The SDK's own message for an HTTP failure, which the retry helpers read a status from.
+    it.each([
+        ['HTTP 502: Bad Gateway', 502],
+        ['HTTP 503: Service Unavailable', 503],
+        ['HTTP 504: Gateway Timeout', 504],
+    ])(
+        'does not let a retry around the tool write again after a read-back %s',
+        async (message, code) => {
+            vi.useFakeTimers({ now: NOW, toFake: ['Date', 'setTimeout'] })
+            mockTodoistApi.sync.mockImplementation(async (request) => {
+                if (request.commands) {
+                    return answer(request)
+                }
+                throw new TodoistRequestError(message, code)
+            })
 
-        await expect(
-            executeWithRetry(() => setUserStatus.execute({ message: 'Away' }, mockTodoistApi), {
-                baseDelayMs: 0,
-                maxDelayMs: 0,
-            }),
-        ).rejects.toThrow('The status was written')
+            const outcome = executeWithRetry(
+                () => setUserStatus.execute({ message: 'Away' }, mockTodoistApi),
+                { baseDelayMs: 0, maxDelayMs: 0 },
+            ).catch((caught: unknown) => caught)
+            await vi.runAllTimersAsync()
 
-        expect(requests().filter((request) => request.commands)).toHaveLength(1)
-    })
+            expect(((await outcome) as Error).message).toContain('The status was written')
+
+            expect(requests().filter((request) => request.commands)).toHaveLength(1)
+        },
+    )
 
     it('fails rather than report no status when the read-back has no user', async () => {
         server.held = undefined
 
-        await expect(setUserStatus.execute({ message: 'Away' }, mockTodoistApi)).rejects.toThrow(
+        const error = await setUserStatus
+            .execute({ message: 'Away' }, mockTodoistApi)
+            .catch((caught: unknown) => caught)
+
+        expect((error as Error).message).toContain('reading it back failed')
+        expect(((error as Error).cause as Error).message).toContain(
             'Todoist did not return the user',
         )
     })

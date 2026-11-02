@@ -97,7 +97,7 @@ function parseActiveUntil(value: string, now: Date): string {
 
     // Sub-second precision and offset minutes are checked by `Date` itself, now that the date and
     // time are known to be real.
-    const parsed = new Date(value.toUpperCase())
+    const parsed = new Date(value)
     if (Number.isNaN(parsed.getTime())) {
         throw invalidActiveUntil(value)
     }
@@ -187,10 +187,11 @@ const setUserStatus = {
         // Anything else that writes the status (Comms, another client) can land between the write
         // and the read-back, so report a mismatch rather than present another status as this one.
         const held = await fetchUserStatus(client).catch((error: unknown) => {
-            // Not a request error any more, so nothing above retries it and writes a second time.
-            const reason = error instanceof Error ? error.message : String(error)
+            // The message carries no HTTP status, not even the cause's, because the retry around
+            // the tool reads one out of the text and would write again.
             throw new Error(
-                `The status was written, but reading it back failed, so it is unconfirmed: ${reason}. Use ${ToolNames.GET_USER_STATUS} to check it.`,
+                `The status was written, but reading it back failed, so it is unconfirmed. Use ${ToolNames.GET_USER_STATUS} to check it.`,
+                { cause: error },
             )
         })
         if (status === null) {
