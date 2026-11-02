@@ -1,5 +1,6 @@
-import type { SyncResponse, UserStatus } from '@doist/todoist-sdk'
+import type { SyncResponse, TodoistApi, UserStatus } from '@doist/todoist-sdk'
 import { z } from 'zod'
+import { executeWithRetry } from './retry.js'
 
 const StatusOutputSchema = z.object({
     message: z.string(),
@@ -27,6 +28,14 @@ function readStatus(response: SyncResponse): UserStatus | null {
         throw new Error('Todoist did not return the user, so the status is unknown.')
     }
     return response.user.status ?? null
+}
+
+/** The user's active status, or `null` when there is none or it has expired. */
+async function fetchUserStatus(client: TodoistApi): Promise<UserStatus | null> {
+    const response = await executeWithRetry(() =>
+        client.sync({ resourceTypes: ['user'], syncToken: '*' }),
+    )
+    return readStatus(response)
 }
 
 function toStatusOutput(status: UserStatus): StatusOutput {
@@ -68,4 +77,4 @@ function buildUserStatusResult(
     }
 }
 
-export { buildUserStatusResult, readStatus, UserStatusOutputSchema, type UserStatusStructured }
+export { buildUserStatusResult, fetchUserStatus, UserStatusOutputSchema, type UserStatusStructured }

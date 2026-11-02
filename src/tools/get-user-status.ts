@@ -1,7 +1,10 @@
 import type { TodoistTool } from '../todoist-tool.js'
-import { executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
-import { buildUserStatusResult, readStatus, UserStatusOutputSchema } from '../utils/user-status.js'
+import {
+    buildUserStatusResult,
+    fetchUserStatus,
+    UserStatusOutputSchema,
+} from '../utils/user-status.js'
 
 const ArgsSchema = {}
 
@@ -13,10 +16,7 @@ const getUserStatus = {
     outputSchema: UserStatusOutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     async execute(_args, client) {
-        const response = await executeWithRetry(() =>
-            client.sync({ resourceTypes: ['user'], syncToken: '*' }),
-        )
-        return buildUserStatusResult(readStatus(response), 'Status')
+        return buildUserStatusResult(await fetchUserStatus(client), 'Status')
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof UserStatusOutputSchema>
 
