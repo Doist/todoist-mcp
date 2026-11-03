@@ -132,6 +132,21 @@ describe(`${UPDATE_PROJECTS} tool`, () => {
             })
         })
 
+        it('switches a project to the table view style', async () => {
+            mockTodoistApi.updateProject.mockResolvedValue(
+                createMockProject({ id: 'project-123', name: 'Roadmap', viewStyle: 'table' }),
+            )
+
+            const parsed = z.object(updateProjects.parameters).parse({
+                projects: [{ id: 'project-123', viewStyle: 'table' }],
+            })
+            await updateProjects.execute(parsed, mockTodoistApi)
+
+            expect(mockTodoistApi.updateProject).toHaveBeenCalledWith('project-123', {
+                viewStyle: 'table',
+            })
+        })
+
         it('saves the literal string "remove" as a description (no sentinel)', async () => {
             mockTodoistApi.updateProject.mockResolvedValue(
                 createMockProject({ id: 'project-123', name: 'Docs', description: 'remove' }),

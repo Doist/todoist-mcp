@@ -243,6 +243,21 @@ describe(`${ADD_PROJECTS} tool`, () => {
             expect(call).toBeDefined()
             expect(call?.color).toBeUndefined()
         })
+
+        it('should create a project with the table view style', async () => {
+            mockTodoistApi.addProject.mockResolvedValue(
+                createMockProject({ id: 'project-table', name: 'Roadmap', viewStyle: 'table' }),
+            )
+
+            const parsed = z.object(addProjects.parameters).parse({
+                projects: [{ name: 'Roadmap', viewStyle: 'table' }],
+            })
+            await addProjects.execute(parsed, mockTodoistApi)
+
+            expect(mockTodoistApi.addProject).toHaveBeenCalledWith(
+                expect.objectContaining({ name: 'Roadmap', viewStyle: 'table' }),
+            )
+        })
     })
 
     describe('creating multiple projects', () => {
