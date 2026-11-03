@@ -13,6 +13,7 @@ import { assignmentValidator } from '../utils/assignment-validator.js'
 import { logBatchFailures } from '../utils/batch-failures.js'
 import { getMoveLimiter, getWriteLimiter } from '../utils/concurrency.js'
 import { BatchLimits, DisplayLimits } from '../utils/constants.js'
+import { type DueMutationSample, sampleDueMutation } from '../utils/due-mutation-diagnostics.js'
 import {
     DURATION_INPUT_DESCRIPTION,
     DurationParseError,
@@ -246,6 +247,14 @@ const updateTasks = {
             }
         }
 
+        const dueSample = sampleDueMutation(
+            ToolNames.UPDATE_TASKS,
+            ready.filter((item) => item.updateArgs.dueString !== undefined),
+        )
+        if (dueSample) {
+            dueSample.diagnostic.captureUpdateInput(dueSample.item.updateArgs)
+        }
+
         // Read current containers so a caller echoing back a task's existing
         // project/section/parent doesn't turn a field edit into a move.
         const currentTasks = await fetchCurrentTaskStates({
@@ -287,6 +296,11 @@ const updateTasks = {
                 applyFieldUpdates({
                     client,
                     items: pending,
+                    dueSample,
+                    currentTask: (item) => {
+                        const moved = movedTasks.get(item.index)
+                        return moved && 'task' in moved ? moved.task : currentTasks.get(item.id)
+                    },
                     onUpdated: (item, task) => {
                         outcomes[item.index] = { kind: 'updated', task }
                     },
@@ -339,6 +353,23 @@ const updateTasks = {
         })
 
         await Promise.all(fieldUpdates)
+
+        if (dueSample) {
+            const outcome = outcomes[dueSample.item.index]
+            const moved = movedTasks.get(dueSample.item.index)
+            dueSample.diagnostic.finish({
+                // A successful move is not evidence that a failed due write landed.
+                after: outcome?.kind === 'updated' ? outcome.task : undefined,
+                result: outcome?.kind === 'updated' ? 'succeeded' : 'failed',
+                moveApplied:
+                    moved && 'task' in moved
+                        ? true
+                        : hasMove(dueSample.item.moveRequest) &&
+                            !dueSample.item.redundantMoveSkipped
+                          ? 'unknown'
+                          : false,
+            })
+        }
 
         // Tasks that only moved have no field update to report against, so take
         // their outcome straight from the move result.
@@ -644,11 +675,15 @@ async function reconcileMoves({
 async function applyFieldUpdates({
     client,
     items,
+    dueSample,
+    currentTask,
     onUpdated,
     onFailed,
 }: {
     client: TodoistApi
     items: PreparedTask[]
+    dueSample?: DueMutationSample<PreparedTask>
+    currentTask: (item: PreparedTask) => Task | undefined
     onUpdated: (item: PreparedTask, task: Task) => void
     onFailed: (item: PreparedTask, error: unknown) => void
 }): Promise<void> {
@@ -658,10 +693,20 @@ async function applyFieldUpdates({
         items
             .filter((item) => hasFields(item.updateArgs))
             .map(async (item) => {
+                const diagnostic =
+                    dueSample && dueSample.item === item ? dueSample.diagnostic : undefined
                 try {
-                    const task = await writeLimiter(() =>
-                        executeWithRetry(() => client.updateTask(item.id, item.updateArgs)),
-                    )
+                    const task = await writeLimiter(async () => {
+                        if (diagnostic) {
+                            await diagnostic.readBefore(
+                                () => client.getTask(item.id),
+                                currentTask(item),
+                            )
+                        }
+                        const write = () =>
+                            executeWithRetry(() => client.updateTask(item.id, item.updateArgs))
+                        return diagnostic ? diagnostic.runWrite(write) : write()
+                    })
                     onUpdated(item, task)
                 } catch (error) {
                     onFailed(item, error)

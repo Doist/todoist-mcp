@@ -1,5 +1,6 @@
 import type { TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
+import { resetDueMutationDiagnosticsForTesting } from '../utils/due-mutation-diagnostics.js'
 import { createMockTask } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { buildRescheduleDate, rescheduleTasks } from './reschedule-tasks.js'
@@ -14,9 +15,16 @@ const { RESCHEDULE_TASKS } = ToolNames
 describe(`${RESCHEDULE_TASKS} tool`, () => {
     beforeEach(() => {
         vi.clearAllMocks()
+        vi.stubEnv('TODOIST_MCP_DUE_DIAGNOSTICS', '')
+        resetDueMutationDiagnosticsForTesting()
         mockTodoistApi.sync.mockResolvedValue({
             syncStatus: {},
         })
+    })
+
+    afterEach(() => {
+        vi.unstubAllEnvs()
+        vi.restoreAllMocks()
     })
 
     describe('rescheduling non-recurring tasks', () => {
@@ -56,6 +64,8 @@ describe(`${RESCHEDULE_TASKS} tool`, () => {
 
     describe('rescheduling recurring tasks', () => {
         it('should preserve recurrence pattern when rescheduling', async () => {
+            vi.stubEnv('TODOIST_MCP_DUE_DIAGNOSTICS', '1')
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
             const task = createMockTask({
                 id: 'task-1',
                 due: {
@@ -85,6 +95,19 @@ describe(`${RESCHEDULE_TASKS} tool`, () => {
                         },
                     }),
                 ],
+            })
+            expect(mockTodoistApi.getTask).toHaveBeenCalledTimes(2)
+            expect(JSON.parse(String(errorSpy.mock.calls[0]?.[0]))).toMatchObject({
+                tool: RESCHEDULE_TASKS,
+                preReadStatus: 'success',
+                beforeDueState: 'recurring',
+                afterDueState: 'recurring',
+                requestedMode: 'preserve_occurrence',
+                constructedRecurring: true,
+                constructedRuleMatchesBefore: true,
+                wireObservation: 'unobserved',
+                wireRecurring: 'unknown',
+                result: 'succeeded',
             })
         })
     })
@@ -202,6 +225,8 @@ describe(`${RESCHEDULE_TASKS} tool`, () => {
         })
 
         it('should throw when sync fails', async () => {
+            vi.stubEnv('TODOIST_MCP_DUE_DIAGNOSTICS', '1')
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
             const task = createMockTask({
                 id: 'task-1',
                 due: {
@@ -219,6 +244,40 @@ describe(`${RESCHEDULE_TASKS} tool`, () => {
                     mockTodoistApi,
                 ),
             ).rejects.toThrow('Reschedule failed: Sync API error')
+            expect(JSON.parse(String(errorSpy.mock.calls[0]?.[0]))).toMatchObject({
+                result: 'failed',
+                afterDueState: 'unknown',
+            })
+        })
+
+        it('reports unknown persistence after a failed re-fetch without replacing the error', async () => {
+            vi.stubEnv('TODOIST_MCP_DUE_DIAGNOSTICS', '1')
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+            const error = new Error('PRIVATE_REFETCH_ERROR')
+            mockTodoistApi.getTask
+                .mockResolvedValueOnce(
+                    createMockTask({
+                        id: 'task-1',
+                        due: { date: '2026-03-15', string: 'every day', isRecurring: true },
+                    }),
+                )
+                .mockRejectedValueOnce(error)
+
+            await expect(
+                rescheduleTasks.execute(
+                    { tasks: [{ id: 'task-1', date: '2026-03-20' }] },
+                    mockTodoistApi,
+                ),
+            ).rejects.toBe(error)
+
+            expect(mockTodoistApi.getTask).toHaveBeenCalledTimes(2)
+            const line = String(errorSpy.mock.calls[0]?.[0])
+            expect(JSON.parse(line)).toMatchObject({
+                beforeDueState: 'recurring',
+                afterDueState: 'unknown',
+                result: 'unknown',
+            })
+            expect(line).not.toContain('PRIVATE_REFETCH_ERROR')
         })
     })
 

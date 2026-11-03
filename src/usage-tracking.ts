@@ -5,6 +5,10 @@ import { dirname, join } from 'node:path'
 import { type CustomFetch, type CustomFetchResponse, TodoistApi } from '@doist/todoist-sdk'
 import packageJson from '../package.json' with { type: 'json' }
 import { registerClientLimiters } from './utils/concurrency.js'
+import {
+    claimDueDiagnosticPreReadSignal,
+    observeDueMutationRequest,
+} from './utils/due-mutation-diagnostics.js'
 
 const TODOIST_MCP_NAME = 'todoist-mcp'
 const TODOIST_MCP_VERSION = packageJson.version
@@ -232,14 +236,23 @@ export function createTrackedFetch(
     return async (url, options = {}) => {
         const { timeout: timeoutMs, headers, signal, ...rest } = options
 
-        const { signal: abortSignal, cleanup } = mergeAbortSignals(signal, timeoutMs)
+        // Only optional diagnostic reads get a deadline and a single transport
+        // attempt. The SDK's normal read/write retry policy is unchanged.
+        const preReadSignal = claimDueDiagnosticPreReadSignal()
+        const requestSignal = preReadSignal
+            ? AbortSignal.any(signal ? [signal, preReadSignal] : [preReadSignal])
+            : signal
+        const { signal: abortSignal, cleanup } = mergeAbortSignals(requestSignal, timeoutMs)
 
         try {
+            const trackingHeaders = enabled
+                ? mergeTodoistHeaders(headers, { platform, sessionId })
+                : undefined
             const fetchOptions: RequestInit = {
                 ...rest,
                 signal: abortSignal,
-                ...(enabled
-                    ? { headers: mergeTodoistHeaders(headers, { platform, sessionId }) }
+                ...(trackingHeaders
+                    ? { headers: trackingHeaders }
                     : headers !== undefined
                       ? { headers }
                       : {}),
@@ -248,7 +261,13 @@ export function createTrackedFetch(
                 ? await resolveRequestFetch(baseFetch, fetchOptions)
                 : baseFetch
 
+            const observed = observeDueMutationRequest(
+                url,
+                fetchOptions,
+                trackingHeaders?.['request-id'],
+            )
             const response = await requestFetch(url, fetchOptions)
+            observed?.(response.status)
             return toCustomFetchResponse(response)
         } finally {
             cleanup()

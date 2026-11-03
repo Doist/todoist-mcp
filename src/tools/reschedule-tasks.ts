@@ -3,6 +3,7 @@ import { createCommand } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { mapTask } from '../tool-helpers.js'
+import { type DueMutationResult, sampleDueMutation } from '../utils/due-mutation-diagnostics.js'
 import { TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import { summarizeTaskOperation } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -44,62 +45,89 @@ const rescheduleTasks = {
     async execute(args, client) {
         const { tasks: taskInputs } = args
 
-        // Fetch all tasks in parallel to get current due date info
-        const existingTasks = await Promise.all(
-            taskInputs.map(async (input) => {
-                const task = await client.getTask(input.id)
-                return { input, task }
-            }),
-        )
+        const dueSample = sampleDueMutation(ToolNames.RESCHEDULE_TASKS, taskInputs)
+        let diagnosticResult: DueMutationResult = 'not_attempted'
+        let sampledAfter: Task | undefined
 
-        // Validate all tasks have due dates and build sync commands
-        const commands = existingTasks.map(({ input, task }) => {
-            if (!task.due) {
-                throw new Error(
-                    `Task "${task.content}" (${task.id}) has no due date. Rescheduling requires an existing due date.`,
-                )
-            }
+        try {
+            // Fetch all tasks in parallel to get current due date info
+            const existingTasks = await Promise.all(
+                taskInputs.map(async (input, index) => {
+                    try {
+                        const task = await client.getTask(input.id)
+                        if (dueSample && index === dueSample.index) {
+                            dueSample.diagnostic.captureBefore(task)
+                        }
+                        return { input, task }
+                    } catch (error) {
+                        if (dueSample && index === dueSample.index) {
+                            dueSample.diagnostic.capturePreReadFailure()
+                        }
+                        throw error
+                    }
+                }),
+            )
 
-            const newDate = buildRescheduleDate(input.date, task.due)
+            // Validate all tasks have due dates and build sync commands
+            const commands = existingTasks.map(({ input, task }, index) => {
+                if (!task.due) {
+                    throw new Error(
+                        `Task "${task.content}" (${task.id}) has no due date. Rescheduling requires an existing due date.`,
+                    )
+                }
 
-            return createCommand('item_update', {
-                id: input.id,
-                due: {
+                const newDate = buildRescheduleDate(input.date, task.due)
+                const due = {
                     date: newDate,
                     string: task.due.string,
                     isRecurring: task.due.isRecurring,
                     timezone: task.due.timezone ?? undefined,
                     lang: task.due.lang ?? undefined,
-                },
+                }
+                const command = createCommand('item_update', { id: input.id, due })
+                if (dueSample && index === dueSample.index) {
+                    dueSample.diagnostic.captureConstructed(due, command.uuid)
+                }
+                return command
             })
-        })
 
-        // Execute all reschedules in a single sync request.
-        // The SDK throws TodoistRequestError if any syncStatus entry is non-ok,
-        // so we catch and rethrow with task-scoped context.
-        try {
-            await client.sync({ commands })
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            throw new Error(`Reschedule failed: ${message}`)
-        }
+            // Execute all reschedules in a single sync request.
+            // The SDK throws TodoistRequestError if any syncStatus entry is non-ok,
+            // so we catch and rethrow with task-scoped context.
+            try {
+                diagnosticResult = 'failed'
+                const write = () => client.sync({ commands })
+                await (dueSample ? dueSample.diagnostic.runWrite(write) : write())
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error)
+                throw new Error(`Reschedule failed: ${message}`)
+            }
 
-        // Re-fetch tasks via REST to get consistent output format
-        const updatedTasks = await Promise.all(taskInputs.map((input) => client.getTask(input.id)))
+            // A successful Sync without a successful re-fetch is not proof of
+            // recurrence preservation. Reuse the existing reads; never add more.
+            diagnosticResult = 'unknown'
+            const updatedTasks = await Promise.all(
+                taskInputs.map((input) => client.getTask(input.id)),
+            )
+            sampledAfter = dueSample ? updatedTasks[dueSample.index] : undefined
+            diagnosticResult = 'succeeded'
 
-        const mappedTasks = updatedTasks.map(mapTask)
+            const mappedTasks = updatedTasks.map(mapTask)
 
-        const textContent = summarizeTaskOperation('Rescheduled', mappedTasks, {
-            showDetails: mappedTasks.length <= 5,
-        })
+            const textContent = summarizeTaskOperation('Rescheduled', mappedTasks, {
+                showDetails: mappedTasks.length <= 5,
+            })
 
-        return {
-            textContent,
-            structuredContent: {
-                tasks: mappedTasks,
-                totalCount: mappedTasks.length,
-                rescheduledTaskIds: updatedTasks.map((task) => task.id),
-            },
+            return {
+                textContent,
+                structuredContent: {
+                    tasks: mappedTasks,
+                    totalCount: mappedTasks.length,
+                    rescheduledTaskIds: updatedTasks.map((task) => task.id),
+                },
+            }
+        } finally {
+            dueSample?.diagnostic.finish({ after: sampledAfter, result: diagnosticResult })
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>

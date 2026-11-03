@@ -1,4 +1,7 @@
+import { TodoistApi } from '@doist/todoist-sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { rescheduleTasks } from './tools/reschedule-tasks.js'
+import { updateTasks } from './tools/update-tasks.js'
 import {
     buildUsageTrackingHeaders,
     createTodoistClient,
@@ -8,6 +11,9 @@ import {
     setDispatcherModuleLoaderForTests,
     runWithUsageTrackingContext,
 } from './usage-tracking.js'
+import { resetLimitersForTesting } from './utils/concurrency.js'
+import { resetDueMutationDiagnosticsForTesting } from './utils/due-mutation-diagnostics.js'
+import { createMockTask } from './utils/test-helpers.js'
 
 const getDefaultTransportMock = vi.fn<
     () => Promise<{ dispatcher: unknown; fetch?: typeof fetch } | undefined>
@@ -350,6 +356,175 @@ describe('usage tracking', () => {
         expect(headers.get('doist-platform')).toBeNull()
         expect(headers.get('mcp-tool')).toBeNull()
         expect(headers.get('session-id')).toBeNull()
+    })
+})
+
+describe('due mutation transport diagnostics', () => {
+    beforeEach(() => {
+        vi.stubEnv('TODOIST_MCP_DUE_DIAGNOSTICS', '1')
+        resetDueMutationDiagnosticsForTesting()
+        resetLimitersForTesting()
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+    })
+
+    afterEach(() => {
+        vi.unstubAllEnvs()
+        vi.restoreAllMocks()
+    })
+
+    it.each([false, true])(
+        'distinguishes constructed recurrence from serialized metadata (omitted: %s)',
+        async (omitMetadata) => {
+            const task = createMockTask({
+                id: 'task-1',
+                content: 'PRIVATE_TITLE',
+                description: 'PRIVATE_DESCRIPTION',
+                due: {
+                    date: '2037-11-03',
+                    string: 'PRIVATE_RECURRING_RULE',
+                    timezone: 'PRIVATE_TIMEZONE',
+                    lang: 'en',
+                    isRecurring: true,
+                },
+            })
+            const baseFetch = vi.fn<typeof fetch>(async (url) =>
+                String(url).endsWith('/sync')
+                    ? createJsonResponse({ sync_status: {} })
+                    : createJsonResponse(task),
+            )
+            const trackedFetch = createTrackedFetch(baseFetch)
+            const client = new TodoistApi('PRIVATE_TOKEN', {
+                customFetch: (url, options = {}) => {
+                    if (omitMetadata && url.endsWith('/sync')) {
+                        // Simulate a serialization-boundary fault, before the
+                        // tracked fetch observes the bytes that will be sent.
+                        const payload = JSON.parse(String(options.body)) as {
+                            commands: Array<{
+                                args: { due: { is_recurring?: boolean; string?: string } }
+                            }>
+                        }
+                        for (const command of payload.commands) {
+                            delete command.args.due.is_recurring
+                            delete command.args.due.string
+                        }
+                        return trackedFetch(url, { ...options, body: JSON.stringify(payload) })
+                    }
+                    return trackedFetch(url, options)
+                },
+            })
+
+            const result = await rescheduleTasks.execute(
+                { tasks: [{ id: task.id, date: '2037-11-04T10:17:00' }] },
+                client,
+            )
+
+            expect(result.structuredContent.rescheduledTaskIds).toEqual([task.id])
+            expect(baseFetch).toHaveBeenCalledTimes(3) // Existing pre-read, Sync, re-fetch only.
+            const syncOptions = baseFetch.mock.calls.find(([url]) =>
+                String(url).endsWith('/sync'),
+            )?.[1]
+            const requestId = new Headers(syncOptions?.headers).get('request-id')
+            const line = String(vi.mocked(console.error).mock.calls[0]?.[0])
+            expect(JSON.parse(line)).toMatchObject({
+                beforeDueState: 'recurring',
+                afterDueState: 'recurring',
+                constructedRecurring: true,
+                constructedRuleMatchesBefore: true,
+                wireObservation: 'observed',
+                wireRecurring: omitMetadata ? 'unknown' : true,
+                wireRulePresent: !omitMetadata,
+                wireRuleMatchesBefore: omitMetadata ? 'unknown' : true,
+                endpoint: 'sync',
+                requestIds: [requestId],
+                attemptCount: 1,
+                httpStatus: 200,
+                result: 'succeeded',
+            })
+            expect(line).not.toMatch(/PRIVATE_|2037-11-0[34]/)
+        },
+    )
+
+    it('isolates parallel retries and limits diagnostic pre-reads to one send', async () => {
+        const recurring = createMockTask({
+            id: 'task-b',
+            due: { date: '2037-11-03', string: 'PRIVATE_RULE_B', isRecurring: true },
+        })
+        const oneTime = createMockTask({
+            id: 'task-a',
+            due: { date: '2037-11-04', string: 'PRIVATE_ONCE_A', isRecurring: false },
+        })
+        const updateIds: string[] = []
+        const syncIds: string[] = []
+        let preReads = 0
+        const baseFetch = vi.fn<typeof fetch>(async (url, options) => {
+            const path = new URL(String(url)).pathname
+            if (path.endsWith('/tasks/task-a') && options?.method === 'GET') {
+                preReads++
+                throw new TypeError('fetch failed PRIVATE_READ_ERROR')
+            }
+            if (path.endsWith('/tasks/task-a') && options?.method === 'POST') {
+                updateIds.push(String(new Headers(options.headers).get('request-id')))
+                if (updateIds.length === 1) {
+                    throw new TypeError('fetch failed PRIVATE_WRITE_ERROR')
+                }
+                return createJsonResponse(oneTime)
+            }
+            if (path.endsWith('/sync')) {
+                syncIds.push(String(new Headers(options?.headers).get('request-id')))
+                return createJsonResponse({ sync_status: {} })
+            }
+            return createJsonResponse(recurring)
+        })
+        const client = new TodoistApi('PRIVATE_TOKEN', {
+            customFetch: createTrackedFetch(baseFetch),
+        })
+
+        const [update, reschedule] = await Promise.all([
+            updateTasks.execute(
+                { tasks: [{ id: 'task-a', dueString: 'PRIVATE_ONCE_A', duration: '15m' }] },
+                client,
+            ),
+            rescheduleTasks.execute(
+                { tasks: [{ id: 'task-b', date: '2037-11-04T10:17:00' }] },
+                client,
+            ),
+        ])
+
+        expect(update.structuredContent.failures).toEqual([])
+        expect(reschedule.structuredContent.rescheduledTaskIds).toEqual(['task-b'])
+        expect(preReads).toBe(1)
+        const lines = vi.mocked(console.error).mock.calls.map(([line]) => String(line))
+        expect(lines).toHaveLength(2)
+        const events = lines.map((line) => JSON.parse(line))
+        const replacement = events.find((event) => event.tool === 'update-tasks')
+        const preserving = events.find((event) => event.tool === 'reschedule-tasks')
+        expect(replacement).toMatchObject({
+            taskId: 'task-a',
+            preReadStatus: 'error',
+            beforeDueState: 'unknown',
+            afterDueState: 'one_time',
+            requestIds: updateIds,
+            attemptCount: 2,
+            retryCount: 1,
+            endpoint: 'task_update',
+            wireRulePresent: true,
+            wireRuleMatchesBefore: 'unknown',
+            httpStatus: 200,
+        })
+        expect(preserving).toMatchObject({
+            taskId: 'task-b',
+            requestIds: syncIds,
+            attemptCount: 1,
+            retryCount: 0,
+            endpoint: 'sync',
+            wireRecurring: true,
+            wireRuleMatchesBefore: true,
+        })
+        expect(replacement.operationId).not.toBe(preserving.operationId)
+        expect(updateIds).toHaveLength(2)
+        expect(syncIds).toHaveLength(1)
+        expect(updateIds).not.toContain(syncIds[0])
+        expect(lines.join('\n')).not.toMatch(/PRIVATE_|2037-11-0[34]/)
     })
 })
 

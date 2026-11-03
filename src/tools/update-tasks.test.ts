@@ -3,6 +3,7 @@ import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
 import { resetLimitersForTesting } from '../utils/concurrency.js'
 import { ConcurrencyLimits } from '../utils/constants.js'
+import { resetDueMutationDiagnosticsForTesting } from '../utils/due-mutation-diagnostics.js'
 import { convertPriorityToNumber } from '../utils/priorities.js'
 import { createApiError, createMockTask, createMockUser, TEST_IDS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -14,6 +15,7 @@ const mockTodoistApi = {
     moveTask: vi.fn(),
     moveTasks: vi.fn(),
     getTasks: vi.fn(),
+    getTask: vi.fn(),
     getUser: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
@@ -25,6 +27,8 @@ const FORBIDDEN_MOVE = 'Not allowed to move objects out of a workspace'
 describe(`${UPDATE_TASKS} tool`, () => {
     beforeEach(() => {
         vi.clearAllMocks()
+        vi.stubEnv('TODOIST_MCP_DUE_DIAGNOSTICS', '')
+        resetDueMutationDiagnosticsForTesting()
         // The mock client is never registered, so it shares the process-wide
         // fallback limiters — reset them so queued work can't leak between cases.
         resetLimitersForTesting()
@@ -32,6 +36,12 @@ describe(`${UPDATE_TASKS} tool`, () => {
         // No current state known by default, so every requested move is performed —
         // the same behaviour as not checking at all.
         mockTodoistApi.getTasks.mockResolvedValue({ results: [], nextCursor: null })
+    })
+
+    afterEach(() => {
+        vi.unstubAllEnvs()
+        vi.restoreAllMocks()
+        vi.useRealTimers()
     })
 
     async function expectSingleFailure(
@@ -148,6 +158,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
         })
 
         it('should update task priority and due date', async () => {
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
             const mockApiResponse: Task = createMockTask({
                 id: '8485093749',
                 content: 'Original task content',
@@ -183,6 +194,9 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 priority: convertPriorityToNumber('p3'),
                 dueString: 'Aug 20',
             })
+            // Disabled diagnostics must not add reads or log output.
+            expect(mockTodoistApi.getTask).not.toHaveBeenCalled()
+            expect(errorSpy).not.toHaveBeenCalled()
 
             // Verify result structure
             expect(result.textContent).toContain('Updated 1 task')
@@ -326,6 +340,8 @@ describe(`${UPDATE_TASKS} tool`, () => {
         })
 
         it('should update task duration', async () => {
+            vi.stubEnv('TODOIST_MCP_DUE_DIAGNOSTICS', '1')
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
             const mockApiResponse: Task = createMockTask({
                 id: '8485093753',
                 content: 'Task with updated duration',
@@ -352,6 +368,9 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 duration: 150,
                 durationUnit: 'minute',
             })
+            // Duration-only edits are not eligible, even with the flag enabled.
+            expect(mockTodoistApi.getTask).not.toHaveBeenCalled()
+            expect(errorSpy).not.toHaveBeenCalled()
 
             // Verify result structure
             expect(result.textContent).toContain('Updated 1 task')
@@ -618,6 +637,13 @@ describe(`${UPDATE_TASKS} tool`, () => {
 
     describe('updating due dates', () => {
         it('should remove task due date with "remove" string', async () => {
+            vi.stubEnv('TODOIST_MCP_DUE_DIAGNOSTICS', '1')
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+            mockTodoistApi.getTask.mockResolvedValue(
+                createMockTask({
+                    due: { date: '2026-03-15', string: 'every day', isRecurring: true },
+                }),
+            )
             const mockApiResponse: Task = createMockTask({
                 id: '8485093762',
                 content: 'Task without due date',
@@ -656,6 +682,13 @@ describe(`${UPDATE_TASKS} tool`, () => {
                     }),
                 ]),
             )
+            expect(JSON.parse(String(errorSpy.mock.calls[0]?.[0]))).toMatchObject({
+                beforeDueState: 'recurring',
+                afterDueState: 'none',
+                explicitClear: true,
+                inputMatchesPriorRule: false,
+                result: 'succeeded',
+            })
         })
 
         it('should remove task due date with null for backward compatibility', async () => {
@@ -713,6 +746,109 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 dueString: 'no date',
             })
         })
+    })
+
+    describe('due mutation diagnostics', () => {
+        it('samples only due edits and leaves replacement arguments and results unchanged if logging fails', async () => {
+            vi.stubEnv('TODOIST_MCP_DUE_DIAGNOSTICS', '1')
+            const lines: string[] = []
+            vi.spyOn(console, 'error').mockImplementation((line) => {
+                lines.push(String(line))
+                throw new Error('PRIVATE_LOGGER_ERROR')
+            })
+            mockTodoistApi.getTask.mockResolvedValue(
+                createMockTask({
+                    id: 'task-a',
+                    due: { date: '2026-03-15', string: 'every day at 9am', isRecurring: true },
+                }),
+            )
+            mockTodoistApi.updateTask.mockImplementation(async (id) =>
+                createMockTask({
+                    id,
+                    due: { date: '2026-03-20', string: 'Mar 20', isRecurring: false },
+                }),
+            )
+
+            const result = await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'task-a', dueString: 'Mar 20 at 10am', duration: '15m' },
+                        { id: 'task-b', duration: '15m' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getTask).toHaveBeenCalledExactlyOnceWith('task-a')
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledWith('task-a', {
+                dueString: 'Mar 20 at 10am',
+                duration: 15,
+                durationUnit: 'minute',
+            })
+            expect(result.structuredContent).toMatchObject({ totalCount: 2, failures: [] })
+            expect(lines).toHaveLength(1)
+            expect(JSON.parse(String(lines[0]))).toMatchObject({
+                event: 'todoist_due_mutation_diagnostic',
+                tool: UPDATE_TASKS,
+                taskId: 'task-a',
+                eligibleCount: 1,
+                sampledCount: 1,
+                preReadStatus: 'success',
+                beforeDueState: 'recurring',
+                afterDueState: 'one_time',
+                requestedMode: 'replace_string',
+                explicitClear: false,
+                inputMatchesPriorRule: false,
+                durationSupplied: true,
+                wireObservation: 'unobserved',
+                wireRecurring: 'unknown',
+                result: 'succeeded',
+            })
+        })
+
+        it.each(['error', 'timeout'] as const)(
+            'continues the write after a pre-read %s, including a late rejection',
+            async (status) => {
+                vi.stubEnv('TODOIST_MCP_DUE_DIAGNOSTICS', '1')
+                vi.useFakeTimers()
+                const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+                let rejectLate: ((error: Error) => void) | undefined
+                if (status === 'error') {
+                    mockTodoistApi.getTask.mockRejectedValue(new Error('PRIVATE_READ_ERROR'))
+                } else {
+                    mockTodoistApi.getTask.mockImplementation(
+                        () =>
+                            new Promise<Task>((_resolve, reject) => {
+                                rejectLate = reject
+                            }),
+                    )
+                }
+                mockTodoistApi.updateTask.mockResolvedValue(createMockTask({ id: 'task-a' }))
+
+                const pending = updateTasks.execute(
+                    { tasks: [{ id: 'task-a', dueString: 'tomorrow' }] },
+                    mockTodoistApi,
+                )
+                await vi.advanceTimersByTimeAsync(2000)
+                const result = await pending
+                rejectLate?.(new Error('PRIVATE_LATE_ERROR'))
+                await Promise.resolve()
+
+                expect(mockTodoistApi.getTask).toHaveBeenCalledTimes(1)
+                expect(mockTodoistApi.updateTask).toHaveBeenCalledExactlyOnceWith('task-a', {
+                    dueString: 'tomorrow',
+                })
+                expect(result.structuredContent).toMatchObject({ totalCount: 1, failures: [] })
+                const line = String(errorSpy.mock.calls[0]?.[0])
+                expect(JSON.parse(line)).toMatchObject({
+                    preReadStatus: status,
+                    beforeDueState: 'unknown',
+                    inputMatchesPriorRule: 'unknown',
+                    result: 'succeeded',
+                })
+                expect(line).not.toContain('PRIVATE_')
+            },
+        )
     })
 
     describe('updating labels', () => {
@@ -1292,12 +1428,15 @@ describe(`${UPDATE_TASKS} tool`, () => {
         })
 
         it('reports a partial outcome when the move succeeds but the field update fails', async () => {
+            vi.stubEnv('TODOIST_MCP_DUE_DIAGNOSTICS', '1')
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
             // Combined move + field update where the move succeeds but updateTask rejects.
             // The response must disclose the move because retrying the whole item could
             // otherwise apply the same operation twice.
             const movedTask = createMockTask({
                 id: 'move-update-task',
                 projectId: 'new-project-id',
+                due: { date: '2026-03-15', string: 'every day', isRecurring: true },
             })
             mockTodoistApi.moveTask.mockResolvedValue(movedTask)
             mockTodoistApi.updateTask.mockRejectedValue(new Error('API Error: Invalid priority'))
@@ -1309,6 +1448,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
                             id: 'move-update-task',
                             projectId: 'new-project-id',
                             content: 'New content',
+                            dueString: 'tomorrow at 10am',
                         },
                     ],
                 },
@@ -1331,6 +1471,14 @@ describe(`${UPDATE_TASKS} tool`, () => {
                 skippedCount: 0,
                 failureCount: 1,
                 redundantMovesSkipped: 0,
+            })
+            expect(mockTodoistApi.getTask).not.toHaveBeenCalled()
+            expect(JSON.parse(String(errorSpy.mock.calls[0]?.[0]))).toMatchObject({
+                preReadStatus: 'reused',
+                beforeDueState: 'recurring',
+                afterDueState: 'unknown',
+                result: 'failed',
+                moveApplied: true,
             })
         })
 
