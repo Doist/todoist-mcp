@@ -1,4 +1,8 @@
-import type { PersonalProject, WorkspaceProject } from '@doist/todoist-sdk'
+import {
+    PROJECT_VIEW_STYLES,
+    type PersonalProject,
+    type WorkspaceProject,
+} from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
@@ -27,7 +31,7 @@ const ProjectSchema = z.object({
         .optional()
         .describe('Whether the project is a favorite. Defaults to false.'),
     viewStyle: z
-        .enum(['list', 'board', 'calendar'])
+        .enum(PROJECT_VIEW_STYLES)
         .optional()
         .describe('The project view style. Defaults to "list".'),
     description: z

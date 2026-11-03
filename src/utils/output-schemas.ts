@@ -42,7 +42,7 @@ const ProjectSchema = z.object({
     isShared: z.boolean(),
     parentId: z.string().optional(),
     inboxProject: z.boolean(),
-    viewStyle: z.string().describe('list, board or calendar.'),
+    viewStyle: z.string().describe('list, board, calendar or table.'),
     workspaceId: z.string().optional().describe('Undefined for personal projects.'),
     folderId: z.string().optional().describe('Workspace projects only.'),
     childOrder: z.number().describe('Ordering index among siblings.'),

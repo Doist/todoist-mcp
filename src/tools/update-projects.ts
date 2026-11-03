@@ -1,4 +1,8 @@
-import type { PersonalProject, WorkspaceProject } from '@doist/todoist-sdk'
+import {
+    PROJECT_VIEW_STYLES,
+    type PersonalProject,
+    type WorkspaceProject,
+} from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'
@@ -14,7 +18,7 @@ const ProjectUpdateSchema = z.object({
     id: z.string().min(1).describe('The ID of the project to update.'),
     name: z.string().min(1).optional().describe('The new name of the project.'),
     isFavorite: z.boolean().optional().describe('Whether the project is a favorite.'),
-    viewStyle: z.enum(['list', 'board', 'calendar']).optional().describe('The project view style.'),
+    viewStyle: z.enum(PROJECT_VIEW_STYLES).optional().describe('The project view style.'),
     description: z
         .preprocess(
             // `null` is the advertised clear value; the param schema stays a
