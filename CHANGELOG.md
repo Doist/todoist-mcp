@@ -1,3 +1,9 @@
+## [13.10.0](https://github.com/Doist/todoist-mcp/compare/v13.9.0...v13.10.0) (2026-11-03)
+
+### Features
+
+* add get-user-status and set-user-status tools ([#662](https://github.com/Doist/todoist-mcp/issues/662)) ([55905de](https://github.com/Doist/todoist-mcp/commit/55905debab8936e31630d6d9792c9faa8ebe4ace))
+
 ## [13.9.0](https://github.com/Doist/todoist-mcp/compare/v13.8.4...v13.9.0) (2026-11-03)
 
 ### Features
