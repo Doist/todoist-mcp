@@ -141,6 +141,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; add
 - `batch-failures.ts` — `logBatchFailures`, the one log line a batch tool writes for the items it could not act on
 - `response-builders.ts` — `summarizeTaskOperation`, `summarizeBatch`, `appendFailureSummary`, `previewTasks` (keep output messages consistent)
 - `retry.ts` — `executeWithRetry()` used inside `registerTool`; exponential backoff with full jitter
+- `user-status.ts` — `UserStatusOutputSchema`, `fetchUserStatus` and `buildUserStatusResult`, shared by `get-user-status` and `set-user-status`
 - `sync-commands.ts` — `settleSyncCommands`: sends Sync commands in one request and reports whether each was applied, for batch tools backed by the Sync API
 - `order-keys.ts` — `computeOrderKeys`: the fractional-indexing order keys that place entities at given positions among their siblings, re-keying only what moved. Todoist orders projects, sections and folders by these keys; the integer `*_reorder` Sync commands are deprecated
 - `concurrency.ts` — `getMoveLimiter`/`getWriteLimiter` bound how many write requests a batch tool has in flight. Limiters are per account (registered by `createTodoistClient`), because the HTTP transport builds a client per request. Task moves get their own single-slot lane: the API locks a task's whole tree for a move, so overlapping moves contend
