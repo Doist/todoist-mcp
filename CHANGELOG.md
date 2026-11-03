@@ -1,3 +1,9 @@
+## [13.9.0](https://github.com/Doist/todoist-mcp/compare/v13.8.4...v13.9.0) (2026-11-03)
+
+### Features
+
+* accept the table view style ([#664](https://github.com/Doist/todoist-mcp/issues/664)) ([a5afd8c](https://github.com/Doist/todoist-mcp/commit/a5afd8c9594d513ec53a9e278ecbc65572816982))
+
 ## [13.8.4](https://github.com/Doist/todoist-mcp/compare/v13.8.3...v13.8.4) (2026-11-02)
 
 ### Bug Fixes
