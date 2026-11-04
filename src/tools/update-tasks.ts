@@ -13,11 +13,7 @@ import { assignmentValidator } from '../utils/assignment-validator.js'
 import { logBatchFailures } from '../utils/batch-failures.js'
 import { getMoveLimiter, getWriteLimiter } from '../utils/concurrency.js'
 import { BatchLimits, DisplayLimits } from '../utils/constants.js'
-import {
-    DURATION_INPUT_DESCRIPTION,
-    DurationParseError,
-    parseDuration,
-} from '../utils/duration-parser.js'
+import { DURATION_INPUT_DESCRIPTION, parseItemDuration } from '../utils/duration-parser.js'
 import {
     destinationKey,
     isMoveRedundant,
@@ -73,10 +69,16 @@ const TasksUpdateSchema = z.object({
             z
                 .string()
                 .describe(
-                    'The new due date for the task in natural language (e.g., "tomorrow at 5pm"). Use "remove" to clear the due date.',
+                    'The new due date for the task in natural language (e.g., "tomorrow at 5pm"). Use "remove" to clear the due date. Replaces any recurrence, so it is refused on a recurring task unless replaceRecurrence is true. To move a task, use reschedule-tasks.',
                 ),
         )
         .optional(),
+    replaceRecurrence: z
+        .boolean()
+        .optional()
+        .describe(
+            "True only when the user asks to change or drop a recurring task's recurrence rule.",
+        ),
     deadlineDate: z
         .preprocess(
             // Keep accepting legacy null while exposing a Gemini-compatible string schema.
@@ -129,6 +131,12 @@ type PreparedTask = {
     updateArgs: UpdateTaskArgs
     moveRequest: MoveRequest
     redundantMoveSkipped: boolean
+    /**
+     * True when the update sends a new due date that would replace a recurrence rule
+     * the caller did not explicitly agree to replace, so the task's current due date
+     * must be checked first.
+     */
+    checkRecurrence: boolean
     /** Set once a task has an outcome that later phases must not overwrite. */
     failed: boolean
 }
@@ -246,19 +254,40 @@ const updateTasks = {
             }
         }
 
-        // Read current containers so a caller echoing back a task's existing
-        // project/section/parent doesn't turn a field edit into a move.
-        const currentTasks = await fetchCurrentTaskStates({
+        // Read current state once for two checks: containers, so a caller echoing back
+        // a task's existing project/section/parent doesn't turn a field edit into a
+        // move; and due dates, so a new dueString can't silently wipe a recurrence.
+        const { states: currentTasks, readFailed } = await fetchCurrentTaskStates({
             client,
             ids: [
                 ...new Set(
-                    ready.filter((item) => hasMove(item.moveRequest)).map((item) => item.id),
+                    ready
+                        .filter((item) => hasMove(item.moveRequest) || item.checkRecurrence)
+                        .map((item) => item.id),
                 ),
             ],
         })
 
+        for (const item of ready) {
+            if (!item.checkRecurrence) {
+                continue
+            }
+            const error = recurrenceGuardError({
+                id: item.id,
+                current: currentTasks.get(item.id),
+                readFailed,
+            })
+            if (error) {
+                failWith(item.index, error)
+                item.failed = true
+            }
+        }
+
         const moving: PlannedMove[] = []
         for (const item of ready) {
+            if (item.failed) {
+                continue
+            }
             try {
                 const plan = planMove({
                     taskId: item.id,
@@ -462,21 +491,17 @@ async function fetchCurrentTaskStates({
 }: {
     client: TodoistApi
     ids: string[]
-}): Promise<Map<string, Task>> {
+}): Promise<{ states: Map<string, Task>; readFailed: boolean }> {
     const states = new Map<string, Task>()
     if (ids.length === 0) {
-        return states
+        return { states, readFailed: false }
     }
 
     try {
         const requested = new Set(ids)
-        // The endpoint wants `ids` comma-separated, while the SDK serialises array
-        // parameters as JSON — which the API rejects with INVALID_ARGUMENT_VALUE. The
-        // cast buys a query the API accepts rather than papering over a type mismatch.
-        const query = {
-            ids: ids.join(','),
-            limit: MAX_TASKS_PER_OPERATION,
-        } as unknown as GetTasksArgs
+        // Pass the array: the SDK joins `ids` into the comma-separated form the
+        // endpoint wants, and throws if handed a pre-joined string.
+        const query: GetTasksArgs = { ids, limit: MAX_TASKS_PER_OPERATION }
         const { results } = await executeWithRetry(() => client.getTasks(query))
         for (const task of results) {
             if (requested.has(task.id)) {
@@ -484,10 +509,43 @@ async function fetchCurrentTaskStates({
             }
         }
     } catch {
-        // Unknown state, so every requested move goes ahead.
+        // Unknown state, so every requested move goes ahead. Recurrence checks fail
+        // closed instead, see `recurrenceGuardError`.
+        return { states, readFailed: true }
     }
 
-    return states
+    return { states, readFailed: false }
+}
+
+/**
+ * Refuses a dueString on a recurring task, since the API replaces the whole due date
+ * and the task silently becomes a one-time task (Doist/Issues#21505). Returns the
+ * failure reason, or undefined when the update may go ahead.
+ *
+ * A failed read fails closed: losing a recurrence is hard to notice and hard to undo,
+ * while a refused update is reported and can be retried. A task absent from a
+ * successful read is not active, so the update itself reports the problem.
+ */
+function recurrenceGuardError({
+    id,
+    current,
+    readFailed,
+}: {
+    id: string
+    current: Task | undefined
+    readFailed: boolean
+}): string | undefined {
+    if (readFailed) {
+        return `Task ${id}: could not check whether the task is recurring, so its due date was not changed. Retry the update.`
+    }
+    if (!current?.due?.isRecurring) {
+        return undefined
+    }
+    return (
+        `Task ${id} recurs ("${current.due.string}"). dueString would replace that rule and make it a one-time task, so nothing was changed. ` +
+        `To move it to another date or time, use ${ToolNames.RESCHEDULE_TASKS} (it also accepts duration). ` +
+        'To change or drop the recurrence on purpose, resend with replaceRecurrence: true.'
+    )
 }
 
 /**
@@ -617,7 +675,7 @@ async function reconcileMoves({
     results: Map<number, MoveResult>
 }): Promise<void> {
     const ids = [...new Set(unresolved.flatMap(({ group }) => group.map(({ item }) => item.id)))]
-    const states = await fetchCurrentTaskStates({ client, ids })
+    const { states } = await fetchCurrentTaskStates({ client, ids })
 
     for (const { group, destination, error } of unresolved) {
         const reason =
@@ -698,6 +756,7 @@ async function prepareTaskUpdate({
         priority,
         labels,
         deadlineDate,
+        replaceRecurrence,
         ...otherUpdateArgs
     } = task
 
@@ -734,19 +793,8 @@ async function prepareTaskUpdate({
 
     // Parse duration if provided
     if (durationStr) {
-        try {
-            const { amount, unit } = parseDuration(durationStr)
-            updateArgs = {
-                ...updateArgs,
-                duration: amount,
-                durationUnit: unit,
-            }
-        } catch (error) {
-            if (error instanceof DurationParseError) {
-                throw new Error(`Task ${id}: ${error.message}`)
-            }
-            throw error
-        }
+        const { amount, unit } = parseItemDuration(`Task ${id}`, durationStr)
+        updateArgs = { ...updateArgs, duration: amount, durationUnit: unit }
     }
 
     // Handle assignment changes if provided
@@ -767,6 +815,10 @@ async function prepareTaskUpdate({
             parentId,
         },
         redundantMoveSkipped: false,
+        checkRecurrence:
+            dueStringUpdate !== undefined &&
+            dueStringUpdate !== DUE_DATE_REMOVAL_VALUE &&
+            replaceRecurrence !== true,
         failed: false,
     }
 }
@@ -840,7 +892,11 @@ function generateTextContent({
     return `${summary}\nFailed (${failures.length}) - address or drop these items:\n${failureLines}${moreInfo}`
 }
 
-function hasUpdatesToMake({ id: _id, ...otherUpdateArgs }: TaskUpdate) {
+function hasUpdatesToMake({
+    id: _id,
+    replaceRecurrence: _replaceRecurrence,
+    ...otherUpdateArgs
+}: TaskUpdate) {
     return Object.keys(otherUpdateArgs).length > 0
 }
 

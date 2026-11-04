@@ -10,11 +10,7 @@ import { isInboxProjectId, mapTask } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
 import { logBatchFailures } from '../utils/batch-failures.js'
 import { BatchLimits } from '../utils/constants.js'
-import {
-    DURATION_INPUT_DESCRIPTION,
-    DurationParseError,
-    parseDuration,
-} from '../utils/duration-parser.js'
+import { DURATION_INPUT_DESCRIPTION, parseItemDuration } from '../utils/duration-parser.js'
 import { FailureSchema, TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import {
     convertPriorityToNumber,
@@ -250,19 +246,8 @@ async function processTask(
 
     // Parse duration if provided
     if (durationStr) {
-        try {
-            const { amount, unit } = parseDuration(durationStr)
-            taskArgs = {
-                ...taskArgs,
-                duration: amount,
-                durationUnit: unit,
-            }
-        } catch (error) {
-            if (error instanceof DurationParseError) {
-                throw new Error(`Task "${task.content}": ${error.message}`)
-            }
-            throw error
-        }
+        const { amount, unit } = parseItemDuration(`Task "${task.content}"`, durationStr)
+        taskArgs = { ...taskArgs, duration: amount, durationUnit: unit }
     }
 
     // Handle assignment if provided

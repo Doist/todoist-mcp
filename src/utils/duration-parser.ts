@@ -168,6 +168,21 @@ function parseMinutes(durationStr: string, normalized: string): number {
  * @param unit - The unit the amount is stored in
  * @returns Formatted duration string like "2h30m", "45m" or "3d"
  */
+/**
+ * Parses one batch item's duration, prefixing a format error with `label` (e.g.
+ * `Task 123`) so the caller can report it against that item.
+ */
+export function parseItemDuration(label: string, durationStr: string): ParsedDuration {
+    try {
+        return parseDuration(durationStr)
+    } catch (error) {
+        if (error instanceof DurationParseError) {
+            throw new Error(`${label}: ${error.message}`)
+        }
+        throw error
+    }
+}
+
 export function formatDuration(amount: number, unit: DurationUnit = 'minute'): string {
     if (unit === 'day') {
         return `${amount}d`

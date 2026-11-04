@@ -1667,10 +1667,9 @@ describe(`${UPDATE_TASKS} tool`, () => {
             )
 
             expect(mockTodoistApi.getTasks).toHaveBeenCalledTimes(1)
-            // Comma-separated, not an array: the API rejects the JSON-array form the
-            // SDK would otherwise serialise.
+            // An array: the SDK joins it, and throws on a pre-joined string.
             expect(mockTodoistApi.getTasks).toHaveBeenNthCalledWith(1, {
-                ids: 'task-a,task-b',
+                ids: ['task-a', 'task-b'],
                 limit: 25,
             })
         })
@@ -2113,6 +2112,178 @@ describe(`${UPDATE_TASKS} tool`, () => {
             expect(order.indexOf('update-start:m0')).toBeGreaterThan(order.indexOf('move-end:m0'))
             // ...but its update overlaps the next task's move rather than waiting for it.
             expect(order.indexOf('update-start:m0')).toBeLessThan(order.indexOf('move-end:m1'))
+        })
+    })
+
+    describe('recurrence guard (Doist/Issues#21505)', () => {
+        const recurringTask = createMockTask({
+            id: 'recurring-1',
+            due: {
+                date: '2026-10-29',
+                datetime: '2026-10-29T09:00:00',
+                string: 'every day at 9:00',
+                isRecurring: true,
+                lang: 'en',
+                timezone: null,
+            },
+        })
+        const oneTimeTask = createMockTask({
+            id: 'one-time-1',
+            due: {
+                date: '2026-10-29',
+                string: 'Oct 29',
+                isRecurring: false,
+                lang: 'en',
+                timezone: null,
+            },
+        })
+
+        it('refuses a dueString that would wipe a recurrence, and still updates the rest', async () => {
+            mockTodoistApi.getTasks.mockResolvedValue({
+                results: [recurringTask, oneTimeTask],
+                nextCursor: null,
+            })
+            mockTodoistApi.updateTask.mockResolvedValue(oneTimeTask)
+
+            // The exact call the Time Block automation makes.
+            const { structuredContent, textContent } = await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'recurring-1', dueString: 'today at 10:00', duration: '15m' },
+                        { id: 'one-time-1', dueString: 'today at 11:00', duration: '15m' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getTasks).toHaveBeenCalledWith({
+                ids: ['recurring-1', 'one-time-1'],
+                limit: 25,
+            })
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledTimes(1)
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledWith('one-time-1', {
+                dueString: 'today at 11:00',
+                duration: 15,
+                durationUnit: 'minute',
+            })
+            expect(structuredContent.updatedTaskIds).toEqual(['one-time-1'])
+            expect(structuredContent.failures).toHaveLength(1)
+            expect(structuredContent.failures[0]?.item).toBe('recurring-1')
+            expect(structuredContent.failures[0]?.error).toContain('every day at 9:00')
+            expect(structuredContent.failures[0]?.error).toContain(ToolNames.RESCHEDULE_TASKS)
+            expect(structuredContent.failures[0]?.error).toContain('replaceRecurrence: true')
+            expect(textContent).toContain('1 failed')
+        })
+
+        it.each([
+            { field: 'projectId', value: 'project-other' },
+            { field: 'sectionId', value: 'section-other' },
+            { field: 'parentId', value: 'parent-other' },
+        ])(
+            'does not move a refused task that also asks for a $field change',
+            async ({ field, value }) => {
+                mockTodoistApi.getTasks.mockResolvedValue({
+                    results: [recurringTask],
+                    nextCursor: null,
+                })
+
+                const { structuredContent } = await updateTasks.execute(
+                    { tasks: [{ id: 'recurring-1', dueString: 'today at 10:00', [field]: value }] },
+                    mockTodoistApi,
+                )
+
+                expect(mockTodoistApi.moveTask).not.toHaveBeenCalled()
+                expect(mockTodoistApi.moveTasks).not.toHaveBeenCalled()
+                expect(mockTodoistApi.updateTask).not.toHaveBeenCalled()
+                expect(structuredContent.failures).toEqual([
+                    expect.objectContaining({ item: 'recurring-1' }),
+                ])
+            },
+        )
+
+        it('replaces the recurrence when replaceRecurrence is true', async () => {
+            mockTodoistApi.updateTask.mockResolvedValue(recurringTask)
+
+            const { structuredContent } = await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'recurring-1', dueString: 'every monday', replaceRecurrence: true },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getTasks).not.toHaveBeenCalled()
+            // The flag is a local guard, never an API field.
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledWith('recurring-1', {
+                dueString: 'every monday',
+            })
+            expect(structuredContent.failures).toEqual([])
+        })
+
+        it('lets "remove" clear a recurring due date without a read', async () => {
+            mockTodoistApi.updateTask.mockResolvedValue(recurringTask)
+
+            await updateTasks.execute(
+                { tasks: [{ id: 'recurring-1', dueString: 'remove' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getTasks).not.toHaveBeenCalled()
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledWith('recurring-1', {
+                dueString: 'no date',
+            })
+        })
+
+        it('does not guard a duration-only update', async () => {
+            mockTodoistApi.updateTask.mockResolvedValue(recurringTask)
+
+            await updateTasks.execute(
+                { tasks: [{ id: 'recurring-1', duration: '15m' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getTasks).not.toHaveBeenCalled()
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledWith('recurring-1', {
+                duration: 15,
+                durationUnit: 'minute',
+            })
+        })
+
+        it('fails closed when the due date cannot be checked', async () => {
+            mockTodoistApi.getTasks.mockRejectedValue(new Error('boom'))
+            mockTodoistApi.updateTask.mockResolvedValue(recurringTask)
+
+            const { structuredContent } = await updateTasks.execute(
+                {
+                    tasks: [
+                        { id: 'recurring-1', dueString: 'today at 10:00' },
+                        { id: 'other', content: 'renamed' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledTimes(1)
+            expect(mockTodoistApi.updateTask).toHaveBeenCalledWith('other', {
+                content: 'renamed',
+            })
+            expect(structuredContent.failures).toEqual([
+                expect.objectContaining({
+                    item: 'recurring-1',
+                    error: expect.stringContaining('could not check whether the task is recurring'),
+                }),
+            ])
+        })
+
+        it('treats replaceRecurrence alone as no change', async () => {
+            const { structuredContent } = await updateTasks.execute(
+                { tasks: [{ id: 'recurring-1', replaceRecurrence: true }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.updateTask).not.toHaveBeenCalled()
+            expect(structuredContent.appliedOperations.skippedCount).toBe(1)
         })
     })
 })
