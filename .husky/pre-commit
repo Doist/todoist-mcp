@@ -1,2 +1,10 @@
+sh .agents/scripts/branch-guard.sh commit
+
+# GUI git clients often run hooks without node on PATH. Skip lint rather than block
+# the commit; CI runs the same checks.
+if ! command -v npx >/dev/null 2>&1; then
+    echo "pre-commit: npx not found, so lint-staged was skipped. CI still lints and formats." >&2
+    exit 0
+fi
+
 npx lint-staged
-npm run type-check

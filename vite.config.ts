@@ -90,7 +90,7 @@ export default defineConfig({
     test: {
         globals: true, // Enable global test APIs (describe, it, expect, etc.)
         environment: 'node',
-        include: ['src/**/*.{test,spec}.{js,ts}'],
+        include: ['src/**/*.{test,spec}.{js,ts}', '.agents/scripts/**/*.test.ts'],
         exclude: ['node_modules', 'dist'],
         // Optimize for CI - avoid unnecessary bundling
         server: {

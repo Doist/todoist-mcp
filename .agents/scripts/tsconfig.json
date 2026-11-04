@@ -1,0 +1,16 @@
+{
+    // Agent tooling runs straight from source with Node's type stripping, so it may only use
+    // erasable TypeScript syntax and must import files with their .ts extension.
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "rootDir": "../..",
+        "noEmit": true,
+        "declaration": false,
+        "declarationMap": false,
+        "allowImportingTsExtensions": true,
+        "erasableSyntaxOnly": true,
+        "lib": ["es2023"],
+        "types": ["node", "vitest/globals"]
+    },
+    "include": ["."]
+}

@@ -1,1 +1,4 @@
+sh .agents/scripts/branch-guard.sh push
+
+npm run type-check
 npm test

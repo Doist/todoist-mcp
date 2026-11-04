@@ -81,6 +81,12 @@ When adding new tool features:
 3. Add tests demonstrating the feature
 4. Include examples in descriptions where helpful
 
+## Git hooks and agent tooling
+
+- Commits and pushes to `main` are refused by the git hooks. Work on a branch.
+- Agent tooling lives in `.agents/scripts/`, never in `scripts/` (which ships in the npm package).
+- How it all fits together: [`docs/agents.md`](docs/agents.md).
+
 ## Running Tools Directly
 
 Use `scripts/run-tool.ts` to execute any tool without the MCP server:
