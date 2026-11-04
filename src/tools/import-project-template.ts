@@ -92,7 +92,7 @@ const OutputSchema = {
 const importProjectTemplate = {
     name: ToolNames.IMPORT_PROJECT_TEMPLATE,
     description:
-        'Import a template into an existing project, adding its tasks, sections and comments to whatever is already there. Source it by template ID/URL or by passing CSV content from export-project-template. To start a new project from a template, create the project with add-projects first, then import into it. This writes immediately and cannot be undone, so only run it against a project the user named.',
+        'Import a template into an existing project, adding its tasks, sections and comments to whatever is already there. Source it by template ID/URL or by passing CSV content from export-project-template. To start a new project from a template, use create-project-from-template instead. This writes immediately and cannot be undone, so only run it against a project the user named.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
