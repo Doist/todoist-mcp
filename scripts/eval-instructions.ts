@@ -88,6 +88,20 @@ const SCENARIOS: Scenario[] = [
         guards: 'instructions: reschedule-tasks vs update-tasks (recurrence loss)',
     },
     {
+        // Doist/Issues#21505: time-blocking needs a time and a duration, and
+        // update-tasks used to be the only tool that set both.
+        id: 'time-block-recurring',
+        prompt: 'Block 10:00-10:15 today for task 6XG4Vw2c9J ("Give meds", repeats every day at 9:00).',
+        forbid: [ToolNames.UPDATE_TASKS],
+        check: (input) => {
+            const task = firstItem(input, 'tasks')
+            // Only the reschedule call carries a date; a lookup is fine.
+            if (!task || !('date' in task)) return null
+            return task.duration ? null : `rescheduled without a duration: ${JSON.stringify(task)}`
+        },
+        guards: 'reschedule-tasks duration: time-blocking a recurring task',
+    },
+    {
         id: 'completed-via-activity',
         prompt: 'What did I actually get done last week?',
         expect: [ToolNames.FIND_ACTIVITY],

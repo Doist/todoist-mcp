@@ -2175,6 +2175,32 @@ describe(`${UPDATE_TASKS} tool`, () => {
             expect(textContent).toContain('1 failed')
         })
 
+        it.each([
+            { field: 'projectId', value: 'project-other' },
+            { field: 'sectionId', value: 'section-other' },
+            { field: 'parentId', value: 'parent-other' },
+        ])(
+            'does not move a refused task that also asks for a $field change',
+            async ({ field, value }) => {
+                mockTodoistApi.getTasks.mockResolvedValue({
+                    results: [recurringTask],
+                    nextCursor: null,
+                })
+
+                const { structuredContent } = await updateTasks.execute(
+                    { tasks: [{ id: 'recurring-1', dueString: 'today at 10:00', [field]: value }] },
+                    mockTodoistApi,
+                )
+
+                expect(mockTodoistApi.moveTask).not.toHaveBeenCalled()
+                expect(mockTodoistApi.moveTasks).not.toHaveBeenCalled()
+                expect(mockTodoistApi.updateTask).not.toHaveBeenCalled()
+                expect(structuredContent.failures).toEqual([
+                    expect.objectContaining({ item: 'recurring-1' }),
+                ])
+            },
+        )
+
         it('replaces the recurrence when replaceRecurrence is true', async () => {
             mockTodoistApi.updateTask.mockResolvedValue(recurringTask)
 

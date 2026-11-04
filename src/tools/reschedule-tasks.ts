@@ -3,7 +3,7 @@ import { createCommand } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { mapTask } from '../tool-helpers.js'
-import { DurationParseError, parseDuration } from '../utils/duration-parser.js'
+import { parseItemDuration } from '../utils/duration-parser.js'
 import { TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
 import { summarizeTaskOperation } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -41,7 +41,7 @@ const rescheduleTasks = {
     description:
         'Reschedule tasks to new dates while preserving recurring schedules. ' +
         'Unlike update-tasks (which replaces the entire due string and can wipe recurrence), ' +
-        'this tool changes only the date, keeping recurrence patterns intact. ' +
+        'this tool changes only the date (and duration, if given), keeping recurrence patterns intact. ' +
         'Use this when moving recurring tasks to a different date or time without altering their repeat pattern.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
@@ -50,7 +50,9 @@ const rescheduleTasks = {
         const { tasks: taskInputs } = args
 
         // Parse durations before any request, so a bad one changes nothing.
-        const durations = taskInputs.map((input) => parseRescheduleDuration(input))
+        const durations = taskInputs.map((input) =>
+            input.duration ? parseItemDuration(`Task ${input.id}`, input.duration) : undefined,
+        )
 
         // Fetch all tasks in parallel to get current due date info
         const existingTasks = await Promise.all(
@@ -112,23 +114,6 @@ const rescheduleTasks = {
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
-
-function parseRescheduleDuration(input: {
-    id: string
-    duration?: string
-}): { amount: number; unit: string } | undefined {
-    if (!input.duration) {
-        return undefined
-    }
-    try {
-        return parseDuration(input.duration)
-    } catch (error) {
-        if (error instanceof DurationParseError) {
-            throw new Error(`Task ${input.id}: ${error.message}`)
-        }
-        throw error
-    }
-}
 
 function buildRescheduleDate(inputDate: string, existingDue: NonNullable<Task['due']>): string {
     const isInputDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(inputDate)
