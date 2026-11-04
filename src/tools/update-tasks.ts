@@ -503,13 +503,9 @@ async function fetchCurrentTaskStates({
 
     try {
         const requested = new Set(ids)
-        // The endpoint wants `ids` comma-separated, while the SDK serialises array
-        // parameters as JSON — which the API rejects with INVALID_ARGUMENT_VALUE. The
-        // cast buys a query the API accepts rather than papering over a type mismatch.
-        const query = {
-            ids: ids.join(','),
-            limit: MAX_TASKS_PER_OPERATION,
-        } as unknown as GetTasksArgs
+        // Pass the array: the SDK joins `ids` into the comma-separated form the
+        // endpoint wants, and throws if handed a pre-joined string.
+        const query: GetTasksArgs = { ids, limit: MAX_TASKS_PER_OPERATION }
         const { results } = await executeWithRetry(() => client.getTasks(query))
         for (const task of results) {
             if (requested.has(task.id)) {

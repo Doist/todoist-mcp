@@ -1667,10 +1667,9 @@ describe(`${UPDATE_TASKS} tool`, () => {
             )
 
             expect(mockTodoistApi.getTasks).toHaveBeenCalledTimes(1)
-            // Comma-separated, not an array: the API rejects the JSON-array form the
-            // SDK would otherwise serialise.
+            // An array: the SDK joins it, and throws on a pre-joined string.
             expect(mockTodoistApi.getTasks).toHaveBeenNthCalledWith(1, {
-                ids: 'task-a,task-b',
+                ids: ['task-a', 'task-b'],
                 limit: 25,
             })
         })
@@ -2158,7 +2157,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
             )
 
             expect(mockTodoistApi.getTasks).toHaveBeenCalledWith({
-                ids: 'recurring-1,one-time-1',
+                ids: ['recurring-1', 'one-time-1'],
                 limit: 25,
             })
             expect(mockTodoistApi.updateTask).toHaveBeenCalledTimes(1)
