@@ -6,6 +6,7 @@ import { saveProjectAsTemplate } from './save-project-as-template.js'
 
 const mockTodoistApi = {
     createUserTemplate: vi.fn(),
+    createUserTemplateFromFile: vi.fn(),
     getProject: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
@@ -205,5 +206,61 @@ describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
             ),
         ).rejects.toThrow('502')
         expect(mockTodoistApi.createUserTemplate).toHaveBeenCalledTimes(1)
+    })
+
+    describe('from CSV content', () => {
+        beforeEach(() => {
+            mockTodoistApi.createUserTemplateFromFile.mockResolvedValue(createTemplate())
+        })
+
+        it('uploads the CSV as a file and defaults the color to charcoal', async () => {
+            const result = await saveProjectAsTemplate.execute(
+                {
+                    csvFileContent: 'TYPE,CONTENT\ntask,Plan',
+                    name: 'Launch plan',
+                    description: 'A launch',
+                },
+                mockTodoistApi,
+            )
+
+            const [args] = mockTodoistApi.createUserTemplateFromFile.mock.calls[0] ?? []
+            expect(args).toMatchObject({
+                fileName: 'template.csv',
+                name: 'Launch plan',
+                description: 'A launch',
+                color: 'charcoal',
+            })
+            expect(args?.file).toBeInstanceOf(Blob)
+            expect(await (args?.file as Blob).text()).toBe('TYPE,CONTENT\ntask,Plan')
+            expect(mockTodoistApi.createUserTemplate).not.toHaveBeenCalled()
+            expect(result.textContent).toContain('Saved CSV content as template "Launch plan"')
+        })
+
+        it('refuses to save CSV content to a workspace', async () => {
+            await expect(
+                saveProjectAsTemplate.execute(
+                    {
+                        csvFileContent: 'TYPE,CONTENT',
+                        name: 'Launch plan',
+                        description: 'A launch',
+                        saveToWorkspace: true,
+                    },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow('always saved to personal templates')
+            expect(mockTodoistApi.createUserTemplateFromFile).not.toHaveBeenCalled()
+        })
+    })
+
+    it.each([
+        ['neither', {}],
+        ['both', { projectId: 'project-1', csvFileContent: 'TYPE,CONTENT' }],
+    ])('needs exactly one source, not %s', async (_, source) => {
+        await expect(
+            saveProjectAsTemplate.execute(
+                { ...source, name: 'Launch plan', description: 'A launch' },
+                mockTodoistApi,
+            ),
+        ).rejects.toThrow('exactly one source')
     })
 })

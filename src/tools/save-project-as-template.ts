@@ -1,4 +1,4 @@
-import type { ColorKey, TodoistApi } from '@doist/todoist-sdk'
+import type { ColorKey, Template, TodoistApi } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { ColorKeySchema, colorSchemaWithDefault } from '../utils/colors.js'
@@ -6,21 +6,32 @@ import { executeCreateWithRetry, executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const ArgsSchema = {
-    projectId: z.string().min(1).describe('The project to save. It is copied, not changed.'),
+    projectId: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('The project to save. It is copied, not changed.'),
+    csvFileContent: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+            'CSV template content, e.g. from export-project-template, to save instead of a project. Provide this or `projectId`, not both.',
+        ),
     name: z.string().trim().min(1).describe('The name of the template.'),
     description: z
         .string()
         .trim()
         .min(1)
-        .describe('Required. If the user gave none, write a one-sentence summary of the project.'),
+        .describe('Required. If the user gave none, write a one-sentence summary of the content.'),
     color: colorSchemaWithDefault(
-        "Unrecognized colors are omitted and the project's color is used, which is also the default.",
+        "Unrecognized colors are omitted. Defaults to the project's color, or charcoal for CSV.",
     ),
     saveToWorkspace: z
         .boolean()
         .optional()
         .describe(
-            "For a workspace project, save to the workspace's templates instead of the user's personal ones. Only workspace templates keep assignees. It starts unshared. Defaults to false.",
+            "For a workspace project, save to the workspace's templates instead of the user's personal ones. Only workspace templates keep assignees. It starts unshared. Not for CSV. Defaults to false.",
         ),
 }
 
@@ -33,29 +44,54 @@ const OutputSchema = {
 const saveProjectAsTemplate = {
     name: ToolNames.SAVE_PROJECT_AS_TEMPLATE,
     description:
-        'Save a project as a reusable template in the user\'s Todoist, like the app\'s "Save as template". Each call saves a new one.',
+        'Save a project, or CSV template content, as a reusable template in the user\'s Todoist, like the app\'s "Save as template". Each call saves a new one.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-    async execute({ projectId, name, description, color, saveToWorkspace }, client) {
-        const templateColor = color ?? (await getProjectColor(client, projectId))
+    async execute(
+        { projectId, csvFileContent, name, description, color, saveToWorkspace },
+        client,
+    ) {
+        if (Boolean(projectId) === Boolean(csvFileContent)) {
+            throw new Error('Provide exactly one source: either `projectId` or `csvFileContent`.')
+        }
 
-        // A create retries only a 503: after a 502 or 504 the template may already exist.
-        const template = await executeCreateWithRetry(() =>
-            client.createUserTemplate({
-                projectId,
-                name,
-                description,
-                color: templateColor,
-                forWorkspace: saveToWorkspace,
-            }),
-        )
+        // Creates retry only a 503: after a 502 or 504 the template may already exist.
+        let template: Template
+        if (projectId) {
+            const templateColor = color ?? (await getProjectColor(client, projectId))
+            template = await executeCreateWithRetry(() =>
+                client.createUserTemplate({
+                    projectId,
+                    name,
+                    description,
+                    color: templateColor,
+                    forWorkspace: saveToWorkspace,
+                }),
+            )
+        } else {
+            if (saveToWorkspace) {
+                throw new Error(
+                    'A CSV template is always saved to personal templates. Save it without `saveToWorkspace`, then move it with update-template and `workspace`.',
+                )
+            }
+            template = await executeCreateWithRetry(() =>
+                client.createUserTemplateFromFile({
+                    // The SDK treats strings as filesystem paths, not file content.
+                    file: new Blob([csvFileContent ?? ''], { type: 'text/csv' }),
+                    fileName: 'template.csv',
+                    name,
+                    description,
+                    color: color ?? 'charcoal',
+                }),
+            )
+        }
 
         const workspaceId = template.workspaceId ?? undefined
 
         return {
             textContent: generateTextContent({
-                projectId,
+                source: projectId ? `project (id=${projectId})` : 'CSV content',
                 templateId: template.id,
                 name: template.name,
                 workspaceId,
@@ -77,19 +113,19 @@ async function getProjectColor(client: TodoistApi, projectId: string): Promise<C
 }
 
 function generateTextContent({
-    projectId,
+    source,
     templateId,
     name,
     workspaceId,
     shared,
 }: {
-    projectId: string
+    source: string
     templateId: string
     name: string
     workspaceId: string | undefined
     shared: boolean
 }) {
-    const saved = `Saved project (id=${projectId}) as template "${name}" (id=${templateId}).`
+    const saved = `Saved ${source} as template "${name}" (id=${templateId}).`
     const sharing = shared ? 'shared with members' : 'not yet shared with members'
     const where = workspaceId
         ? ` It is in the workspace's templates (workspace id=${workspaceId}), ${sharing}.`
