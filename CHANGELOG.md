@@ -1,3 +1,10 @@
+## [13.10.1](https://github.com/Doist/todoist-mcp/compare/v13.10.0...v13.10.1) (2026-11-04)
+
+### Bug Fixes
+
+* **tasks:** stop update-tasks from wiping a task's recurrence ([#667](https://github.com/Doist/todoist-mcp/issues/667)) ([e43a320](https://github.com/Doist/todoist-mcp/commit/e43a3209cdb024ce84b76c7070d8bb3442acc1c9))
+* **update-tasks:** restore redundant-move detection ([#668](https://github.com/Doist/todoist-mcp/issues/668)) ([197b41d](https://github.com/Doist/todoist-mcp/commit/197b41d257dc731dfa659560771047164cc82984))
+
 ## [13.10.0](https://github.com/Doist/todoist-mcp/compare/v13.9.0...v13.10.0) (2026-11-03)
 
 ### Features
