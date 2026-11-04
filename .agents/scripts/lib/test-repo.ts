@@ -4,21 +4,17 @@
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process'
 import { cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+import { CHECKOUT_ROOT, cleanGitEnv } from './git.ts'
 
-export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
-
-// Variables git exports to hooks (GIT_DIR, GIT_INDEX_FILE, ...). Left in place, a git command
-// in a test would act on the real repository: `npm test` runs inside the pre-push hook.
-const LOCAL_GIT_VARS = spawnSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf8' })
-    .stdout.split('\n')
-    .filter(Boolean)
+export const REPO_ROOT = CHECKOUT_ROOT
 
 /** Environment for a test process: no hook variables, no user git config, no CI exemption. */
 export function isolatedEnv(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
-    const env: NodeJS.ProcessEnv = { ...process.env }
-    for (const name of [...LOCAL_GIT_VARS, 'GITHUB_ACTIONS', 'HUSKY', 'GIT_CONFIG_PARAMETERS']) {
+    // Clears the variables git exports to hooks. Left in place, a git command in a test would
+    // act on the real repository: `npm test` runs inside the pre-push hook.
+    const env = cleanGitEnv()
+    for (const name of ['GITHUB_ACTIONS', 'HUSKY', 'GIT_CONFIG_PARAMETERS']) {
         delete env[name]
     }
     Object.assign(env, {

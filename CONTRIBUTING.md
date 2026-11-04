@@ -30,11 +30,7 @@ npm run tool -- get-overview '{}'
 
 ## Quality Checks
 
-Run these before opening a PR:
-
-- `npm run test`
-- `npm run type-check`
-- `npm run check`
+Run `npm run verify` before opening a PR. It runs every check CI runs (lint, format, types, tests, build, schema validation, the executable smoke test) in about ten seconds.
 
 ## Tool Changes
 
