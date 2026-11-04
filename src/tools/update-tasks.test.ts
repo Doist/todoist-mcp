@@ -1497,9 +1497,15 @@ describe(`${UPDATE_TASKS} tool`, () => {
         const TASK_ID = 'task-in-place'
         const PROJECT_ID = 'project-abc'
 
-        /** Makes the prefetch report `task` as the current state of its id. */
+        /**
+         * Makes the prefetch report `task` as the current state of its id. Joins `ids`
+         * the way the SDK does, so a query the real SDK would reject fails here too.
+         */
         function currentlyIs(task: Task) {
-            mockTodoistApi.getTasks.mockResolvedValue({ results: [task], nextCursor: null })
+            mockTodoistApi.getTasks.mockImplementation(async (args) => {
+                args?.ids?.join(',')
+                return { results: [task], nextCursor: null }
+            })
         }
 
         it('skips the move when the caller echoes back the current project', async () => {
