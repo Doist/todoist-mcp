@@ -330,6 +330,60 @@ describe(`${RESCHEDULE_TASKS} tool`, () => {
     })
 })
 
+describe(`${RESCHEDULE_TASKS} duration`, () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        mockTodoistApi.sync.mockResolvedValue({ syncStatus: {} })
+    })
+
+    it('sets the duration in the same command and keeps the recurrence', async () => {
+        const task = createMockTask({
+            id: 'task-1',
+            due: {
+                date: '2026-10-29',
+                datetime: '2026-10-29T09:00:00',
+                string: 'every day at 9:00',
+                isRecurring: true,
+            },
+        })
+        mockTodoistApi.getTask.mockResolvedValue(task)
+
+        await rescheduleTasks.execute(
+            { tasks: [{ id: 'task-1', date: '2026-10-29T10:00:00', duration: '15m' }] },
+            mockTodoistApi,
+        )
+
+        expect(mockTodoistApi.sync).toHaveBeenCalledWith({
+            commands: [
+                expect.objectContaining({
+                    type: 'item_update',
+                    args: {
+                        id: 'task-1',
+                        due: {
+                            date: '2026-10-29T10:00:00',
+                            string: 'every day at 9:00',
+                            isRecurring: true,
+                        },
+                        duration: { amount: 15, unit: 'minute' },
+                    },
+                }),
+            ],
+        })
+    })
+
+    it('rejects an invalid duration before any request', async () => {
+        await expect(
+            rescheduleTasks.execute(
+                { tasks: [{ id: 'task-1', date: '2026-10-29', duration: 'soon' }] },
+                mockTodoistApi,
+            ),
+        ).rejects.toThrow('Task task-1: Invalid duration format "soon"')
+
+        expect(mockTodoistApi.getTask).not.toHaveBeenCalled()
+        expect(mockTodoistApi.sync).not.toHaveBeenCalled()
+    })
+})
+
 describe('buildRescheduleDate', () => {
     it('should return date-only input as-is when task has no time', () => {
         const result = buildRescheduleDate('2026-03-20', {
