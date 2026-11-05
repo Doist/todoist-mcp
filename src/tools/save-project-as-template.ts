@@ -42,7 +42,7 @@ const saveProjectAsTemplate = {
 
         // A create retries only a 503: after a 502 or 504 the template may already exist.
         const template = await executeCreateWithRetry(() =>
-            client.createUserTemplate({
+            client.saveProjectAsTemplate({
                 projectId,
                 name,
                 description,
