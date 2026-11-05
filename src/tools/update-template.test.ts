@@ -93,10 +93,39 @@ describe(`${UPDATE_TEMPLATE} tool`, () => {
         expect(result.textContent).toContain('in workspace (id=111) and shared with its members.')
     })
 
+    it("replaces the template's content from a project", async () => {
+        await updateTemplate.execute(
+            { templateId: 'UT_28Ex1', projectId: 'project-1' },
+            mockTodoistApi,
+        )
+
+        expect(mockTodoistApi.updateUserTemplate).toHaveBeenCalledWith(
+            'UT_28Ex1',
+            expect.objectContaining({ projectId: 'project-1', name: undefined }),
+        )
+    })
+
+    it('stops sharing when that is the only change', async () => {
+        mockTodoistApi.updateUserTemplate.mockResolvedValue(
+            createTemplate({ workspaceId: '111', sharedWithWorkspaceMembers: false }),
+        )
+
+        const result = await updateTemplate.execute(
+            { templateId: 'UT_28Ex1', sharedWithWorkspaceMembers: false },
+            mockTodoistApi,
+        )
+
+        expect(mockTodoistApi.updateUserTemplate).toHaveBeenCalledWith(
+            'UT_28Ex1',
+            expect.objectContaining({ sharedWithWorkspaceMembers: false }),
+        )
+        expect(result.textContent).toContain('not shared with its members')
+    })
+
     it('refuses to edit a gallery template', async () => {
         await expect(
             updateTemplate.execute({ templateId: 'product-launch', name: 'Mine' }, mockTodoistApi),
-        ).rejects.toThrow('is a gallery template')
+        ).rejects.toThrow('is not a saved template ID')
         expect(mockTodoistApi.updateUserTemplate).not.toHaveBeenCalled()
     })
 

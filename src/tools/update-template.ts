@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { ColorSchema } from '../utils/colors.js'
+import { colorSchemaWithDefault } from '../utils/colors.js'
 import { executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { workspaceResolver } from '../utils/workspace-resolver.js'
@@ -14,7 +14,9 @@ const ArgsSchema = {
         .describe('A saved template ID ("UT_28Ex...") or its Todoist URL.'),
     name: z.string().trim().min(1).optional(),
     description: z.string().trim().min(1).optional(),
-    color: ColorSchema,
+    color: colorSchemaWithDefault(
+        'Unrecognized colors are omitted. Omit to keep the current color.',
+    ),
     projectId: z
         .string()
         .min(1)
@@ -64,7 +66,7 @@ const updateTemplate = {
         const id = extractTemplateId(templateId)
         if (!id.startsWith('UT_')) {
             throw new Error(
-                `"${id}" is a gallery template, which cannot be edited. Only saved templates (IDs starting with "UT_") can.`,
+                `"${id}" is not a saved template ID. Saved template IDs start with "UT_"; gallery templates cannot be edited.`,
             )
         }
 
