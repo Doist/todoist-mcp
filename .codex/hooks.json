@@ -1,0 +1,26 @@
+{
+    "hooks": {
+        "UserPromptSubmit": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "unset $(git rev-parse --local-env-vars 2>/dev/null); root=$(git rev-parse --show-toplevel 2>/dev/null) || root=.; f=\"$root/.agents/scripts/guard.ts\"; if [ -f \"$f\" ]; then node \"$f\" turn-start; else echo '{\"systemMessage\":\"agent-guard: this checkout has no .agents/scripts/guard.ts, so turn-start was skipped\"}'; fi",
+                        "timeout": 30
+                    }
+                ]
+            }
+        ],
+        "Stop": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "unset $(git rev-parse --local-env-vars 2>/dev/null); root=$(git rev-parse --show-toplevel 2>/dev/null) || root=.; f=\"$root/.agents/scripts/guard.ts\"; if [ -f \"$f\" ]; then node \"$f\" turn-end; else echo '{\"systemMessage\":\"agent-guard: this checkout has no .agents/scripts/guard.ts, so turn-end was skipped\"}'; fi",
+                        "timeout": 30
+                    }
+                ]
+            }
+        ]
+    }
+}
