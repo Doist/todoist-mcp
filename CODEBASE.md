@@ -28,6 +28,7 @@ TypeScript · ESM-only · Node >=24 · npm >=11 · `zod` v4 for schemas · MCP S
 ├─ CLAUDE.md              # Imports AGENTS.md for Claude Code; nothing else
 ├─ .agents/scripts/          # Agent tooling (verify, git hook guard) and its tests. Not published, unlike scripts/
 ├─ docs/agents.md         # How the agent tooling fits together, for the owner
+├─ docs/specs/            # Feature specs, named <quarter>-<topic>.md (e.g. 26Q4-template-tools.md)
 ├─ CODEBASE.md            # This file — descriptive map
 ├─ package.json           # See Scripts section
 └─ .github/workflows/     # ci.yml, release.yml (semantic-release), check-semantic-pull-request.yml
