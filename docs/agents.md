@@ -15,9 +15,9 @@ This repository is set up so coding agents prove their work before they call it 
 
 | Rule                                                                                                    | Held by                                                              | Certainty                                |
 | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------- |
-| No commits on `main`                                                                                    | `pre-commit` → `.agents/scripts/branch-guard.sh`                     | Enforced locally; `--no-verify` skips it |
+| No commits on `main`                                                                                    | `pre-commit` and `commit-msg` → `.agents/scripts/branch-guard.sh`    | Enforced locally; `--no-verify` skips it |
 | No pushes to `main`                                                                                     | `pre-push` → `branch-guard.sh`; the "Protect default branch" ruleset | Enforced on GitHub                       |
-| Committed files are linted and formatted                                                                | `pre-commit` → lint-staged; CI                                       | Enforced in CI                           |
+| Committed files are linted and formatted                                                                | `pre-commit` (lefthook, staged files only); CI                       | Enforced in CI                           |
 | Type check passes before a commit                                                                       | `pre-commit`; CI                                                     | Enforced in CI                           |
 | Tests pass before a push                                                                                | `pre-push`; CI                                                       | Enforced in CI                           |
 | Agent tooling never ships in the npm package                                                            | `.agents/scripts/package-contents.test.ts`                           | Enforced in CI                           |
@@ -36,14 +36,15 @@ This repository is set up so coding agents prove their work before they call it 
 
 ## Git hooks
 
-Husky installs the hooks when you run `npm install` (the `prepare` script). Nothing changes in your git configuration beyond the `core.hooksPath` husky has always set.
+[Lefthook](https://github.com/evilmartians/lefthook) runs the hooks, configured in `lefthook.yml`. `npm install` installs them into `.git/hooks` (the `prepare` script runs `lefthook install --reset-hooks-path`). If your clone still has husky's `core.hooksPath`, that first install removes it, which lefthook needs; the leftover `.husky/` folder can be deleted.
 
-- **`pre-commit`** refuses a commit on `main`, then runs lint-staged and the type check.
+- **`pre-commit`** refuses a commit on `main`, then lints and formats the staged files (re-staging what the tools fix), runs the schema check when a tool file is staged, and runs the type check. Unstaged changes in a partly staged file are left alone.
+- **`commit-msg`** refuses a commit on `main` again. Lefthook runs no pre-commit job when nothing is staged, so without it an empty commit would get past.
 - **`pre-push`** refuses a push to `main`, then runs the tests. It checks `git push --dry-run` too.
 - If node is not on `PATH` (some GUI git clients), both hooks still apply the branch rule, skip the checks, and say so. CI runs the same checks.
 - The default branch is read from `origin/HEAD`, falling back to `main`.
 
-The release workflow commits and pushes to `main` from GitHub Actions, and husky installs the hooks there as well. The guard therefore skips itself when `GITHUB_ACTIONS=true`. That is the one exemption. Branch protection on GitHub is the real enforcement; the hooks only catch mistakes early.
+The release workflow commits and pushes to `main` from GitHub Actions, and `npm ci` runs `prepare` there, which installs the hooks. The guard therefore skips itself when `GITHUB_ACTIONS=true`. That is the one exemption. Branch protection on GitHub is the real enforcement; the hooks only catch mistakes early.
 
 ## `npm run verify`
 
@@ -78,7 +79,8 @@ Every agent's hooks call one script, `.agents/scripts/guard.ts`, so the agents c
 
 - Two sessions in one checkout share its files, so each may be told about the other's edits. Use a worktree per session.
 - If the branch's code is back to what `main` has (an undo, a stash, a switch), the turn passes: CI already checked that code.
-- A new worktree has no git hooks until `npm ci` runs there: husky creates `.husky/_` on install, and until then git runs no hooks at all. The end-of-turn gate works without it.
+- Worktrees share the hooks in `.git/hooks`, so the branch rule works in a new worktree at once. Lint, format, types and tests need `npm ci` in that worktree first.
+- Without the lefthook binary (no `node_modules` in the main checkout), the hooks print "Can't find lefthook in PATH" and let the commit through.
 
 **Fails open, visibly:** a broken guard, bad input or a checkout without the script lets the turn end and says why in a message. `DISABLE_AGENT_GUARD=1` in the agent's environment turns the gate off for you.
 
