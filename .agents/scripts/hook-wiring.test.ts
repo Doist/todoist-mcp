@@ -14,6 +14,13 @@ const AGENTS = [
         env: (dir: string) => ({ CLAUDE_PROJECT_DIR: dir }),
     },
     { name: 'Codex', config: '.codex/hooks.json', env: () => ({}) },
+    // Cursor runs the Claude Code hooks. If it does not set CLAUDE_PROJECT_DIR, the command falls
+    // back to the git root.
+    {
+        name: 'Cursor (Claude Code hooks, no CLAUDE_PROJECT_DIR)',
+        config: '.claude/settings.json',
+        env: () => ({ CLAUDE_PROJECT_DIR: undefined }),
+    },
 ]
 
 function command(config: string, event: string): string {

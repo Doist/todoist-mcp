@@ -1,4 +1,4 @@
-import { rmSync } from 'node:fs'
+import { existsSync, rmSync, utimesSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { writeVerified } from './state.ts'
@@ -130,13 +130,42 @@ describe('turns that changed code without verifying', () => {
         expect(end().decision).toBe('block')
     })
 
-    it('keeps sessions apart', () => {
+    it('checks each session against the tree it saw at its own turn start', () => {
         start()
         startTurn({ root: repo.dir, sessionId: 'other' })
         repo.write('src/a.ts', 'export const a = 2\n')
         expect(end().decision).toBe('block')
         expect(endTurn({ root: repo.dir, sessionId: 'other' }).decision).toBe('block')
     })
+})
+
+describe('a branch', () => {
+    beforeEach(() => repo.git(['switch', '--quiet', '-c', 'feature']))
+
+    it('lets the turn end when the code is back to what main has', () => {
+        repo.write('src/a.ts', 'export const a = 2\n')
+        repo.git(['commit', '--quiet', '-am', 'change'])
+        start()
+        repo.git(['revert', '--no-edit', '--quiet', 'HEAD'])
+        repo.write('docs/note.md', 'note\n')
+        expect(end()).toEqual({ decision: 'allow' })
+    })
+
+    it('still sends the agent back when the branch differs from main', () => {
+        start()
+        repo.write('src/a.ts', 'export const a = 2\n')
+        expect(end().decision).toBe('block')
+    })
+})
+
+it('removes turn records older than a week when a turn starts', () => {
+    startTurn({ root: repo.dir, sessionId: 'old' })
+    const old = join(repo.dir, '.tmp/agents/turns/old.json')
+    const weekAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
+    utimesSync(old, weekAgo, weekAgo)
+    start()
+    expect(existsSync(old)).toBe(false)
+    expect(existsSync(join(repo.dir, `.tmp/agents/turns/${session}.json`))).toBe(true)
 })
 
 it('allows the turn, and says why, without a turn-start record', () => {

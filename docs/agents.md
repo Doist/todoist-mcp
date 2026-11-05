@@ -68,11 +68,17 @@ Every agent's hooks call one script, `.agents/scripts/guard.ts`, so the agents c
 - **Passes without a word:** turns that changed nothing, changed only docs, or undid their edits.
 - **"Once"** is deliberate: an agent can stop on purpose and say what is unfinished.
 
-| Agent       | Wiring                                                 | Known limits                                                                                                                                           |
-| ----------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Claude Code | `.claude/settings.json`: `UserPromptSubmit` and `Stop` | None known.                                                                                                                                            |
-| Codex       | `.codex/hooks.json`: `UserPromptSubmit` and `Stop`     | Runs only in a trusted project, after each person reviews the hooks in `/hooks`. Versions 0.154 and 0.162.1 ran no project hooks in a linked worktree. |
-| Cursor      | Runs the Claude Code hooks itself                      | No Cursor hooks file: a second one would run every hook twice. A test keeps it out.                                                                    |
+| Agent       | Wiring                                                                                                                | Known limits                                                                                                                                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code | `.claude/settings.json`: `UserPromptSubmit` and `Stop`                                                                | Tested in a real session: it sent the agent back once and let it stop the second time.                                                                                                  |
+| Codex       | `.codex/hooks.json`: `UserPromptSubmit` and `Stop`                                                                    | Runs only in a trusted project, after each person reviews the hooks in `/hooks`. Versions 0.154 and 0.162.1 ran no project hooks in a linked worktree. Not yet tried in a real session. |
+| Cursor      | Runs the Claude Code hooks itself; the command falls back to the git root if Cursor does not set `CLAUDE_PROJECT_DIR` | No Cursor hooks file: a second one would run every hook twice. A test keeps it out. Not yet tried in a real session.                                                                    |
+
+**Other limits:**
+
+- Two sessions in one checkout share its files, so each may be told about the other's edits. Use a worktree per session.
+- If the branch's code is back to what `main` has (an undo, a stash, a switch), the turn passes: CI already checked that code.
+- A new worktree has no git hooks until `npm ci` runs there: husky creates `.husky/_` on install, and until then git runs no hooks at all. The end-of-turn gate works without it.
 
 **Fails open, visibly:** a broken guard, bad input or a checkout without the script lets the turn end and says why in a message. `DISABLE_AGENT_GUARD=1` in the agent's environment turns the gate off for you.
 
