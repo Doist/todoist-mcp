@@ -14,7 +14,7 @@ const ArgsSchema = {
         .min(1)
         .describe('Required. If the user gave none, write a one-sentence summary of the project.'),
     color: colorSchemaWithDefault(
-        "Unrecognized colors are omitted. Defaults to the project's color.",
+        "Unrecognized colors are omitted and the project's color is used, which is also the default.",
     ),
     saveToWorkspace: z
         .boolean()
@@ -33,13 +33,14 @@ const OutputSchema = {
 const saveProjectAsTemplate = {
     name: ToolNames.SAVE_PROJECT_AS_TEMPLATE,
     description:
-        'Save a project as a reusable template in the user\'s Todoist, like the app\'s "Save as template". Each call saves a new one. To make a template from CSV content, use create-template-from-csv.',
+        'Save a project as a reusable template in the user\'s Todoist, like the app\'s "Save as template". Each call saves a new one.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     async execute({ projectId, name, description, color, saveToWorkspace }, client) {
         const templateColor = color ?? (await getProjectColor(client, projectId))
-        // Creates retry only a 503: after a 502 or 504 the template may already exist.
+
+        // A create retries only a 503: after a 502 or 504 the template may already exist.
         const template = await executeCreateWithRetry(() =>
             client.saveProjectAsTemplate({
                 projectId,

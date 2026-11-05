@@ -372,13 +372,6 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
         idempotentHint: false,
     },
     {
-        name: ToolNames.CREATE_TEMPLATE_FROM_CSV,
-        title: 'Todoist: Create Template From CSV',
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-    },
-    {
         name: ToolNames.UPDATE_TEMPLATE,
         title: 'Todoist: Update Template',
         readOnlyHint: false,

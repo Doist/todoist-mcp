@@ -20,7 +20,7 @@ function formatToolTitle(name: string): string {
     return name
         .split('-')
         .filter(Boolean)
-        .map((s) => (s === 'csv' ? 'CSV' : `${s.charAt(0).toUpperCase()}${s.slice(1)}`))
+        .map((s) => `${s.charAt(0).toUpperCase()}${s.slice(1)}`)
         .join(' ')
 }
 
@@ -94,7 +94,7 @@ function measure(): Row[] {
 // Treat it as a ratchet rather than headroom: it should move down over time, and
 // a rise needs justifying in the PR that causes it. Override at runtime with
 // MCP_TOKEN_BUDGET=NNNN to experiment without editing the source.
-const DEFAULT_TOKEN_BUDGET = 38_400
+const DEFAULT_TOKEN_BUDGET = 37_980
 const TOKEN_BUDGET = Number(process.env.MCP_TOKEN_BUDGET ?? DEFAULT_TOKEN_BUDGET)
 
 describe('token footprint baseline', () => {
