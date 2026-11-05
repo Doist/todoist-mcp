@@ -22,6 +22,7 @@ const DOCS = [
     join(REPO_ROOT, 'AGENTS.md'),
     join(REPO_ROOT, 'CODEBASE.md'),
     join(REPO_ROOT, 'docs/agents.md'),
+    join(REPO_ROOT, '.cursor/rules/typescript.mdc'),
     ...markdownFiles(join(REPO_ROOT, '.agents')),
 ]
 
