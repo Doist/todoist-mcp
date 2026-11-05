@@ -1,4 +1,12 @@
-import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+    chmodSync,
+    existsSync,
+    readFileSync,
+    readlinkSync,
+    rmSync,
+    symlinkSync,
+    writeFileSync,
+} from 'node:fs'
 import { basename, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { createReviewWorktree } from './review-worktree.ts'
@@ -44,6 +52,19 @@ it('reproduces staged, unstaged, deleted, binary and untracked changes', () => {
     expect(existsSync(join(target, 'ignored/cache.txt'))).toBe(false)
 })
 
+it('works when the user has diff.noprefix set', () => {
+    repo.git(['config', 'diff.noprefix', 'true'])
+    repo.write('src/a.ts', 'unstaged edit\n')
+    createReviewWorktree(repo.dir, target)
+    expect(readFileSync(join(target, 'src/a.ts'), 'utf8')).toBe('unstaged edit\n')
+})
+
+it('copies an untracked relative symlink as a relative symlink', () => {
+    symlinkSync('../src/a.ts', join(repo.dir, 'src/link.ts'))
+    createReviewWorktree(repo.dir, target)
+    expect(readlinkSync(join(target, 'src/link.ts'))).toBe('../src/a.ts')
+})
+
 it('leaves the original checkout as it was', () => {
     repo.write('src/a.ts', 'unstaged edit\n')
     repo.write('src/new.ts', 'untracked\n')
@@ -82,5 +103,6 @@ it('works from the command line, in a checkout whose path has a space', () => {
     const result = repo.run(process.execPath, ['.agents/scripts/review-worktree.ts', target])
     expect(result.stderr).toBe('')
     expect(result.stdout).toContain('Review worktree ready')
+    expect(result.stdout).toContain(`cd '${target}' && npm ci`)
     expect(readFileSync(join(target, 'src/a.ts'), 'utf8')).toBe('unstaged edit\n')
 })

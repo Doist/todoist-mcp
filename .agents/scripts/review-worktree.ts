@@ -18,6 +18,7 @@ try {
     console.error(`review-worktree: ${(error as Error).message}`)
     process.exit(1)
 }
+const quoted = `'${dir.replaceAll("'", "'\\''")}'`
 console.log(`Review worktree ready: ${dir}`)
-console.log(`Install dependencies there before running anything: cd ${dir} && npm ci`)
-console.log(`Remove it when done: git worktree remove --force ${dir}`)
+console.log(`Install dependencies there before running anything: cd ${quoted} && npm ci`)
+console.log(`Remove it when done: git worktree remove --force ${quoted}`)
