@@ -46,6 +46,7 @@ Without the link, `save-project-as-csv` persists nothing and is read-only.
 
 - **Setup templates.** A setup template creates several projects plus labels and filters (`POST /templates/{template_id}/use`). These tools handle project templates only. `create-project-from-template` rejects a setup template, because `POST /projects/from_template` does not support them.
 - **Template previews.** There is no tool to preview what a template contains before using it (`GET /templates/{template_id}/preview`). `find-templates` returns each template's name and description.
+- **A `create-project-from-csv` tool.** `POST /projects/import` creates a new project from CSV in one call, but it only takes a name and a workspace. Calling `add-projects` and then `import-csv-into-project` can also set the color, view style, parent project and folder, and goes through `add-projects`' personal project limit check, without adding another tool to every conversation's token cost. The two calls are not atomic: if the import fails, the new project is left empty, so `import-csv-into-project` should name that project in its error. Revisit if models struggle with the two steps.
 
 ## Migration notes
 
