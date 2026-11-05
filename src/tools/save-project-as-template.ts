@@ -33,7 +33,7 @@ const OutputSchema = {
 const saveProjectAsTemplate = {
     name: ToolNames.SAVE_PROJECT_AS_TEMPLATE,
     description:
-        'Save a project as a reusable template in the user\'s Todoist, like the app\'s "Save as template". Each call saves a new one.',
+        'Save a project as a reusable template in the user\'s Todoist, like the app\'s "Save as template". Each call saves a new one. To make a template from CSV content, use create-template-from-csv.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },

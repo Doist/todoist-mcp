@@ -208,11 +208,18 @@ function getMcpAnnotations(tool: { name: string; annotations: ToolAnnotations })
     return { ...defaultAnnotations, ...tool.annotations }
 }
 
+// Name segments written in capitals in a tool's title, e.g. "Create Template From CSV".
+const TITLE_ACRONYMS = new Set(['csv'])
+
 function formatToolTitle(toolName: string): string {
     return toolName
         .split('-')
         .filter(Boolean)
-        .map((segment) => `${segment.charAt(0).toUpperCase()}${segment.slice(1)}`)
+        .map((segment) =>
+            TITLE_ACRONYMS.has(segment)
+                ? segment.toUpperCase()
+                : `${segment.charAt(0).toUpperCase()}${segment.slice(1)}`,
+        )
         .join(' ')
 }
 

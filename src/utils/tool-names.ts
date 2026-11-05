@@ -81,6 +81,7 @@ export const ToolNames = {
     CREATE_PROJECT_FROM_TEMPLATE: 'create-project-from-template',
     GET_TEMPLATE: 'get-template',
     UPDATE_TEMPLATE: 'update-template',
+    CREATE_TEMPLATE_FROM_CSV: 'create-template-from-csv',
 
     // Workspace tools
     LIST_WORKSPACES: 'list-workspaces',
