@@ -53,7 +53,7 @@ export type TempRepo = {
     cleanup: () => void
 }
 
-export function createTempRepo({ branch = 'main' }: { branch?: string } = {}): TempRepo {
+export function createTempRepo(): TempRepo {
     const dir = mkdtempSync(join(tmpdir(), 'agent-tools-'))
 
     const run: TempRepo['run'] = (command, args, options = {}) =>
@@ -74,6 +74,7 @@ export function createTempRepo({ branch = 'main' }: { branch?: string } = {}): T
         },
         copyFromCheckout(...paths) {
             for (const path of paths) {
+                mkdirSync(dirname(join(dir, path)), { recursive: true })
                 cpSync(join(REPO_ROOT, path), join(dir, path), { recursive: true })
             }
         },
@@ -82,7 +83,7 @@ export function createTempRepo({ branch = 'main' }: { branch?: string } = {}): T
         },
     }
 
-    const init = repo.git(['init', '--quiet', '--initial-branch', branch])
+    const init = repo.git(['init', '--quiet', '--initial-branch', 'main'])
     if (init.status !== 0) throw new Error(`git init failed: ${init.stderr}`)
     // If git variables leaked through, git would be acting on another repository. Stop first.
     const toplevel = repo.git(['rev-parse', '--show-toplevel']).stdout.trim()

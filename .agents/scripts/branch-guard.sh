@@ -42,7 +42,8 @@ push)
     done
     ;;
 *)
-    echo "branch-guard: unknown mode '$mode' (expected 'commit' or 'push'), so nothing was checked" >&2
+    echo "branch-guard: unknown mode '$mode' (expected 'commit' or 'push'); the hook calling it is misconfigured" >&2
+    exit 2
     ;;
 esac
 
