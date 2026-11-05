@@ -61,7 +61,7 @@ const saveProjectAsTemplate = {
         if (projectId) {
             const templateColor = color ?? (await getProjectColor(client, projectId))
             template = await executeCreateWithRetry(() =>
-                client.createUserTemplate({
+                client.saveProjectAsTemplate({
                     projectId,
                     name,
                     description,
@@ -76,7 +76,7 @@ const saveProjectAsTemplate = {
                 )
             }
             template = await executeCreateWithRetry(() =>
-                client.createUserTemplateFromFile({
+                client.createTemplateFromCSV({
                     // The SDK treats strings as filesystem paths, not file content.
                     file: new Blob([csvFileContent ?? ''], { type: 'text/csv' }),
                     fileName: 'template.csv',

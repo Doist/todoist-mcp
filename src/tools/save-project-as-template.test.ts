@@ -5,8 +5,8 @@ import { ToolNames } from '../utils/tool-names.js'
 import { saveProjectAsTemplate } from './save-project-as-template.js'
 
 const mockTodoistApi = {
-    createUserTemplate: vi.fn(),
-    createUserTemplateFromFile: vi.fn(),
+    saveProjectAsTemplate: vi.fn(),
+    createTemplateFromCSV: vi.fn(),
     getProject: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
@@ -41,7 +41,7 @@ function createTemplate(overrides: Partial<Template> = {}): Template {
 describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
     beforeEach(() => {
         vi.clearAllMocks()
-        mockTodoistApi.createUserTemplate.mockResolvedValue(createTemplate())
+        mockTodoistApi.saveProjectAsTemplate.mockResolvedValue(createTemplate())
         mockTodoistApi.getProject.mockResolvedValue(
             createMockProject({ id: 'project-1', color: 'berry_red' }),
         )
@@ -59,7 +59,7 @@ describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
         )
 
         expect(mockTodoistApi.getProject).not.toHaveBeenCalled()
-        expect(mockTodoistApi.createUserTemplate).toHaveBeenCalledWith({
+        expect(mockTodoistApi.saveProjectAsTemplate).toHaveBeenCalledWith({
             projectId: 'project-1',
             name: 'Launch plan',
             description: 'Everything for a launch',
@@ -79,13 +79,15 @@ describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
         )
 
         expect(mockTodoistApi.getProject).toHaveBeenCalledWith('project-1')
-        expect(mockTodoistApi.createUserTemplate).toHaveBeenCalledWith(
+        expect(mockTodoistApi.saveProjectAsTemplate).toHaveBeenCalledWith(
             expect.objectContaining({ color: 'berry_red' }),
         )
     })
 
     it('saves to the workspace and says it is not shared yet', async () => {
-        mockTodoistApi.createUserTemplate.mockResolvedValue(createTemplate({ workspaceId: '111' }))
+        mockTodoistApi.saveProjectAsTemplate.mockResolvedValue(
+            createTemplate({ workspaceId: '111' }),
+        )
 
         const result = await saveProjectAsTemplate.execute(
             {
@@ -98,7 +100,7 @@ describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
             mockTodoistApi,
         )
 
-        expect(mockTodoistApi.createUserTemplate).toHaveBeenCalledWith(
+        expect(mockTodoistApi.saveProjectAsTemplate).toHaveBeenCalledWith(
             expect.objectContaining({ forWorkspace: true }),
         )
         expect(result.structuredContent).toEqual({
@@ -121,7 +123,7 @@ describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
             mockTodoistApi,
         )
 
-        expect(mockTodoistApi.createUserTemplate).toHaveBeenCalledWith(
+        expect(mockTodoistApi.saveProjectAsTemplate).toHaveBeenCalledWith(
             expect.objectContaining({ color: 'charcoal' }),
         )
     })
@@ -137,11 +139,11 @@ describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
                 mockTodoistApi,
             ),
         ).rejects.toThrow('404')
-        expect(mockTodoistApi.createUserTemplate).not.toHaveBeenCalled()
+        expect(mockTodoistApi.saveProjectAsTemplate).not.toHaveBeenCalled()
     })
 
     it('says a workspace template is shared when the API reports it shared', async () => {
-        mockTodoistApi.createUserTemplate.mockResolvedValue(
+        mockTodoistApi.saveProjectAsTemplate.mockResolvedValue(
             createTemplate({ workspaceId: '111', sharedWithWorkspaceMembers: true }),
         )
 
@@ -164,7 +166,7 @@ describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
     it('retries the save after a 503', async () => {
         vi.useFakeTimers()
         try {
-            mockTodoistApi.createUserTemplate
+            mockTodoistApi.saveProjectAsTemplate
                 .mockRejectedValueOnce(
                     createApiError({ status: 503, error: 'Service Unavailable' }),
                 )
@@ -182,7 +184,7 @@ describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
             await vi.runAllTimersAsync()
             const result = await promise
 
-            expect(mockTodoistApi.createUserTemplate).toHaveBeenCalledTimes(2)
+            expect(mockTodoistApi.saveProjectAsTemplate).toHaveBeenCalledTimes(2)
             expect(result.structuredContent.templateId).toBe('UT_28Ex1')
         } finally {
             vi.useRealTimers()
@@ -190,7 +192,7 @@ describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
     })
 
     it('does not retry the save after a 502, since the template may already exist', async () => {
-        mockTodoistApi.createUserTemplate.mockRejectedValue(
+        mockTodoistApi.saveProjectAsTemplate.mockRejectedValue(
             createApiError({ status: 502, error: 'Bad gateway' }),
         )
 
@@ -205,12 +207,12 @@ describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
                 mockTodoistApi,
             ),
         ).rejects.toThrow('502')
-        expect(mockTodoistApi.createUserTemplate).toHaveBeenCalledTimes(1)
+        expect(mockTodoistApi.saveProjectAsTemplate).toHaveBeenCalledTimes(1)
     })
 
     describe('from CSV content', () => {
         beforeEach(() => {
-            mockTodoistApi.createUserTemplateFromFile.mockResolvedValue(createTemplate())
+            mockTodoistApi.createTemplateFromCSV.mockResolvedValue(createTemplate())
         })
 
         it('uploads the CSV as a file and defaults the color to charcoal', async () => {
@@ -223,7 +225,7 @@ describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
                 mockTodoistApi,
             )
 
-            const [args] = mockTodoistApi.createUserTemplateFromFile.mock.calls[0] ?? []
+            const [args] = mockTodoistApi.createTemplateFromCSV.mock.calls[0] ?? []
             expect(args).toMatchObject({
                 fileName: 'template.csv',
                 name: 'Launch plan',
@@ -232,7 +234,7 @@ describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
             })
             expect(args?.file).toBeInstanceOf(Blob)
             expect(await (args?.file as Blob).text()).toBe('TYPE,CONTENT\ntask,Plan')
-            expect(mockTodoistApi.createUserTemplate).not.toHaveBeenCalled()
+            expect(mockTodoistApi.saveProjectAsTemplate).not.toHaveBeenCalled()
             expect(result.textContent).toContain('Saved CSV content as template "Launch plan"')
         })
 
@@ -248,7 +250,7 @@ describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
                     mockTodoistApi,
                 ),
             ).rejects.toThrow('always saved to personal templates')
-            expect(mockTodoistApi.createUserTemplateFromFile).not.toHaveBeenCalled()
+            expect(mockTodoistApi.createTemplateFromCSV).not.toHaveBeenCalled()
         })
     })
 
