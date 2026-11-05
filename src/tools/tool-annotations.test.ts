@@ -358,6 +358,20 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
         idempotentHint: false,
     },
     {
+        name: ToolNames.SAVE_PROJECT_AS_TEMPLATE,
+        title: 'Todoist: Save Project As Template',
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+    },
+    {
+        name: ToolNames.CREATE_PROJECT_FROM_TEMPLATE,
+        title: 'Todoist: Create Project From Template',
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+    },
+    {
         name: ToolNames.SEARCH,
         title: 'Todoist: Search',
         readOnlyHint: true,

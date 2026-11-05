@@ -9,6 +9,7 @@ import { addSections } from './tools/add-sections.js'
 import { addTasks } from './tools/add-tasks.js'
 import { analyzeProjectHealth } from './tools/analyze-project-health.js'
 import { completeTasks } from './tools/complete-tasks.js'
+import { createProjectFromTemplate } from './tools/create-project-from-template.js'
 import { deleteObject } from './tools/delete-object.js'
 import { exportProjectTemplate } from './tools/export-project-template.js'
 import { fetchObject } from './tools/fetch-object.js'
@@ -37,6 +38,7 @@ import { projectManagement } from './tools/project-management.js'
 import { projectMove } from './tools/project-move.js'
 import { reorderObjects } from './tools/reorder-objects.js'
 import { rescheduleTasks } from './tools/reschedule-tasks.js'
+import { saveProjectAsTemplate } from './tools/save-project-as-template.js'
 import { search } from './tools/search.js'
 import { setUserStatus } from './tools/set-user-status.js'
 import { uncompleteTasks } from './tools/uncomplete-tasks.js'
@@ -148,6 +150,8 @@ const toolRegistry = {
     // Template tools
     exportProjectTemplate,
     importProjectTemplate,
+    saveProjectAsTemplate,
+    createProjectFromTemplate,
 
     // Workspace tools
     listWorkspaces,
