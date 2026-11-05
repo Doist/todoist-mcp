@@ -372,6 +372,13 @@ const TOOL_EXPECTATIONS: ToolExpectation[] = [
         idempotentHint: false,
     },
     {
+        name: ToolNames.GET_TEMPLATE,
+        title: 'Todoist: Get Template',
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+    },
+    {
         name: ToolNames.UPDATE_TEMPLATE,
         title: 'Todoist: Update Template',
         readOnlyHint: false,
