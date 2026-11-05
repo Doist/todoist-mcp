@@ -27,10 +27,10 @@ Write the expected value out as literals (a lookup table or `it.each` rows are f
 
 The real boundary here is the Todoist API: the `Mocked<TodoistApi>`, or a `customFetch` in `*.sdk.test.ts`. Other boundaries: the clock (`vi.useFakeTimers`), `globalThis.fetch` in usage tracking, `console`.
 
-| Flag                                                                            | Fine                                                                                                                                                       |
-| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A **new** `vi.mock` of an internal module, to make setup easier                 | The existing partial mocks (`vi.importActual` plus one replaced function, as for `getTasksByFilter` and `user-resolver`): tolerated, not a pattern to copy |
-| Mocking the function the test is about, or one that computes its expected value |                                                                                                                                                            |
+| Flag                                                                            | Fine                                                                                                                                     |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| A **new** `vi.mock` of an internal module, to make setup easier                 | The existing module mocks, full or partial (`getTasksByFilter`, `user-resolver`, `workspace-resolver`): tolerated, not a pattern to copy |
+| Mocking the function the test is about, or one that computes its expected value |                                                                                                                                          |
 
 New tests should prefer feeding the `Mocked<TodoistApi>` over mocking an internal module.
 
@@ -44,7 +44,7 @@ Use fake timers or wait on the event. Fine: a real wait under 50 ms that interle
 
 ## 7. Snapshots only for model-facing text
 
-`toMatchSnapshot()` on `result.textContent` is fine: that text is what the model reads, and its exact wording matters. It must sit next to assertions on `structuredContent` or the API call, so the behaviour is not only in the snapshot. Flag a snapshot of structured data, or one that is the test's only assertion. Read every snapshot diff before updating it.
+`toMatchSnapshot()` on `result.textContent` is fine: that text is what the model reads, and its exact wording matters. It must sit next to assertions on `structuredContent` or the API call, so the behaviour is not only in the snapshot. Flag a snapshot of structured data, or a snapshot as the only assertion of a test about behaviour. A snapshot-only test is fine when the text is the test's point ("should suggest next steps…", `src/tools/uncomplete-tasks.test.ts:189`). Read every snapshot diff before updating it.
 
 ## 8. Reading source files is for contracts
 

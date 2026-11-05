@@ -17,11 +17,11 @@ Remove code nothing reaches, if you can prove it: no caller (`rg` for every name
 
 ## 3. Move one concept at a time
 
-Make one structural change, run the pinned tests, repeat. Migrate every caller and delete the old API; no shims left behind. Done when the tests pass after each step and no caller uses the old shape.
+Make one structural change, run the pinned tests, repeat. Migrate every caller and delete the old API; no shims left behind. Anything exported from `src/index.ts` is used by other packages: keep its shape, or stop and ask (changing it is a breaking `feat!:` release). Done when the tests pass after each step and no caller uses the old shape.
 
 ## 4. Leave the tests alone
 
-Existing tests may change how they reach the code: import paths, names, call sites. They may not change their inputs or their assertions. A snapshot (`__snapshots__/`) must not change at all. If one needs to, the behaviour changed: stop and say so.
+Existing tests may change how they reach the code: import paths, names, call sites. They may not change their inputs or their assertions. A snapshot's content must not change; renaming a test only renames its key. If content changes, the behaviour changed: stop and say so.
 
 ## 5. Keep it only if it reads better
 

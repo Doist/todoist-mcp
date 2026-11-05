@@ -15,7 +15,7 @@ List what the request leaves open: naming, input shape, what to return, error ca
 
 ## 3. Write "done" as checkable behaviours
 
-Write each behaviour as an input and the expected output, for example: "`add-tasks` with `deadlineDate: "remove"` sends `deadline: null` to `updateTask`". Each becomes a test. Done when a test could pass or fail on every one.
+Write each behaviour as an input and the expected output, for example: "`update-tasks` with `deadlineDate: "remove"` sends `deadlineDate: null` to `updateTask`". Each becomes a test. Done when a test could pass or fail on every one.
 
 ## 4. Build in thin slices, test first
 
@@ -23,16 +23,16 @@ For each behaviour: write its test at the public interface (`<tool>.execute(args
 
 ## 5. Update everything the change touches
 
-| You changed                      | Also update                                                                                                                              |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Added a tool                     | `src/utils/tool-names.ts`, `src/tool-registry.ts`, `src/index.ts` (both `tools` and named exports), `src/tools/tool-annotations.test.ts` |
-| A tool writes a list of items    | Per-item `failures` (see "Batch write tools" in `AGENTS.md`); `batch-failures-contract.test.ts` checks it                                |
-| A clearable optional field       | The `"remove"`/`"unassign"` string, both runtime branches, the schema description                                                        |
-| Tool or field descriptions       | Run `npm run eval` before and after (it calls paid models: ask first)                                                                    |
-| The tool surface grew            | `src/token-footprint.test.ts` may fail: raise `TOKEN_BUDGET` only if needed, and say so in the PR                                        |
-| Cross-tool routing               | The `instructions` string in `src/mcp-server.ts`, only if a model needs it to pick between tools                                         |
-| Output schemas                   | `src/utils/output-schemas.ts`; never `.nullable()` (`output-schema-nullability.test.ts`)                                                 |
-| Structure (new folder or helper) | `CODEBASE.md`, by its "Keeping CODEBASE.md accurate" rules                                                                               |
+| You changed                      | Also update                                                                                                             |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Added a tool                     | `src/utils/tool-names.ts`, `src/tool-registry.ts`, `src/index.ts` (named exports), `src/tools/tool-annotations.test.ts` |
+| A tool writes a list of items    | Per-item `failures` (see "Batch write tools" in `AGENTS.md`); `batch-failures-contract.test.ts` checks it               |
+| A clearable optional field       | The `"remove"`/`"unassign"` string, both runtime branches, the schema description                                       |
+| Tool or field descriptions       | Run `npm run eval` before and after (it calls paid models: ask first)                                                   |
+| The tool surface grew            | `src/token-footprint.test.ts` may fail: raise `DEFAULT_TOKEN_BUDGET` only if needed, and say so in the PR               |
+| Cross-tool routing               | The `instructions` string in `src/mcp-server.ts`, only if a model needs it to pick between tools                        |
+| Output schemas                   | `src/utils/output-schemas.ts`; never `.nullable()` (`output-schema-nullability.test.ts`)                                |
+| Structure (new folder or helper) | `CODEBASE.md`, by its "Keeping CODEBASE.md accurate" rules                                                              |
 
 Done when each row that applies is handled.
 

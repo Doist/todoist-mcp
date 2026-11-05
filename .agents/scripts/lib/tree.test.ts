@@ -74,8 +74,11 @@ describe('codeFingerprint', () => {
 describe('classify', () => {
     it.each([
         ['README.md', 'docs'],
-        ['docs/agents.md', 'docs'],
-        ['.agents/skills/verify/SKILL.md', 'docs'],
+        ['docs/dev-setup.md', 'docs'],
+        ['CODEBASE.md', 'docs'],
+        ['AGENTS.md', 'code'],
+        ['docs/agents.md', 'code'],
+        ['.agents/skills/verify/SKILL.md', 'code'],
         ['.github/PULL_REQUEST_TEMPLATE.md', 'docs'],
         ['LICENSE', 'docs'],
         ['.github/workflows/ci.yml', 'code'],

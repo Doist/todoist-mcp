@@ -27,7 +27,6 @@ const DOCS = [
 const tracked = git(REPO_ROOT, ['ls-files', '--cached', '--others', '--exclude-standard'])
     .stdout.split('\n')
     .filter(Boolean)
-const trackedNames = new Set(tracked.map((path) => basename(path)))
 const scripts = Object.keys(
     (
         JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
@@ -37,30 +36,59 @@ const scripts = Object.keys(
 )
 
 const ROOTED = /^(src|tools|scripts|docs|\.agents|\.github|\.husky|\.claude|\.codex|\.cursor)\//
-// A rooted value must end in an extension or a slash: `tools/list` is an MCP method, not a path.
-const LOOKS_LIKE_FILE = /(\.\w+|\/)$/
 const FILE_NAME = /^[\w.-]+\.(md|json|ts|tsx|js|cjs|mjs|sh|yml|yaml)$/
+// MCP method names look like paths.
+const NOT_PATHS = new Set(['tools/list', 'tools/call', 'resources/read'])
 
-/** Paths named in backticks, with `:line` suffixes removed. Placeholders (`<tool>`, `*`) are skipped. */
-function namedPaths(text: string): string[] {
+type Reference = { path: string; line?: number }
+
+/** Paths named in backticks, with an optional `:line`. Placeholders (`<tool>`, `*`) are skipped. */
+function namedPaths(text: string): Reference[] {
     return [...text.matchAll(/`([^`\s]+)`/g)]
-        .map((match) => (match[1] ?? '').replace(/:\d+$/, ''))
+        .map((match) => match[1] ?? '')
         .filter((value) => !/[<>*{}]/.test(value))
-        .filter(
-            (value) => (ROOTED.test(value) && LOOKS_LIKE_FILE.test(value)) || FILE_NAME.test(value),
-        )
+        .map((value) => {
+            const [, path = value, line] = value.match(/^(.*?):(\d+)$/) ?? []
+            return { path, line: line ? Number(line) : undefined }
+        })
+        .filter(({ path }) => (ROOTED.test(path) && !NOT_PATHS.has(path)) || FILE_NAME.test(path))
 }
 
-function exists(path: string): boolean {
-    if (ROOTED.test(path)) return existsSync(join(REPO_ROOT, path))
-    return trackedNames.has(path) || existsSync(join(REPO_ROOT, path))
+/** The repository path a reference names, or why it doesn't resolve. */
+function resolveReference(path: string): string | { problem: string } {
+    if (ROOTED.test(path) || existsSync(join(REPO_ROOT, path))) {
+        return existsSync(join(REPO_ROOT, path)) ? path : { problem: 'does not exist' }
+    }
+    const matches = tracked.filter((candidate) => basename(candidate) === path)
+    if (matches.length === 1) return matches[0] ?? path
+    return {
+        problem: matches.length === 0 ? 'does not exist' : `is ambiguous: ${matches.join(', ')}`,
+    }
+}
+
+function brokenReferences(text: string): string[] {
+    return namedPaths(text).flatMap(({ path, line }) => {
+        const resolved = resolveReference(path)
+        if (typeof resolved !== 'string') return [`${path} ${resolved.problem}`]
+        if (line === undefined) return []
+        const full = join(REPO_ROOT, resolved)
+        if (lstatSync(full).isDirectory()) return [`${path}:${line} names a line in a folder`]
+        const lines = readFileSync(full, 'utf8').split('\n').length
+        return line > lines ? [`${path}:${line} is past the end (${lines} lines)`] : []
+    })
+}
+
+/** Backticked names in the bullet list under a heading. */
+function listedUnder(text: string, heading: string): string[] {
+    const section = text.split(heading)[1]?.split(/\n#{1,3} /)[0] ?? ''
+    return [...section.matchAll(/^- `([\w-]+)`/gm)].map((match) => match[1] ?? '')
 }
 
 describe.each(DOCS.map((path) => [relative(REPO_ROOT, path), path]))('%s', (_name, path) => {
     const text = readFileSync(path, 'utf8')
 
-    it('names only files that exist', () => {
-        expect(namedPaths(text).filter((named) => !exists(named))).toEqual([])
+    it('names only files and lines that exist', () => {
+        expect(brokenReferences(text)).toEqual([])
     })
 
     it('links only to files that exist', () => {
@@ -93,6 +121,21 @@ describe.each(skills)('skill %s', (skill) => {
         expect(lstatSync(link).isSymbolicLink()).toBe(true)
         expect(resolve(dirname(link), readlinkSync(link))).toBe(join(SKILLS_DIR, skill))
     })
+})
+
+it('lists every skill in AGENTS.md, and only those', () => {
+    const text = readFileSync(join(REPO_ROOT, 'AGENTS.md'), 'utf8')
+    expect(listedUnder(text, '## Skills').toSorted()).toEqual(skills.toSorted())
+})
+
+it('names only test helpers that src/utils/test-helpers.ts exports', () => {
+    const skill = readFileSync(join(SKILLS_DIR, 'write-tests/SKILL.md'), 'utf8')
+    const section = skill.split('## Helpers')[1]?.split('\n## ')[0] ?? ''
+    const named = [...section.matchAll(/`(\w+)`/g)].map((match) => match[1] ?? '')
+    const helpers = readFileSync(join(REPO_ROOT, 'src/utils/test-helpers.ts'), 'utf8')
+    const exported = [...helpers.matchAll(/^export (?:function|const) (\w+)/gm)].map((m) => m[1])
+    expect(named.length).toBeGreaterThan(5)
+    expect(named.filter((name) => !exported.includes(name))).toEqual([])
 })
 
 it('has no Claude Code skill link without a skill behind it', () => {
