@@ -18,7 +18,7 @@ Today the server has two template tools, added in #555:
 | `save-project-as-csv`          | Returns a project as CSV template content. No shareable download link (see below).                                                                               | `export-project-template`                           | `GET /templates/file`                                 | `exportTemplateAsFile` (exists)                                                                                          | Not started                                                                |
 | `import-csv-into-project`      | Adds CSV template content to an existing project. CSV only.                                                                                                      | The CSV half of `import-project-template`           | `POST /projects/{project_id}/import`                  | Not in the SDK yet                                                                                                       | Needs the SDK method                                                       |
 | `import-template-into-project` | Adds a gallery or saved template to an existing project, by template ID or URL.                                                                                  | The template-ID half of `import-project-template`   | `POST /projects/{project_id}/import_template`         | Not in the SDK yet                                                                                                       | Needs the SDK method                                                       |
-| `create-project-from-template` | Creates a new project from a gallery or saved template, by template ID or URL.                                                                                   | The `add-projects` then import workaround from #555 | `POST /projects/from_template`                        | `createProjectFromTemplateId` (Doist/todoist-sdk-typescript#746)                                                         | Drafted in #665                                                            |
+| `create-project-from-template` | Creates a new project from a gallery or saved template, by template ID or URL. Templates only, not CSV content.                                                  | The `add-projects` then import workaround from #555 | `POST /projects/from_template`                        | `createProjectFromTemplateId` (Doist/todoist-sdk-typescript#746)                                                         | Drafted in #665                                                            |
 | `save-project-as-template`     | Saves a project, or CSV content, as a reusable template in the user's Todoist, like the app's "Save as template".                                                | —                                                   | `POST /templates/user`, `POST /templates/user/import` | `createUserTemplate` (Doist/todoist-sdk-typescript#746), `createUserTemplateFromFile` (Doist/todoist-sdk-typescript#748) | Drafted in #665 and #666                                                   |
 | `update-template`              | Renames a saved template, changes its description or color, replaces its content from a project, moves it into a workspace, or shares it with workspace members. | —                                                   | `PUT /templates/user/{template_id}`                   | `updateUserTemplate` (Doist/todoist-sdk-typescript#748)                                                                  | Drafted in #666                                                            |
 | `find-templates`               | Searches gallery, personal and workspace templates, so the model can find a template without the user supplying its ID.                                          | —                                                   | `GET /templates`, `GET /templates/{template_id}`      | `getTemplates`, `getTemplate` (Doist/todoist-sdk-typescript#747)                                                         | Not started                                                                |
@@ -26,7 +26,11 @@ Today the server has two template tools, added in #555:
 
 `export-project-template` and `import-project-template` are removed once their replacements ship.
 
-> **Note:** Renaming or removing these tools is a breaking change. Callers that use the old names stop working. See open question 4.
+> **Note:** Renaming or removing these tools is a breaking change. Callers that use the old names stop working. See open question 3.
+
+### No CSV in `create-project-from-template`
+
+`create-project-from-template` only takes a template, not CSV content, so it does not use `POST /projects/import`. To start a new project from CSV, create the project with `add-projects` and then call `import-csv-into-project`.
 
 ### Dropping the shareable download link
 
@@ -41,7 +45,7 @@ Without the link, `save-project-as-csv` persists nothing and is read-only.
 ## Migration notes
 
 - **The current import tool uses routes that are being retired.** `import-project-template` calls `templates/import_into_project_from_template_id` and `templates/import_into_project_from_file`. The backend spec gates both behind the `RESTFUL_TEMPLATES` API increment, and returns `410 Gone` to clients on that increment or later. The two import tools should call the new `/projects/{project_id}/…` routes, which needs two new SDK methods first. `GET /templates/file` keeps its path, so `save-project-as-csv` is unaffected.
-- **Renaming tools is a breaking change for clients.** Any saved prompt, agent configuration or client allowlist that names `export-project-template` or `import-project-template` stops working. Whether and how to rename is open question 4.
+- **Renaming tools is a breaking change for clients.** Any saved prompt, agent configuration or client allowlist that names `export-project-template` or `import-project-template` stops working. Whether and how to rename is open question 3.
 - **Per-tool bookkeeping.** Each new or renamed tool needs entries in `src/utils/tool-names.ts`, `src/tool-registry.ts`, `src/index.ts` and `src/tools/tool-annotations.test.ts`. The routing guidance in `src/mcp-server.ts` changes too, and `src/token-footprint.test.ts` may need a higher budget.
 - **Annotations.** Following the rules in `CLAUDE.md`:
     - `save-project-as-csv` is read-only, since returning CSV content persists nothing.
@@ -53,9 +57,8 @@ Without the link, `save-project-as-csv` persists nothing and is read-only.
 
 ## Open questions
 
-1. **Should `create-project-from-template` also accept CSV content?** `POST /projects/import` creates a new project from a CSV, which would remove the need to create a project and then import CSV into it.
-2. **Setup templates.** `POST /templates/{template_id}/use` instantiates a setup template (several projects, plus labels and filters). Is this in scope, and if so, as part of `create-project-from-template` or as its own tool?
-3. **Template previews.** `GET /templates/{template_id}/preview` shows what a template contains before using it. Is this worth a tool, or is `find-templates` enough?
-4. **How do we ship the renames?** Leaning towards renaming; to confirm with the team. Options:
+1. **Setup templates.** `POST /templates/{template_id}/use` instantiates a setup template (several projects, plus labels and filters). Is this in scope, and if so, as part of `create-project-from-template` or as its own tool?
+2. **Template previews.** `GET /templates/{template_id}/preview` shows what a template contains before using it. Is this worth a tool, or is `find-templates` enough?
+3. **How do we ship the renames?** Leaning towards renaming; to confirm with the team. Options:
     - Rename in one release marked as breaking (`feat!`), so semantic-release bumps the major version. Simplest, but callers using the old names break on upgrade.
     - Keep the old names for one release as deprecated duplicates of the new tools, then remove them. Gives callers time to switch, but both sets of tools count against the token budget in the meantime.
