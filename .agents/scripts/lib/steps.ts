@@ -34,34 +34,21 @@ export const VERIFY_STEPS: Step[] = [
 ]
 
 /**
- * How each `run:` in CI's test job maps to verify steps, and the package.json script it calls
- * at the time of writing. A test compares both against the real files, so CI and verify
- * cannot drift apart silently.
+ * How each `run:` in CI's test job maps to verify steps. For `npm run <script>`, the steps must
+ * run the script's commands, in order; steps.test.ts compares them with package.json and ci.yml,
+ * so CI and verify cannot drift apart silently.
  */
-export const CI_EQUIVALENTS: { run: string; script?: string; steps: string[] }[] = [
+export const CI_EQUIVALENTS: { run: string; steps: string[] }[] = [
     { run: 'npm ci', steps: [] }, // the preflight checks node_modules matches the lockfile
-    { run: 'npm run test', script: 'vitest run', steps: ['tests'] },
-    {
-        run: 'npm run type-check',
-        script: 'npx tsc --noEmit && npx tsc --noEmit -p .agents/scripts',
-        steps: ['types', 'types:tools'],
-    },
-    {
-        run: 'npm run format:check',
-        script: 'oxlint src scripts .agents/scripts && oxfmt --check',
-        steps: ['lint', 'format'],
-    },
-    {
-        run: 'npm run lint:schemas',
-        script: 'npm run build && npx tsx scripts/validate-schemas.ts',
-        steps: ['build', 'schemas'],
-    },
-    {
-        run: 'npm run test:executable',
-        script: 'npm run build && node scripts/test-executable.cjs',
-        steps: ['build', 'executable'],
-    },
+    { run: 'npm run test', steps: ['tests'] },
+    { run: 'npm run type-check', steps: ['types', 'types:tools'] },
+    { run: 'npm run format:check', steps: ['lint', 'format'] },
+    { run: 'npm run lint:schemas', steps: ['build', 'schemas'] },
+    { run: 'npm run test:executable', steps: ['build', 'executable'] },
 ]
+
+/** Variables that loosen a check. CI never sets them, so verify removes them. */
+export const LOOSENING_ENV = ['MCP_TOKEN_BUDGET']
 
 type PackageJson = {
     engines?: { node?: string }
@@ -88,13 +75,21 @@ export function preflight(root: string, nodeVersion = process.versions.node): st
         return problems
     }
     const lock = readJson<Lockfile>(join(root, 'package-lock.json'))
+    if (!lock?.packages) {
+        problems.push('package-lock.json is missing or unreadable. Run `npm install`.')
+        return problems
+    }
     const stale: string[] = []
     for (const name of Object.keys({ ...pkg?.dependencies, ...pkg?.devDependencies })) {
-        const locked = lock?.packages?.[`node_modules/${name}`]?.version
+        const locked = lock.packages[`node_modules/${name}`]?.version
+        if (!locked) {
+            stale.push(`${name} is not in the lockfile`)
+            continue
+        }
         const installed = readJson<{ version?: string }>(
             join(root, 'node_modules', name, 'package.json'),
         )?.version
-        if (locked && installed !== locked) {
+        if (installed !== locked) {
             stale.push(`${name} ${installed ?? 'missing'} (lockfile: ${locked})`)
         }
     }

@@ -104,14 +104,28 @@ describe('a code change', () => {
 })
 
 describe('what counts as a change', () => {
-    it('checks an untracked file', async () => {
+    it('sees an untracked file as a change', async () => {
         repo.write('src/new.ts', 'new\n')
         expect(await verify([pass('lint')])).toEqual({ ok: true, recorded: true })
+        expect(lines[0]).toMatch(/^✓ lint/)
     })
 
-    it('checks committed changes on the branch', async () => {
+    it('sees committed changes on the branch', async () => {
         repo.write('src/a.ts', 'committed\n')
         repo.git(['commit', '--quiet', '-am', 'change'])
+        expect(await verify([pass('lint')])).toEqual({ ok: true, recorded: true })
+        expect(lines[0]).toMatch(/^✓ lint/)
+    })
+
+    it('keeps an earlier pass when only docs changed', async () => {
+        writeVerified(repo.dir, { fingerprint: 'earlier', head: 'x', at: 'then' })
+        repo.write('README.md', 'changed\n')
+        await verify([pass('lint')])
+        expect(readVerified(repo.dir)?.fingerprint).toBe('earlier')
+    })
+
+    it('runs the checks when ci.yml changes, since a local test reads it', async () => {
+        repo.write('.github/workflows/ci.yml', 'on: push\n')
         expect(await verify([pass('lint')])).toEqual({ ok: true, recorded: true })
     })
 
@@ -123,11 +137,11 @@ describe('what counts as a change', () => {
     })
 
     it('records nothing when only files CI alone reads changed', async () => {
-        repo.write('.github/workflows/ci.yml', 'on: push\n')
+        repo.write('.github/workflows/release.yml', 'on: push\n')
         repo.write('README.md', 'changed\n')
         const result = await verify([pass('lint')])
         expect(result).toEqual({ ok: true, recorded: false })
-        expect(lines[0]).toContain('.github/workflows/ci.yml')
+        expect(lines[0]).toContain('.github/workflows/release.yml')
         expect(readVerified(repo.dir)).toBeUndefined()
     })
 

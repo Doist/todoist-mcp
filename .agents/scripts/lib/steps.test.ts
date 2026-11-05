@@ -1,6 +1,6 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { writeJson } from './state.ts'
 import { CI_EQUIVALENTS, preflight, VERIFY_STEPS } from './steps.ts'
@@ -21,14 +21,22 @@ describe('verify covers CI', () => {
         expect(commands.toSorted()).toEqual(CI_EQUIVALENTS.map((entry) => entry.run).toSorted())
     })
 
-    it('mirrors the package.json scripts CI calls', () => {
+    it('runs the same commands as the package.json scripts CI calls', () => {
         const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
             scripts: Record<string, string>
+        }
+        // `npx tsc` and node_modules/.bin/tsc are the same command; `--silent` changes output only.
+        const normalize = (command: string) =>
+            command.trim().replace(/^npx /, '').replace(' --silent', '')
+        const stepCommand = (name: string) => {
+            const step = VERIFY_STEPS.find((candidate) => candidate.name === name)
+            return normalize([basename(step?.command ?? ''), ...(step?.args ?? [])].join(' '))
         }
         for (const entry of CI_EQUIVALENTS) {
             const script = entry.run.match(/^npm run (\S+)$/)?.[1]
             if (!script) continue
-            expect({ script, body: pkg.scripts[script] }).toEqual({ script, body: entry.script })
+            const commands = (pkg.scripts[script] ?? '').split('&&').map(normalize)
+            expect({ script, commands }).toEqual({ script, commands: entry.steps.map(stepCommand) })
         }
     })
 
@@ -84,6 +92,21 @@ describe('preflight', () => {
     it('names a dependency that is not installed', () => {
         rmSync(join(root, 'node_modules/vitest'), { recursive: true })
         expect(preflight(root, '24.0.0')[0]).toContain('vitest missing (lockfile: 2.0.0)')
+    })
+
+    it('names a direct dependency missing from the lockfile', () => {
+        writeJson(join(root, 'package.json'), {
+            engines: { node: '>=24' },
+            dependencies: { zod: '1.0.0', added: '1.0.0' },
+        })
+        expect(preflight(root, '24.0.0')[0]).toContain('added is not in the lockfile')
+    })
+
+    it('says when the lockfile is missing', () => {
+        rmSync(join(root, 'package-lock.json'))
+        expect(preflight(root, '24.0.0')).toEqual([
+            'package-lock.json is missing or unreadable. Run `npm install`.',
+        ])
     })
 
     it('says when node_modules is missing', () => {

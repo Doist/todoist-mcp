@@ -47,8 +47,7 @@ export function defaultBranchRef(root: string): string | undefined {
 }
 
 /** Where the current branch left the default branch, or undefined if there is no default branch. */
-export function branchBase(root: string): string | undefined {
-    const ref = defaultBranchRef(root)
+export function branchBase(root: string, ref = defaultBranchRef(root)): string | undefined {
     if (!ref) return undefined
     const base = git(root, ['merge-base', 'HEAD', ref])
     return base.ok ? base.stdout.trim() : undefined

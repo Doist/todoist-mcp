@@ -30,10 +30,6 @@ const LOG_TAIL_LINES = 30
 export async function runVerify(options: VerifyOptions): Promise<VerifyResult> {
     const { root, steps, base, baseName = 'main', out = console.log } = options
 
-    // A run that does not finish with a pass must not leave an earlier pass behind.
-    clearVerified(root)
-    const before = snapshot(root)
-
     if (base === undefined) {
         out(`No ${baseName} branch found, so checking the whole tree.`)
     } else {
@@ -51,6 +47,12 @@ export async function runVerify(options: VerifyOptions): Promise<VerifyResult> {
         }
         if (changes.length === 0) out(`No changes since ${baseName}; checking the tree anyway.`)
     }
+
+    // From here the checks run, so a run that does not end in a pass must not leave an earlier
+    // pass behind. (A docs-only run returns above: docs are outside the fingerprint, so an
+    // earlier pass is still valid.)
+    clearVerified(root)
+    const before = snapshot(root)
 
     const logDir = join(stateDir(root), 'logs')
     mkdirSync(logDir, { recursive: true })

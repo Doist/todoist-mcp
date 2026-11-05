@@ -43,6 +43,8 @@ export type FileKind = 'docs' | 'unchecked' | 'code'
  * - code: everything else, including config, lockfiles, skills' scripts and tests.
  */
 export function classify(path: string): FileKind {
+    // .agents/scripts/lib/steps.test.ts reads ci.yml to keep verify in step with it.
+    if (path === '.github/workflows/ci.yml') return 'code'
     if (path.startsWith('.github/')) return path.endsWith('.md') ? 'docs' : 'unchecked'
     if (path.endsWith('.md') && !path.startsWith('src/')) return 'docs'
     if (path === 'LICENSE') return 'docs'
