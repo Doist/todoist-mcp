@@ -37,6 +37,7 @@ import { projectManagement } from './tools/project-management.js'
 import { projectMove } from './tools/project-move.js'
 import { reorderObjects } from './tools/reorder-objects.js'
 import { rescheduleTasks } from './tools/reschedule-tasks.js'
+import { searchCompletedTasks } from './tools/search-completed-tasks.js'
 import { search } from './tools/search.js'
 import { setUserStatus } from './tools/set-user-status.js'
 import { uncompleteTasks } from './tools/uncomplete-tasks.js'
@@ -86,6 +87,7 @@ const toolRegistry = {
     findTasks,
     findTasksByDate: findTasksByDateWithUi,
     findCompletedTasks,
+    searchCompletedTasks,
 
     // Project management tools
     addProjects,
