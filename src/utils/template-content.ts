@@ -1,10 +1,20 @@
-import { DURATION_UNITS, PROJECT_VIEW_STYLES, type TemplateContent } from '@doist/todoist-sdk'
+import {
+    DURATION_UNITS,
+    PROJECT_VIEW_STYLES,
+    type TemplateContent,
+    type TemplateContentDate,
+} from '@doist/todoist-sdk'
 import { z } from 'zod'
 import { convertNumberToPriority, convertPriorityToNumber, PRIORITY_VALUES } from './priorities.js'
 
+// get-template returns complete dates; a new date can be just `string`. Send dates back as
+// received so their type, time and timezone are kept.
 const ContentDateSchema = z.object({
-    string: z.string().describe('As written, e.g. "every monday" or "tomorrow at 9am".'),
+    date: z.string().optional().describe('ISO date or datetime.'),
+    string: z.string().optional().describe('e.g. "every monday at 9am".'),
     lang: z.string().optional(),
+    isRecurring: z.boolean().optional(),
+    timezone: z.string().optional(),
 })
 
 const ContentCommentFields = {
@@ -80,12 +90,8 @@ function toToolTemplateContent(content: TemplateContent): ToolTemplateContent {
             priority:
                 task.priority === undefined ? undefined : convertNumberToPriority(task.priority),
             labels: task.labels,
-            due: task.due
-                ? { string: task.due.string, lang: task.due.lang ?? undefined }
-                : undefined,
-            deadline: task.deadline
-                ? { string: task.deadline.string, lang: task.deadline.lang ?? undefined }
-                : undefined,
+            due: toToolDate(task.due),
+            deadline: toToolDate(task.deadline),
             duration: task.duration ?? undefined,
             responsibleUid: task.responsibleUid ?? undefined,
             assignedByUid: task.assignedByUid ?? undefined,
@@ -96,6 +102,19 @@ function toToolTemplateContent(content: TemplateContent): ToolTemplateContent {
         })),
         projectComments: content.projectComments.map(toToolComment),
         projectViewOptionsDefaults: content.projectViewOptionsDefaults,
+    }
+}
+
+function toToolDate(date: TemplateContentDate | null | undefined) {
+    if (!date) {
+        return undefined
+    }
+    return {
+        date: date.date,
+        string: date.string,
+        lang: date.lang ?? undefined,
+        isRecurring: date.isRecurring,
+        timezone: date.timezone ?? undefined,
     }
 }
 

@@ -216,6 +216,34 @@ describe(`${UPDATE_TEMPLATE} tool`, () => {
             )
         })
 
+        it('passes a complete date through unchanged, so its time and timezone are kept', async () => {
+            const due = {
+                date: '2026-11-06T09:00:00Z',
+                string: 'every friday at 10am',
+                lang: 'en',
+                isRecurring: true,
+                timezone: 'Europe/Rome',
+            }
+
+            await updateTemplate.execute(
+                {
+                    templateId: 'UT_28Ex1',
+                    content: {
+                        projects: [{ viewStyle: 'list' }],
+                        sections: [],
+                        tasks: [{ id: 't1', content: 'Plan', due }],
+                        comments: [],
+                        projectComments: [],
+                        projectViewOptionsDefaults: [],
+                    },
+                },
+                mockTodoistApi,
+            )
+
+            const [, args] = mockTodoistApi.updateTemplate.mock.calls[0] ?? []
+            expect(args?.content?.tasks[0]?.due).toEqual(due)
+        })
+
         it('shows a dropped task in the reply', async () => {
             const result = await updateTemplate.execute(
                 {
