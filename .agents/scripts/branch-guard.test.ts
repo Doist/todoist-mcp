@@ -279,6 +279,20 @@ describe('pre-push', () => {
     })
 })
 
+describe('the test environment', () => {
+    it('runs the hooks even when the person running the tests has LEFTHOOK=0', () => {
+        const previous = process.env.LEFTHOOK
+        process.env.LEFTHOOK = '0'
+        try {
+            const result = commit()
+            expect(output(result)).toContain("commits on 'main' are not allowed")
+        } finally {
+            if (previous === undefined) delete process.env.LEFTHOOK
+            else process.env.LEFTHOOK = previous
+        }
+    })
+})
+
 describe('branch-guard.sh', () => {
     it('fails loudly when a hook calls it with an unknown mode', () => {
         const result = repo.run('sh', ['.agents/scripts/branch-guard.sh', 'comit'])

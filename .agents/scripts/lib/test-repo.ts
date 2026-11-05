@@ -14,10 +14,13 @@ export function isolatedEnv(overrides: Record<string, string | undefined> = {}):
     // Clears the variables git exports to hooks. Left in place, a git command in a test would
     // act on the real repository: `npm test` runs inside the pre-push hook.
     const env = cleanGitEnv()
-    // DISABLE_AGENT_GUARD may be set in the agent running the tests; only the opt-out test wants it.
+    // DISABLE_AGENT_GUARD and LEFTHOOK=0 may be set by the person or agent running the tests; they
+    // would turn off what the tests check.
     for (const name of [
         'GITHUB_ACTIONS',
-        'HUSKY',
+        'LEFTHOOK',
+        'LEFTHOOK_BIN',
+        'LEFTHOOK_CONFIG',
         'GIT_CONFIG_PARAMETERS',
         'DISABLE_AGENT_GUARD',
     ]) {
