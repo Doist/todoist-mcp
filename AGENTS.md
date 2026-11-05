@@ -19,6 +19,18 @@ Use the matching skill without being asked. They live in `.agents/skills/` (Clau
 - `refactor`: changing structure without changing behaviour. Other tasks send restructuring here, as a separate change.
 - `write-tests`: writing or changing tests; `.agents/skills/write-tests/references/test-rules.md` is the quality bar.
 - `learn`: after a correction, to turn it into a check.
+- `review-changes`: when the owner says a change is ready for a PR, or asks for a review.
+
+## Review checks
+
+Reviewers, Doistbot included, apply these to every change:
+
+- [Tests](.agents/checks/tests.md): not weakened, new behaviour tested.
+- [Architecture](.agents/checks/architecture.md): rules lint can't express.
+- [Security](.agents/checks/security.md): tokens, the HTTP guard, fetched URLs.
+- [Privacy and secrets](.agents/checks/privacy.md): this repository is public.
+- [Tool surface](.agents/checks/tool-surface.md): what models see.
+- [Evidence](.agents/checks/evidence.md): claims backed by what ran.
 
 ## Git hooks and agent tooling
 
