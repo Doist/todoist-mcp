@@ -75,7 +75,8 @@ describe('classify', () => {
     it.each([
         ['README.md', 'docs'],
         ['docs/dev-setup.md', 'docs'],
-        ['CODEBASE.md', 'docs'],
+        ['CODEBASE.md', 'code'],
+        ['CONTRIBUTING.md', 'docs'],
         ['AGENTS.md', 'code'],
         ['docs/agents.md', 'code'],
         ['.agents/skills/verify/SKILL.md', 'code'],

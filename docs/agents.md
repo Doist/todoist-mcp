@@ -45,7 +45,7 @@ The release workflow commits and pushes to `main` from GitHub Actions, and husky
 One command, every check a pull request's CI runs: lint, format, both type checks, all tests, the build, schema validation and the executable smoke test. It takes about ten seconds, so it always checks the whole tree. Picking only the affected tests would save two seconds and add a way to miss something.
 
 - **Before the checks** it stops if Node is older than `package.json` requires, or if `node_modules` does not match the lockfile. Both make checks fail for reasons unrelated to your change.
-- **Only docs changed** since the branch left `main`: it says there is nothing to check. The agent instructions (`AGENTS.md`, `docs/agents.md`, `.agents/`) count as code, since a test checks every reference in them.
+- **Only docs changed** since the branch left `main`: it says there is nothing to check. The agent instructions (`AGENTS.md`, `CODEBASE.md`, `docs/agents.md`, `.agents/`) count as code, since a test checks every reference in them.
 - **Only CI files changed** (`.github/` workflows other than `ci.yml`, Renovate): it says no local check reads them. `ci.yml` counts as code, since a local test compares verify with it.
 - **`MCP_TOKEN_BUDGET`** raises the token budget test's limit. CI never sets it, so verify ignores it and says so.
 - **Output:** one line per step. A failing step prints the last 30 lines of its log and the log's path under `.tmp/agents/logs/`.
@@ -58,14 +58,14 @@ If CI gains a step, `.agents/scripts/lib/steps.test.ts` fails until verify gains
 
 Each skill is a short procedure with a check at the end of every step. Agents load one when the task matches its description.
 
-| Skill           | For                                    | Ends with                                                          |
-| --------------- | -------------------------------------- | ------------------------------------------------------------------ |
-| `verify`        | Any change about to be called done     | `npm run verify`, proof matched to the change, an evidence report  |
-| `fix-bug`       | Something broken                       | A test that failed on the symptom, the root cause, undo/restore    |
-| `build-feature` | A new tool, parameter or behaviour     | Decisions settled up front, test-first slices, a "touches X" map   |
-| `refactor`      | Structure changes, behaviour unchanged | Pinned tests, no changed assertions or snapshots                   |
-| `write-tests`   | Writing or changing tests              | Tests that failed once, by the rules in `references/test-rules.md` |
-| `learn`         | A correction from you                  | A type, lint rule, test or script check that catches the mistake   |
+| Skill           | For                                    | Ends with                                                         |
+| --------------- | -------------------------------------- | ----------------------------------------------------------------- |
+| `verify`        | Any change about to be called done     | `npm run verify`, proof matched to the change, an evidence report |
+| `fix-bug`       | Something broken                       | A test that failed on the symptom, the root cause, undo/restore   |
+| `build-feature` | A new tool, parameter or behaviour     | Decisions settled up front, test-first slices, a "touches X" map  |
+| `refactor`      | Structure changes, behaviour unchanged | Pinned tests, no changed assertions or snapshots                  |
+| `write-tests`   | Writing or changing tests              | Tests that failed once, meeting the test rules                    |
+| `learn`         | A correction from you                  | A type, lint rule, test or script check that catches the mistake  |
 
 The evidence report rates each claim: **said**, **cited** (a line), **traced** (followed the code), **ran** (a test or command executed it), **seen** (in the running server). "Fixed" or "safe" needs **ran**. Anything less is listed under "Not verified".
 

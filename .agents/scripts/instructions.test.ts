@@ -20,6 +20,7 @@ function markdownFiles(dir: string): string[] {
 
 const DOCS = [
     join(REPO_ROOT, 'AGENTS.md'),
+    join(REPO_ROOT, 'CODEBASE.md'),
     join(REPO_ROOT, 'docs/agents.md'),
     ...markdownFiles(join(REPO_ROOT, '.agents')),
 ]
@@ -37,6 +38,10 @@ const scripts = Object.keys(
 
 const ROOTED = /^(src|tools|scripts|docs|\.agents|\.github|\.husky|\.claude|\.codex|\.cursor)\//
 const FILE_NAME = /^[\w.-]+\.(md|json|ts|tsx|js|cjs|mjs|sh|yml|yaml)$/
+// A path relative to the document, like `references/test-rules.md` in a skill.
+const RELATIVE_FILE = /^[\w.-]+(\/[\w.-]+)+\.(md|json|ts|sh)$/
+// Output and state that exist only after a build or run.
+const GENERATED = /^(\.tmp|tmp|dist|node_modules)\//
 // MCP method names look like paths.
 const NOT_PATHS = new Set(['tools/list', 'tools/call', 'resources/read'])
 
@@ -46,17 +51,26 @@ type Reference = { path: string; line?: number }
 function namedPaths(text: string): Reference[] {
     return [...text.matchAll(/`([^`\s]+)`/g)]
         .map((match) => match[1] ?? '')
-        .filter((value) => !/[<>*{}]/.test(value))
+        .filter((value) => !/[<>*{}]/.test(value) && !GENERATED.test(value))
         .map((value) => {
             const [, path = value, line] = value.match(/^(.*?):(\d+)$/) ?? []
             return { path, line: line ? Number(line) : undefined }
         })
-        .filter(({ path }) => (ROOTED.test(path) && !NOT_PATHS.has(path)) || FILE_NAME.test(path))
+        .filter(
+            ({ path }) =>
+                (ROOTED.test(path) && !NOT_PATHS.has(path)) ||
+                FILE_NAME.test(path) ||
+                RELATIVE_FILE.test(path),
+        )
 }
 
 /** The repository path a reference names, or why it doesn't resolve. */
-function resolveReference(path: string): string | { problem: string } {
-    if (ROOTED.test(path) || existsSync(join(REPO_ROOT, path))) {
+function resolveReference(path: string, doc: string): string | { problem: string } {
+    if (!ROOTED.test(path) && path.includes('/')) {
+        const local = relative(REPO_ROOT, resolve(dirname(doc), path))
+        if (existsSync(join(REPO_ROOT, local))) return local
+    }
+    if (ROOTED.test(path) || path.includes('/') || existsSync(join(REPO_ROOT, path))) {
         return existsSync(join(REPO_ROOT, path)) ? path : { problem: 'does not exist' }
     }
     const matches = tracked.filter((candidate) => basename(candidate) === path)
@@ -66,9 +80,9 @@ function resolveReference(path: string): string | { problem: string } {
     }
 }
 
-function brokenReferences(text: string): string[] {
+function brokenReferences(text: string, doc: string): string[] {
     return namedPaths(text).flatMap(({ path, line }) => {
-        const resolved = resolveReference(path)
+        const resolved = resolveReference(path, doc)
         if (typeof resolved !== 'string') return [`${path} ${resolved.problem}`]
         if (line === undefined) return []
         const full = join(REPO_ROOT, resolved)
@@ -88,7 +102,7 @@ describe.each(DOCS.map((path) => [relative(REPO_ROOT, path), path]))('%s', (_nam
     const text = readFileSync(path, 'utf8')
 
     it('names only files and lines that exist', () => {
-        expect(brokenReferences(text)).toEqual([])
+        expect(brokenReferences(text, path)).toEqual([])
     })
 
     it('links only to files that exist', () => {

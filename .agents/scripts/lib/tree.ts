@@ -34,6 +34,8 @@ function hashPath(path: string): string {
     return hash.digest('hex')
 }
 
+const AGENT_DOCS = new Set(['AGENTS.md', 'CODEBASE.md', 'docs/agents.md'])
+
 /** The kind of file, as far as local checks are concerned. */
 export type FileKind = 'docs' | 'unchecked' | 'code'
 
@@ -47,8 +49,7 @@ export function classify(path: string): FileKind {
     // .agents/scripts/lib/steps.test.ts reads ci.yml to keep verify in step with it.
     if (path === '.github/workflows/ci.yml') return 'code'
     // .agents/scripts/instructions.test.ts checks every reference in these.
-    if (path === 'AGENTS.md' || path === 'docs/agents.md' || path.startsWith('.agents/'))
-        return 'code'
+    if (AGENT_DOCS.has(path) || path.startsWith('.agents/')) return 'code'
     if (path.startsWith('.github/')) return path.endsWith('.md') ? 'docs' : 'unchecked'
     if (path.endsWith('.md') && !path.startsWith('src/')) return 'docs'
     if (path === 'LICENSE') return 'docs'

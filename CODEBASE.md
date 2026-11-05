@@ -67,7 +67,7 @@ src/
     - returns the configured `McpServer`.
 3. `registerTool()` unwraps the `TodoistTool` contract, wires MCP's
    `server.registerTool()` with the Zod params/output, and wraps `execute()`
-   with retry logic (`utils/retry.ts`) and `ToolExecutionError` formatting.
+   with retry logic (`src/utils/retry.ts`) and `ToolExecutionError` formatting.
 4. Each tool's `execute(args, client)` calls the Todoist SDK and returns
    `{ textContent?, structuredContent?, contentItems? }`.
 
