@@ -9,6 +9,17 @@
 - **Never weaken a check to pass it.** Don't skip, delete or loosen tests, edit lint, type or test config to get green, or use `--no-verify`. If a check looks wrong, say so and stop.
 - **Report honestly:** what ran, what it showed, and what you did not verify.
 
+## Skills
+
+Use the matching skill without being asked. They live in `.agents/skills/` (Claude Code reads them through `.claude/skills/`).
+
+- `verify`: before saying a change is done, fixed or ready.
+- `fix-bug`: something is broken or wrong.
+- `build-feature`: a new tool, parameter or behaviour.
+- `refactor`: changing structure without changing behaviour. Other tasks send restructuring here, as a separate change.
+- `write-tests`: writing or changing tests; its `references/test-rules.md` is the quality bar.
+- `learn`: after a correction, to turn it into a check.
+
 ## Git hooks and agent tooling
 
 - Commits and pushes to `main` are refused by the git hooks. Work on a branch.
