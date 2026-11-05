@@ -20,6 +20,8 @@ function reply(value: Record<string, unknown>): void {
 }
 
 function readPayload(): Record<string, unknown> {
+    // Run by hand in a terminal, there is no hook payload; reading would wait for EOF.
+    if (process.stdin.isTTY) return {}
     let text = ''
     try {
         text = readFileSync(0, 'utf8')

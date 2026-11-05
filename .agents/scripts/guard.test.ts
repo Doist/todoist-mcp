@@ -103,6 +103,19 @@ it('fails open on an unknown event', () => {
     expect(result.json.systemMessage).toContain('unknown event "turn-middle"')
 })
 
+it('runs the gate even when the agent running the tests has DISABLE_AGENT_GUARD=1', () => {
+    const previous = process.env.DISABLE_AGENT_GUARD
+    process.env.DISABLE_AGENT_GUARD = '1'
+    try {
+        guard('turn-start')
+        repo.write('src/a.ts', 'export const a = 2\n')
+        expect(guard('turn-end').json?.decision).toBe('block')
+    } finally {
+        if (previous === undefined) delete process.env.DISABLE_AGENT_GUARD
+        else process.env.DISABLE_AGENT_GUARD = previous
+    }
+})
+
 it('does nothing with DISABLE_AGENT_GUARD=1', () => {
     guard('turn-start')
     repo.write('src/a.ts', 'export const a = 2\n')
