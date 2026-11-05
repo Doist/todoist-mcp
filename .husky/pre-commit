@@ -1,9 +1,9 @@
 sh .agents/scripts/branch-guard.sh commit
 
 # GUI git clients often run hooks without node on PATH. Skip the checks rather than block
-# the commit; CI runs the same ones.
-if ! command -v npx >/dev/null 2>&1; then
-    echo "pre-commit: npx not found, so lint-staged and the type check were skipped. CI still runs them." >&2
+# the commit; CI runs the same ones. npx and npm are node scripts, so check node itself too.
+if ! command -v node >/dev/null 2>&1 || ! command -v npx >/dev/null 2>&1; then
+    echo "pre-commit: node not found, so lint-staged and the type check were skipped. CI still runs them." >&2
     exit 0
 fi
 

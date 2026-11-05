@@ -13,6 +13,7 @@ let repo: TempRepo
 let initial: string
 let path: string
 let pathWithoutNode: string
+let pathLaunchersOnly: string
 let remote: string
 
 beforeAll(() => {
@@ -33,9 +34,11 @@ beforeAll(() => {
 
     const bin = join(repo.dir, '.stubs/bin')
     const binWithoutNode = join(repo.dir, '.stubs/bin-no-node')
+    const binLaunchersOnly = join(repo.dir, '.stubs/bin-launchers-no-node')
     for (const [dir, stubs] of [
-        [bin, ['npx', 'npm']],
+        [bin, ['npx', 'npm', 'node']],
         [binWithoutNode, []],
+        [binLaunchersOnly, []],
     ] as const) {
         mkdirSync(dir, { recursive: true })
         for (const tool of ['git', 'sh', 'env', 'basename', 'dirname']) {
@@ -56,6 +59,11 @@ beforeAll(() => {
     repo.write('.git/info/exclude', '.stubs/\n')
     path = bin
     pathWithoutNode = binWithoutNode
+    // npx and npm as installed: node scripts, which fail without node.
+    for (const tool of ['npx', 'npm']) {
+        writeFileSync(join(binLaunchersOnly, tool), '#!/usr/bin/env node\n', { mode: 0o755 })
+    }
+    pathLaunchersOnly = binLaunchersOnly
 })
 
 afterAll(() => repo.cleanup())
@@ -140,8 +148,15 @@ describe('pre-commit', () => {
         repo.git(['switch', '--quiet', '-c', 'feature'])
         const result = commit({ PATH: pathWithoutNode })
         expect(result.status).toBe(0)
-        expect(result.stderr).toContain('npx not found, so lint-staged and the type check')
+        expect(result.stderr).toContain('node not found, so lint-staged and the type check')
         expect(commitsOnHead()).toBe('2')
+    })
+
+    it('commits without checks when npx is on PATH but node is not', () => {
+        repo.git(['switch', '--quiet', '-c', 'feature'])
+        const result = commit({ PATH: pathLaunchersOnly })
+        expect(result.status).toBe(0)
+        expect(result.stderr).toContain('node not found')
     })
 
     it('still refuses a commit on main when node is not on PATH', () => {
@@ -194,10 +209,16 @@ describe('pre-push', () => {
         expect(result.stdout).toContain('husky - pre-push script failed (code 1)')
     })
 
+    it('pushes without tests when npm is on PATH but node is not', () => {
+        const result = push(['--dry-run', 'origin', 'feature'], { PATH: pathLaunchersOnly })
+        expect(result.status).toBe(0)
+        expect(result.stderr).toContain('node not found')
+    })
+
     it('pushes without tests, and says so, when node is not on PATH', () => {
         const result = push(['--dry-run', 'origin', 'feature'], { PATH: pathWithoutNode })
         expect(result.status).toBe(0)
-        expect(result.stderr).toContain('npm not found, so the tests were skipped')
+        expect(result.stderr).toContain('node not found, so the tests were skipped')
     })
 
     it('lets the release workflow push to main', () => {
