@@ -26,7 +26,7 @@ Today the server has two template tools, added in #555:
 
 `export-project-template` and `import-project-template` are removed once their replacements ship.
 
-> **Note:** Renaming or removing these tools is a breaking change. Callers that use the old names stop working. See open question 3.
+> **Note:** Renaming or removing these tools is a breaking change. Callers that use the old names stop working. See open question 2.
 
 ### No CSV in `create-project-from-template`
 
@@ -42,10 +42,14 @@ Today the server has two template tools, added in #555:
 
 Without the link, `save-project-as-csv` persists nothing and is read-only.
 
+## Out of scope
+
+- **Setup templates.** A setup template creates several projects plus labels and filters (`POST /templates/{template_id}/use`). These tools handle project templates only. `create-project-from-template` rejects a setup template, because `POST /projects/from_template` does not support them.
+
 ## Migration notes
 
 - **The current import tool uses routes that are being retired.** `import-project-template` calls `templates/import_into_project_from_template_id` and `templates/import_into_project_from_file`. The backend spec gates both behind the `RESTFUL_TEMPLATES` API increment, and returns `410 Gone` to clients on that increment or later. The two import tools should call the new `/projects/{project_id}/…` routes, which needs two new SDK methods first. `GET /templates/file` keeps its path, so `save-project-as-csv` is unaffected.
-- **Renaming tools is a breaking change for clients.** Any saved prompt, agent configuration or client allowlist that names `export-project-template` or `import-project-template` stops working. Whether and how to rename is open question 3.
+- **Renaming tools is a breaking change for clients.** Any saved prompt, agent configuration or client allowlist that names `export-project-template` or `import-project-template` stops working. Whether and how to rename is open question 2.
 - **Per-tool bookkeeping.** Each new or renamed tool needs entries in `src/utils/tool-names.ts`, `src/tool-registry.ts`, `src/index.ts` and `src/tools/tool-annotations.test.ts`. The routing guidance in `src/mcp-server.ts` changes too, and `src/token-footprint.test.ts` may need a higher budget.
 - **Annotations.** Following the rules in `CLAUDE.md`:
     - `save-project-as-csv` is read-only, since returning CSV content persists nothing.
@@ -57,8 +61,7 @@ Without the link, `save-project-as-csv` persists nothing and is read-only.
 
 ## Open questions
 
-1. **Setup templates.** `POST /templates/{template_id}/use` instantiates a setup template (several projects, plus labels and filters). Is this in scope, and if so, as part of `create-project-from-template` or as its own tool?
-2. **Template previews.** `GET /templates/{template_id}/preview` shows what a template contains before using it. Is this worth a tool, or is `find-templates` enough?
-3. **How do we ship the renames?** Leaning towards renaming; to confirm with the team. Options:
+1. **Template previews.** `GET /templates/{template_id}/preview` shows what a template contains before using it. Is this worth a tool, or is `find-templates` enough?
+2. **How do we ship the renames?** Leaning towards renaming; to confirm with the team. Options:
     - Rename in one release marked as breaking (`feat!`), so semantic-release bumps the major version. Simplest, but callers using the old names break on upgrade.
     - Keep the old names for one release as deprecated duplicates of the new tools, then remove them. Gives callers time to switch, but both sets of tools count against the token budget in the meantime.
