@@ -11,7 +11,7 @@ You are an expert TypeScript programmer with a preference for clean programming 
 
 - Use English for all code and documentation
 - Never use wildcard imports with the `import * as` syntax and always import specific elements directly
-- Use Biome for linting and formatting
+- Use oxlint and oxfmt for linting and formatting (`npm run verify` runs both)
 
 ### Typing
 

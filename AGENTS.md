@@ -1,6 +1,48 @@
 # Todoist MCP Server - Development Guidelines
 
+> For repo structure, architecture, shared utilities, and where things live, read [`CODEBASE.md`](./CODEBASE.md) first. This file covers the _rules_; CODEBASE.md is the _map_.
+
+## Definition of done
+
+- **Done means proven:** a test that failed before the change and passes after, or the tool's real answer (`npm run tool`, on a test account). Reading code or a passing compile is not proof.
+- **Run `npm run verify` before calling a change done.** It runs every check CI runs, in about ten seconds, and records the pass. It prints what it cannot see. A docs-only change needs nothing.
+- **Never weaken a check to pass it.** Don't skip, delete or loosen tests, edit lint, type or test config to get green, or use `--no-verify`. If a check looks wrong, say so and stop.
+- **Report honestly:** what ran, what it showed, and what you did not verify.
+
+## Git hooks and agent tooling
+
+- Commits and pushes to `main` are refused by the git hooks. Work on a branch.
+- Agent tooling lives in `.agents/scripts/`, never in `scripts/` (which ships in the npm package).
+- How it all fits together: [`docs/agents.md`](docs/agents.md).
+
 ## Tool Schema Design Rules
+
+### Output schemas must never use `.nullable()`
+
+`structuredContent` is sanitised with `removeNullFields` before it leaves the server, so a null can never reach a client. A nullable output field therefore declares a value the tool cannot deliver: the MCP SDK validates the sanitised payload against the declared `outputSchema` and fails the whole call with `Output validation error` the moment that field is stripped.
+
+Declare the field `.optional()` instead and leave the key out of `structuredContent` (`foo: value ?? undefined`) when there is nothing to report. `src/tools/output-schema-nullability.test.ts` enforces this across every registered tool.
+
+### Tool annotations must describe the tool's worst case
+
+The ChatGPT app review rejects the server when any tool's hints understate what it can do. Annotations are per tool, not per `action`/`operation`, so a tool that groups several operations behind an enum must be annotated for the riskiest one. Their definitions:
+
+- **`readOnlyHint: true`** only if the tool retrieves, lists, searches or transforms data without persisting anything or causing a user-visible side effect. Creating a file or a shareable link counts as a side effect.
+- **`openWorldHint: true`** if the tool reaches anyone or anything outside the user's own Todoist account: notifying another person (comments, assignments), or producing a public URL. `getMcpAnnotations` defaults it to `false`, so set it explicitly when it applies.
+- **`destructiveHint: true`** if the tool deletes, overwrites, replaces prior state, removes someone's access, or is otherwise hard to undo. Additive actions, including sending notifications, are not destructive.
+
+`src/tools/tool-annotations.test.ts` pins every tool's hints, so changing one means updating its entry there.
+
+### Batch write tools report per-item failures, never throw
+
+A tool that writes a list of items settles each item on its own and returns the ones it could not act on in a `failures` array (`FailureSchema`), alongside the successes, even when every item fails. A thrown error hides the items that were written, so callers assume nothing happened and a retry writes them twice. Follow `src/tools/add-projects.ts`:
+
+- `Promise.allSettled` over the items, with each SDK call wrapped in a retry, since the `registerTool` retry never sees a settled failure. A create uses `executeCreateWithRetry`, which retries only a 503: after a 502/504 the item may already exist and the API cannot dedupe a repeat. Updates and lookups use `executeWithRetry`.
+- `formatBatchItemError` for each reason, `logBatchFailures` for the log line, `appendFailureSummary` for the text.
+- Lookups shared across items (current user, workspace, recipients) fail only the items that need them.
+- Sync-backed batches go through `settleSyncCommands` (`src/utils/sync-commands.ts`), which reports each command's outcome.
+
+`src/tools/batch-failures-contract.test.ts` enforces this for every non-read-only tool with a list parameter. The exceptions, including tools not converted yet, are listed there with the reason for each.
 
 ### Removing/Clearing Optional Fields
 
@@ -55,7 +97,7 @@ Leave it off when the description would restate the field name (`id`, `projectId
 3. `src/tool-registry.ts` — add it to `registeredTools`, in the section it belongs to
 4. `src/index.ts` — add it to the `tools` object and the named exports (public API)
 5. `src/tools/<tool-name>.test.ts` — create the test file
-6. `src/tools/tool-annotations.test.ts` — add the annotation expectation entry, choosing hints by the rules in `CLAUDE.md` ("Tool annotations must describe the tool's worst case")
+6. `src/tools/tool-annotations.test.ts` — add the annotation expectation entry, choosing hints by "Tool annotations must describe the tool's worst case" above
 7. `src/mcp-server.ts` — add to the `instructions` string **only** if the tool needs cross-tool routing guidance; per-tool detail belongs in the tool's own description
 
 `src/tool-registry.test.ts` enforces that steps 1, 3 and 4 agree with what the server actually registers, so a partial registration fails CI instead of silently degrading `lint:schemas` coverage or leaving the tool unreachable from `run-tool.ts`.
@@ -69,8 +111,7 @@ When adding new tool parameters:
 1. Add comprehensive test coverage for new fields
 2. Test setting values
 3. Test clearing values (if applicable)
-4. Verify build and type checking pass
-5. Run full test suite (all 333+ tests must pass)
+4. Run `npm run verify`
 
 ## Documentation Requirements
 
@@ -81,11 +122,15 @@ When adding new tool features:
 3. Add tests demonstrating the feature
 4. Include examples in descriptions where helpful
 
-## Git hooks and agent tooling
+### Keeping CODEBASE.md accurate
 
-- Commits and pushes to `main` are refused by the git hooks. Work on a branch.
-- Agent tooling lives in `.agents/scripts/`, never in `scripts/` (which ships in the npm package).
-- How it all fits together: [`docs/agents.md`](docs/agents.md).
+`CODEBASE.md` is a structural map, not a file index. Update it when **structure** changes — not on every new file. Triggers:
+
+- new top-level dir under `src/`, or a new tool-file _category_
+- a new broadly-reusable helper in `src/utils/` (the "don't reimplement" list)
+- changes to the tool contract, registration flow, auth, or build/test/release tooling
+
+Adding a single tool in an existing category or a narrowly-scoped helper used by one caller does not require an update.
 
 ## Running Tools Directly
 
