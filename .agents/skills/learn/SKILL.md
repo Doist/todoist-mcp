@@ -17,7 +17,8 @@ In this order, take the first that works:
 2. **A lint rule** in `.oxlintrc.json`.
 3. **A test** that scans the code or the registered tools, like `src/tools/output-schema-nullability.test.ts` or `batch-failures-contract.test.ts`.
 4. **A script check** in `.agents/scripts/` (verify, a hook).
-5. **A line in `AGENTS.md` or a skill**, only if nothing above can hold it.
+5. **A review check** in `.agents/checks/`, for judgment a script can't make.
+6. **A line in `AGENTS.md` or a skill**, only if nothing above can hold it.
 
 A rule already written down that still got broken skips straight to 1–4. Done when you can say why the stronger options don't fit.
 

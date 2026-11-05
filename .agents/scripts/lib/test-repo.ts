@@ -50,7 +50,7 @@ export type TempRepo = {
 }
 
 export function createTempRepo(): TempRepo {
-    const dir = mkdtempSync(join(tmpdir(), 'agent-tools-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agent tools-'))
 
     const run: TempRepo['run'] = (command, args, options = {}) =>
         spawnSync(command, args, {

@@ -42,6 +42,7 @@
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "verify": "node .agents/scripts/verify.ts",
+        "review:worktree": "node .agents/scripts/review-worktree.ts",
         "build": "npm run build:lib && npm run build:apps",
         "build:lib": "vite build",
         "build:apps": "vite build --config src/mcp-apps/vite.config.ts",
