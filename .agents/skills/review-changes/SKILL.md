@@ -1,6 +1,6 @@
 ---
 name: review-changes
-description: Reviews a finished change with fresh reviewers (a task review, a blast-radius review for shared code, and Doistbot or per-check subagents), then confirms each finding before acting on it. Use when the owner says a change is "ready for a PR", "ready to merge", asks for "a review", or before a release.
+description: Reviews a finished change with fresh reviewers (a task review, a blast-radius review for shared code, and Doistbot or per-check subagents), then confirms each finding before acting on it. Use when the owner says a change is "ready for a PR", "ready to merge" or ready for a release, or asks for "a review".
 ---
 
 # Review a change

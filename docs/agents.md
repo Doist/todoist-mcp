@@ -62,14 +62,15 @@ If CI gains a step, `.agents/scripts/lib/steps.test.ts` fails until verify gains
 
 Each skill is a short procedure with a check at the end of every step. Agents load one when the task matches its description.
 
-| Skill           | For                                    | Ends with                                                         |
-| --------------- | -------------------------------------- | ----------------------------------------------------------------- |
-| `verify`        | Any change about to be called done     | `npm run verify`, proof matched to the change, an evidence report |
-| `fix-bug`       | Something broken                       | A test that failed on the symptom, the root cause, undo/restore   |
-| `build-feature` | A new tool, parameter or behaviour     | Decisions settled up front, test-first slices, a "touches X" map  |
-| `refactor`      | Structure changes, behaviour unchanged | Pinned tests, no changed assertions or snapshots                  |
-| `write-tests`   | Writing or changing tests              | Tests that failed once, meeting the test rules                    |
-| `learn`         | A correction from you                  | A type, lint rule, test or script check that catches the mistake  |
+| Skill            | For                                    | Ends with                                                                                     |
+| ---------------- | -------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `verify`         | Any change about to be called done     | `npm run verify`, proof matched to the change, an evidence report                             |
+| `fix-bug`        | Something broken                       | A test that failed on the symptom, the root cause, undo/restore                               |
+| `build-feature`  | A new tool, parameter or behaviour     | Decisions settled up front, test-first slices, a "touches X" map                              |
+| `refactor`       | Structure changes, behaviour unchanged | Pinned tests, no changed assertions or snapshots                                              |
+| `write-tests`    | Writing or changing tests              | Tests that failed once, meeting the test rules                                                |
+| `learn`          | A correction from you                  | A type, lint rule, test or script check that catches the mistake                              |
+| `review-changes` | A change you say is ready              | Task, blast-radius and code reviews; each finding fixed, dismissed with evidence or left open |
 
 The evidence report rates each claim: **said**, **cited** (a line), **traced** (followed the code), **ran** (a test or command executed it), **seen** (in the running server). "Fixed" or "safe" needs **ran**. Anything less is listed under "Not verified".
 
@@ -100,13 +101,13 @@ Give it:
 
 Leave out the method and your theory of the cause. For a vague report, ask the agent to restate it first. Start a new session for unrelated work.
 
-| To start…  | Say                                                                                 |
-| ---------- | ----------------------------------------------------------------------------------- |
-| a bug fix  | "Fix: <symptom>. Input: <args>. Expected: <x>." (`fix-bug`)                         |
-| a feature  | "Add <behaviour>. Done when <check>." (`build-feature`)                             |
-| a refactor | "Refactor <area> so <what gets easier>." (`refactor`)                               |
-| a review   | "Ready for a PR." (`review-changes`)                                                |
-| a release  | "Ready to release." Check the PR title type: `feat:`/`fix:` publish, others do not. |
+| To start…  | Say                                                                                                                |
+| ---------- | ------------------------------------------------------------------------------------------------------------------ |
+| a bug fix  | "Fix: <symptom>. Input: <args>. Expected: <x>." (`fix-bug`)                                                        |
+| a feature  | "Add <behaviour>. Done when <check>." (`build-feature`)                                                            |
+| a refactor | "Refactor <area> so <what gets easier>." (`refactor`)                                                              |
+| a review   | "Ready for a PR." (`review-changes`)                                                                               |
+| a release  | "Ready to release." Check the PR title type: `feat:`, `fix:`, `perf:` and breaking changes publish; others do not. |
 
 Your part: answer the decision questions, and read the evidence report, especially "Not verified".
 
@@ -118,7 +119,7 @@ Your part: answer the decision questions, and read the evidence report, especial
 
 ## Releases
 
-semantic-release publishes from `main` on every merge. The squash-merged PR title decides whether anything ships: `feat:` and `fix:` release, `chore:`, `ci:`, `docs:`, `test:` and `refactor:` do not. Changes to the agent tooling use `chore:` or `ci:`, so they never publish a new version. No path filter is needed.
+semantic-release publishes from `main` on every merge. The squash-merged PR title decides whether anything ships: `feat:`, `fix:`, `perf:` and any breaking change (`!`) release; `chore:`, `ci:`, `docs:`, `test:` and `refactor:` do not. Changes to the agent tooling use `chore:` or `ci:`, so they never publish a new version. No path filter is needed.
 
 ## What fails open
 

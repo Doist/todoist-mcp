@@ -1,9 +1,9 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { createTempRepo, type TempRepo } from './lib/test-repo.ts'
-import { codeFingerprint, snapshot } from './lib/tree.ts'
 import { createReviewWorktree } from './review-worktree.ts'
+import { createTempRepo, type TempRepo } from './test-repo.ts'
+import { codeFingerprint, snapshot } from './tree.ts'
 
 let repo: TempRepo
 let target: string
@@ -17,7 +17,7 @@ beforeEach(() => {
     writeFileSync(join(repo.dir, 'src/image.bin'), Buffer.from([0, 1, 2, 3]))
     repo.git(['add', '.'])
     repo.git(['commit', '--quiet', '-m', 'initial'])
-    target = join(repo.dir, '..', `${repo.dir.split('/').at(-1)}-review`)
+    target = join(repo.dir, '..', `${basename(repo.dir)} review`)
 })
 
 afterEach(() => {
@@ -59,4 +59,28 @@ it('leaves the original checkout as it was', () => {
 
 it('refuses a target that already exists', () => {
     expect(() => createReviewWorktree(repo.dir, repo.dir)).toThrow('already exists')
+})
+
+// An unreadable file makes the copy fail, after the worktree exists. Root can read it anyway.
+it.skipIf(process.getuid?.() === 0)(
+    'cleans up when a step after creating the worktree fails',
+    () => {
+        repo.write('src/a.ts', 'unstaged edit\n')
+        repo.write('src/unreadable.ts', 'secret\n')
+        chmodSync(join(repo.dir, 'src/unreadable.ts'), 0o000)
+        expect(() => createReviewWorktree(repo.dir, target)).toThrow(/EACCES/)
+        expect(existsSync(target)).toBe(false)
+        expect(repo.git(['worktree', 'list']).stdout.trim().split('\n')).toHaveLength(1)
+    },
+)
+
+it('works from the command line, in a checkout whose path has a space', () => {
+    repo.copyFromCheckout('.agents/scripts/review-worktree.ts', '.agents/scripts/lib')
+    repo.git(['add', '.agents'])
+    repo.git(['commit', '--quiet', '-m', 'tools'])
+    repo.write('src/a.ts', 'unstaged edit\n')
+    const result = repo.run(process.execPath, ['.agents/scripts/review-worktree.ts', target])
+    expect(result.stderr).toBe('')
+    expect(result.stdout).toContain('Review worktree ready')
+    expect(readFileSync(join(target, 'src/a.ts'), 'utf8')).toBe('unstaged edit\n')
 })

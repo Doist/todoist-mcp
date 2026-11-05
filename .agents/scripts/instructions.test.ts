@@ -153,7 +153,9 @@ it('names only test helpers that src/utils/test-helpers.ts exports', () => {
     expect(named.filter((name) => !exported.includes(name))).toEqual([])
 })
 
-describe.each(readdirSync(join(REPO_ROOT, '.agents/checks')))('check %s', (check) => {
+const checks = readdirSync(join(REPO_ROOT, '.agents/checks')).filter((name) => name.endsWith('.md'))
+
+describe.each(checks)('check %s', (check) => {
     const text = readFileSync(join(REPO_ROOT, '.agents/checks', check), 'utf8')
 
     it('says what to report and what is fine', () => {
