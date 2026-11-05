@@ -4,10 +4,21 @@
 
 ## Definition of done
 
-- **Done means proven:** a test that failed before the change and passes after, or the tool's real answer (`npm run tool`, on a test account). Reading code or a passing compile is not proof.
-- **Run `npm run verify` before calling a change done.** It runs every check CI runs, in about ten seconds, and records the pass. It prints what it cannot see. A docs-only change needs nothing.
+- **Done means proven:** a test that failed before the change and passes after, or the tool's real answer (`npm run tool`, on a test account). For a refactor: tests that pin the behaviour, passing before and after. Reading code or a passing compile is not proof.
+- **Run `npm run verify` before calling a change done.** It runs every check CI runs, in about ten seconds, and records the pass. It prints what it cannot see, and says when only docs changed and there is nothing to check.
 - **Never weaken a check to pass it.** Don't skip, delete or loosen tests, edit lint, type or test config to get green, or use `--no-verify`. If a check looks wrong, say so and stop.
 - **Report honestly:** what ran, what it showed, and what you did not verify.
+
+## Skills
+
+Use the matching skill without being asked. They live in `.agents/skills/` (Claude Code reads them through `.claude/skills/`).
+
+- `verify`: before saying a change is done, fixed or ready.
+- `fix-bug`: something is broken or wrong.
+- `build-feature`: a new tool, parameter or behaviour.
+- `refactor`: changing structure without changing behaviour. Other tasks send restructuring here, as a separate change.
+- `write-tests`: writing or changing tests; `.agents/skills/write-tests/references/test-rules.md` is the quality bar.
+- `learn`: after a correction, to turn it into a check.
 
 ## Git hooks and agent tooling
 
@@ -95,7 +106,7 @@ Leave it off when the description would restate the field name (`id`, `projectId
 1. `src/utils/tool-names.ts` — add the tool name constant
 2. `src/tools/<tool-name>.ts` — create the tool definition
 3. `src/tool-registry.ts` — add it to `registeredTools`, in the section it belongs to
-4. `src/index.ts` — add it to the `tools` object and the named exports (public API)
+4. `src/index.ts` — add it to the named exports (public API); the `tools` object there derives from the registry
 5. `src/tools/<tool-name>.test.ts` — create the test file
 6. `src/tools/tool-annotations.test.ts` — add the annotation expectation entry, choosing hints by "Tool annotations must describe the tool's worst case" above
 7. `src/mcp-server.ts` — add to the `instructions` string **only** if the tool needs cross-tool routing guidance; per-tool detail belongs in the tool's own description

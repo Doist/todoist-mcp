@@ -95,7 +95,6 @@ You are an expert TypeScript programmer with a preference for clean programming 
 - Name test variables clearly
 - Follow the convention: inputX, mockX, actualX, expectedX, etc
 - Write unit tests for each public function
-- Use test doubles to simulate dependencies
-  - Except for third-party dependencies that are not expensive to execute
+- Mock only real boundaries, mainly the Todoist API; see `.agents/skills/write-tests/references/test-rules.md`
 - Write acceptance tests for each module
 - Follow the Given-When-Then convention

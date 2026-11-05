@@ -34,17 +34,22 @@ function hashPath(path: string): string {
     return hash.digest('hex')
 }
 
+const AGENT_DOCS = new Set(['AGENTS.md', 'CODEBASE.md', 'docs/agents.md'])
+
 /** The kind of file, as far as local checks are concerned. */
 export type FileKind = 'docs' | 'unchecked' | 'code'
 
 /**
- * - docs: prose no check reads. Markdown under src/ is excluded, since it could be loaded at runtime.
+ * - docs: prose no check reads. Markdown under src/ is excluded, since it could be loaded at runtime,
+ *   and so are the agent instructions, which a test reads.
  * - unchecked: files only CI reads (workflows, Renovate). Local verification cannot vouch for them.
  * - code: everything else, including config, lockfiles, skills' scripts and tests.
  */
 export function classify(path: string): FileKind {
     // .agents/scripts/lib/steps.test.ts reads ci.yml to keep verify in step with it.
     if (path === '.github/workflows/ci.yml') return 'code'
+    // .agents/scripts/instructions.test.ts checks every reference in these.
+    if (AGENT_DOCS.has(path) || path.startsWith('.agents/')) return 'code'
     if (path.startsWith('.github/')) return path.endsWith('.md') ? 'docs' : 'unchecked'
     if (path.endsWith('.md') && !path.startsWith('src/')) return 'docs'
     if (path === 'LICENSE') return 'docs'
