@@ -60,10 +60,11 @@ describe('snapshot', () => {
 })
 
 describe('codeFingerprint', () => {
-    it('ignores docs and nothing else', () => {
+    it('ignores docs and files only CI reads, and nothing else', () => {
         const before = codeFingerprint(snapshot(repo.dir))
         repo.write('README.md', 'changed\n')
         repo.write('docs/guide.md', 'new\n')
+        repo.write('.github/workflows/release.yml', 'on: push\n')
         expect(codeFingerprint(snapshot(repo.dir))).toBe(before)
         repo.write('src/prompt.md', 'markdown the server could load\n')
         expect(codeFingerprint(snapshot(repo.dir))).not.toBe(before)

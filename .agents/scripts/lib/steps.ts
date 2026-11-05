@@ -55,7 +55,16 @@ type PackageJson = {
     dependencies?: Record<string, string>
     devDependencies?: Record<string, string>
 }
-type Lockfile = { packages?: Record<string, { version?: string }> }
+type Lockfile = {
+    packages?: Record<
+        string,
+        {
+            version?: string
+            dependencies?: Record<string, string>
+            devDependencies?: Record<string, string>
+        }
+    >
+}
 
 /** Problems that would make the checks fail for reasons unrelated to the change. */
 export function preflight(root: string, nodeVersion = process.versions.node): string[] {
@@ -79,6 +88,28 @@ export function preflight(root: string, nodeVersion = process.versions.node): st
         problems.push('package-lock.json is missing or unreadable. Run `npm install`.')
         return problems
     }
+    // npm ci refuses to install when package.json and the lockfile disagree, so CI would fail
+    // before any check runs.
+    const manifest = lock.packages[''] ?? {}
+    const disagree: string[] = []
+    for (const field of ['dependencies', 'devDependencies'] as const) {
+        const wanted = pkg?.[field] ?? {}
+        const locked = manifest[field] ?? {}
+        for (const name of new Set([...Object.keys(wanted), ...Object.keys(locked)])) {
+            if (wanted[name] !== locked[name]) {
+                disagree.push(
+                    `${name} (package.json: ${wanted[name] ?? 'none'}, lockfile: ${locked[name] ?? 'none'})`,
+                )
+            }
+        }
+    }
+    if (disagree.length > 0) {
+        problems.push(
+            `package.json and package-lock.json disagree: ${disagree.join(', ')}. Run \`npm install\`.`,
+        )
+        return problems
+    }
+
     const stale: string[] = []
     for (const name of Object.keys({ ...pkg?.dependencies, ...pkg?.devDependencies })) {
         const locked = lock.packages[`node_modules/${name}`]?.version

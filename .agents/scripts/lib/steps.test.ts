@@ -63,6 +63,7 @@ describe('preflight', () => {
         })
         writeJson(join(root, 'package-lock.json'), {
             packages: {
+                '': { dependencies: { zod: '1.0.0' }, devDependencies: { vitest: '2.0.0' } },
                 'node_modules/zod': { version: '1.0.0' },
                 'node_modules/vitest': { version: '2.0.0' },
             },
@@ -94,12 +95,15 @@ describe('preflight', () => {
         expect(preflight(root, '24.0.0')[0]).toContain('vitest missing (lockfile: 2.0.0)')
     })
 
-    it('names a direct dependency missing from the lockfile', () => {
+    it('names a dependency package.json and the lockfile disagree on', () => {
         writeJson(join(root, 'package.json'), {
             engines: { node: '>=24' },
-            dependencies: { zod: '1.0.0', added: '1.0.0' },
+            dependencies: { zod: '1.1.0', added: '1.0.0' },
+            devDependencies: { vitest: '2.0.0' },
         })
-        expect(preflight(root, '24.0.0')[0]).toContain('added is not in the lockfile')
+        expect(preflight(root, '24.0.0')).toEqual([
+            'package.json and package-lock.json disagree: zod (package.json: 1.1.0, lockfile: 1.0.0), added (package.json: 1.0.0, lockfile: none). Run `npm install`.',
+        ])
     })
 
     it('says when the lockfile is missing', () => {

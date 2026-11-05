@@ -96,6 +96,24 @@ describe('a code change', () => {
         expect(readVerified(repo.dir)).toBeUndefined()
     })
 
+    it('keeps an earlier pass when only files CI alone reads changed', async () => {
+        repo.write('src/a.ts', 'export const a = 2\n')
+        await verify([pass('lint')])
+        const earlier = readVerified(repo.dir)
+        repo.git(['add', '.'])
+        repo.git(['commit', '--quiet', '-m', 'code'])
+        repo.write('.github/workflows/release.yml', 'on: push\n')
+        lines = []
+        await runVerify({
+            root: repo.dir,
+            steps: [pass('lint')],
+            base: repo.git(['rev-parse', 'HEAD']).stdout.trim(),
+            out: (line) => lines.push(line),
+        })
+        expect(readVerified(repo.dir)).toEqual(earlier)
+        expect(readVerified(repo.dir)?.fingerprint).toBe(codeFingerprint(snapshot(repo.dir)))
+    })
+
     it('keeps its logs and state out of the fingerprint', async () => {
         await verify([pass('lint')])
         expect(existsSync(join(stateDir(repo.dir), 'logs/lint.log'))).toBe(true)

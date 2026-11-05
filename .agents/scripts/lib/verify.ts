@@ -61,7 +61,7 @@ export async function runVerify(options: VerifyOptions): Promise<VerifyResult> {
 
     const after = snapshot(root)
     if (codeFingerprint(after) !== codeFingerprint(before)) {
-        const changed = changedPaths(before, after).filter((path) => classify(path) !== 'docs')
+        const changed = changedPaths(before, after).filter((path) => classify(path) === 'code')
         out(`Files changed during the run: ${changed.join(', ')}. Nothing recorded; run it again.`)
         return { ok: false, recorded: false }
     }

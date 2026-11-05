@@ -51,11 +51,14 @@ export function classify(path: string): FileKind {
     return 'code'
 }
 
-/** Hash of every file that is not docs, so a docs edit after verification keeps the pass. */
+/**
+ * Hash of every file local checks read, so editing docs, or files only CI reads, after a pass
+ * keeps it valid.
+ */
 export function codeFingerprint(files: Snapshot): string {
     const hash = createHash('sha256')
     for (const path of Object.keys(files).sort()) {
-        if (classify(path) !== 'docs') hash.update(`${path}\0${files[path]}\n`)
+        if (classify(path) === 'code') hash.update(`${path}\0${files[path]}\n`)
     }
     return hash.digest('hex')
 }

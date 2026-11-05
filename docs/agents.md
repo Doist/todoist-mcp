@@ -44,7 +44,7 @@ One command, every check a pull request's CI runs: lint, format, both type check
 - **Only CI files changed** (`.github/` workflows other than `ci.yml`, Renovate): it says no local check reads them. `ci.yml` counts as code, since a local test compares verify with it.
 - **`MCP_TOKEN_BUDGET`** raises the token budget test's limit. CI never sets it, so verify ignores it and says so.
 - **Output:** one line per step. A failing step prints the last 30 lines of its log and the log's path under `.tmp/agents/logs/`.
-- **The record:** after a full pass it writes a content hash of every file except docs to `.tmp/agents/verified.json`. A run that fails, or sees files change while it runs, deletes it. The end-of-turn gate reads it.
+- **The record:** after a full pass it writes a content hash of every file local checks read (not docs, not CI-only files) to `.tmp/agents/verified.json`. A run that fails, or sees files change while it runs, deletes it. The end-of-turn gate reads it.
 - **What it cannot see:** the MCP Apps widgets in a real client, the real Todoist API, and how models use tool descriptions. It prints these after every pass.
 
 If CI gains a step, `.agents/scripts/lib/steps.test.ts` fails until verify gains it too.
