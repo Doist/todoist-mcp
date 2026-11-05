@@ -46,12 +46,13 @@ it('sends the agent back with the block decision every agent reads', () => {
     expect(end.json).toEqual({ decision: 'block', reason: expect.stringContaining('src/a.ts') })
 })
 
-it("allows the second stop, by Claude Code's stop_hook_active or Cursor's loop_count", () => {
+it('sends the agent back on the first stop even if another hook set stop_hook_active or loop_count', () => {
     for (const reentry of [{ stop_hook_active: true }, { loop_count: 1 }]) {
         guard('turn-start')
         repo.write('src/a.ts', `export const a = ${JSON.stringify(reentry)}\n`)
-        const end = guard('turn-end', { session_id: 's1', ...reentry })
-        expect(end.json).toEqual({ systemMessage: expect.stringContaining('agent-guard:') })
+        expect(guard('turn-end', { session_id: 's1', ...reentry }).json?.decision).toBe('block')
+        const second = guard('turn-end', { session_id: 's1', ...reentry })
+        expect(second.json).toEqual({ systemMessage: expect.stringContaining('agent-guard:') })
     }
 })
 

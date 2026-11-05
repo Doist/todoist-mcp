@@ -13,7 +13,13 @@ const AGENTS = [
         config: '.claude/settings.json',
         env: (dir: string) => ({ CLAUDE_PROJECT_DIR: dir }),
     },
-    { name: 'Codex', config: '.codex/hooks.json', env: () => ({}) },
+    // Hostile git variables, as a hook may inherit: the command must unset them to find the
+    // checkout.
+    {
+        name: 'Codex',
+        config: '.codex/hooks.json',
+        env: () => ({ GIT_DIR: '/nonexistent/.git', GIT_WORK_TREE: '/nonexistent' }),
+    },
     // Cursor runs the Claude Code hooks. If it does not set CLAUDE_PROJECT_DIR, the command falls
     // back to the git root.
     {

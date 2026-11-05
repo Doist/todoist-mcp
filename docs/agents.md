@@ -139,7 +139,7 @@ Your part: answer the decision questions, and read the evidence report, especial
 
 ## Where the tooling lives
 
-- `.agents/scripts/` holds scripts and their tests. It is not under `scripts/` because `scripts/` ships in the npm package.
+- `.agents/scripts/` holds scripts and their tests, next to the skills and review checks. It is not under `scripts/`, which ships in the npm package, nor a top-level "tools" folder, which would read as MCP tools (`src/tools/`).
 - The tooling runs straight from TypeScript with Node's type stripping, so it only uses erasable syntax (`.agents/scripts/tsconfig.json` enforces this). `npm run type-check` covers it.
 - Tests run in `npm test` and CI. They copy the tools into throwaway git repositories and never touch your checkout. A test helper clears the variables git exports to hooks, since `npm test` itself runs inside `pre-push`.
 

@@ -10,7 +10,7 @@ let repo: TempRepo
 const session = 'session-1'
 
 const start = () => startTurn({ root: repo.dir, sessionId: session })
-const end = (reentry = false) => endTurn({ root: repo.dir, sessionId: session, reentry })
+const end = () => endTurn({ root: repo.dir, sessionId: session })
 const markVerified = () =>
     writeVerified(repo.dir, {
         fingerprint: codeFingerprint(snapshot(repo.dir)),
@@ -94,12 +94,6 @@ describe('turns that changed code without verifying', () => {
         expect(second).toHaveProperty('note', expect.stringContaining('src/a.ts'))
     })
 
-    it('lets the agent stop when the agent says it already went back', () => {
-        start()
-        repo.write('src/a.ts', 'export const a = 2\n')
-        expect(end(true).decision).toBe('allow')
-    })
-
     it('sends the agent back again in the next turn', () => {
         start()
         repo.write('src/a.ts', 'export const a = 2\n')
@@ -110,7 +104,7 @@ describe('turns that changed code without verifying', () => {
         expect(end().decision).toBe('block')
     })
 
-    it('catches an edit of the same size in the same second', () => {
+    it('catches an edit that keeps the file size', () => {
         start()
         repo.write('src/a.ts', 'export const a = 9\n')
         expect(end().decision).toBe('block')

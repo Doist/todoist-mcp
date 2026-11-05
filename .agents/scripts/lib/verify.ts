@@ -3,7 +3,7 @@ import { createWriteStream, mkdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { cleanGitEnv, git } from './git.ts'
 import { clearVerified, stateDir, writeVerified } from './state.ts'
-import { changedPaths, changedSince, classify, codeFingerprint, snapshot } from './tree.ts'
+import { changedCodePaths, changedSince, classify, codeFingerprint, snapshot } from './tree.ts'
 
 export type Step = {
     name: string
@@ -61,7 +61,7 @@ export async function runVerify(options: VerifyOptions): Promise<VerifyResult> {
 
     const after = snapshot(root)
     if (codeFingerprint(after) !== codeFingerprint(before)) {
-        const changed = changedPaths(before, after).filter((path) => classify(path) === 'code')
+        const changed = changedCodePaths(before, after)
         out(`Files changed during the run: ${changed.join(', ')}. Nothing recorded; run it again.`)
         return { ok: false, recorded: false }
     }

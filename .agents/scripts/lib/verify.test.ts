@@ -114,6 +114,15 @@ describe('a code change', () => {
         expect(readVerified(repo.dir)?.fingerprint).toBe(codeFingerprint(snapshot(repo.dir)))
     })
 
+    it('keeps the pass when only a file CI alone reads changes during the run', async () => {
+        const editor = pass('tests', {
+            args: ['-c', 'mkdir -p .github/workflows && echo x > .github/workflows/release.yml'],
+        })
+        const result = await verify([pass('lint'), editor])
+        expect(result).toEqual({ ok: true, recorded: true })
+        expect(readVerified(repo.dir)?.fingerprint).toBe(codeFingerprint(snapshot(repo.dir)))
+    })
+
     it('keeps its logs and state out of the fingerprint', async () => {
         await verify([pass('lint')])
         expect(existsSync(join(stateDir(repo.dir), 'logs/lint.log'))).toBe(true)

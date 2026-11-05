@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { branchBase } from './git.ts'
 import { readJson, readVerified, stateDir, writeJson } from './state.ts'
 import {
+    changedCodePaths,
     changedPaths,
     changedSince,
     classify,
@@ -54,13 +55,10 @@ function pruneStaleTurns(root: string, now = Date.now()): void {
 export function endTurn({
     root,
     sessionId,
-    reentry = false,
     base = branchBase(root),
 }: {
     root: string
     sessionId: string
-    /** The agent already went back once this turn (Claude Code's `stop_hook_active`). */
-    reentry?: boolean
     /** Where the branch left the default branch; undefined when there is none. */
     base?: string
 }): Verdict {
@@ -75,14 +73,15 @@ export function endTurn({
 
     const now = snapshot(root)
     const changed = changedPaths(state.start, now)
-    const code = changed.filter((file) => classify(file) === 'code')
+    const code = changedCodePaths(state.start, now)
     const ciOnly = changed.filter((file) => classify(file) === 'unchecked')
     const ciNote = ciOnly.length
         ? `only CI checks ${list(ciOnly)}; say so in your report`
         : undefined
 
     if (code.length === 0) return { decision: 'allow', note: ciNote }
-    if (readVerified(root)?.fingerprint === codeFingerprint(now)) {
+    const verified = readVerified(root)
+    if (verified && verified.fingerprint === codeFingerprint(now)) {
         return { decision: 'allow', note: ciNote }
     }
     // The code is back to what the default branch has (an undo, a stash, a branch switch), which
@@ -92,7 +91,9 @@ export function endTurn({
         return { decision: 'allow', note: ciNote }
     }
 
-    if (reentry || state.sentBack) {
+    // Only this guard's own record counts: stop_hook_active or loop_count can also be set by
+    // another hook sending the agent back, which would skip this one.
+    if (state.sentBack) {
         return {
             decision: 'allow',
             note: `the turn ended with changes npm run verify has not passed: ${list(code)}`,

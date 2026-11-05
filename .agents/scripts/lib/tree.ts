@@ -68,6 +68,11 @@ export function codeFingerprint(files: Snapshot): string {
     return hash.digest('hex')
 }
 
+/** Changed files local checks read: what verify and the turn gate both act on. */
+export function changedCodePaths(before: Snapshot, after: Snapshot): string[] {
+    return changedPaths(before, after).filter((path) => classify(path) === 'code')
+}
+
 export function changedPaths(before: Snapshot, after: Snapshot): string[] {
     const paths = new Set([...Object.keys(before), ...Object.keys(after)])
     return [...paths].filter((path) => before[path] !== after[path]).sort()

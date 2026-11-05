@@ -4,7 +4,8 @@
 //   node .agents/scripts/guard.ts turn-end     when the agent stops: may send it back once
 //
 // Input is the hook's JSON on stdin; Claude Code, Codex and Cursor send compatible shapes, and
-// all three read `{"decision":"block","reason":...}` from a Stop hook. It guards the checkout
+// all three read `{"decision":"block","reason":...}` from a Stop hook. The guard keeps its own
+// record of having sent the agent back, rather than trusting stop_hook_active or loop_count. It guards the checkout
 // this file lives in, not the hook's working directory. A broken guard never blocks work: any
 // error allows the action and says why. DISABLE_AGENT_GUARD=1 turns it off. See docs/agents.md.
 
@@ -44,8 +45,7 @@ async function main(): Promise<void> {
         startTurn({ root: CHECKOUT_ROOT, sessionId })
         return
     }
-    const reentry = payload.stop_hook_active === true || Number(payload.loop_count) > 0
-    const verdict = endTurn({ root: CHECKOUT_ROOT, sessionId, reentry })
+    const verdict = endTurn({ root: CHECKOUT_ROOT, sessionId })
     if (verdict.decision === 'block') {
         reply({ decision: 'block', reason: verdict.reason })
     } else if (verdict.note) {
