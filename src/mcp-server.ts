@@ -56,7 +56,7 @@ What each tool does and how to fill its parameters is in the tool's own descript
 **Templates**
 
 - Templates cannot be listed through this server, so only use an ID or URL the user gave you or that **save-project-as-template** returned. Start a new project from one with **create-project-from-template**; add one to an existing project with **import-template-into-project**. Both write immediately and cannot be undone.
-- "Save as template" means **save-project-as-template**, which saves a reusable template in the user's Todoist. **export-project-template** returns a CSV file or download link instead. Edit, move or share a saved template with **update-template**. To change what a template contains (layout, sections, tasks), read it with **get-template**, then send the edited content back to **update-template**.
+- "Save as template" means **save-project-as-template**, which saves a reusable template in the user's Todoist. **export-project-template** returns a CSV file or download link instead. Edit, move or share a saved template with **update-template**. To change what a template contains (layout, sections, tasks), read it with **get-template**, then send the edited content back to **update-template**. Make a template from CSV content with **create-template-from-csv**.
 
 **Project health**
 
