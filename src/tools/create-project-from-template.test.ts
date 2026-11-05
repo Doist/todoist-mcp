@@ -1,6 +1,10 @@
 import type { TodoistApi, Workspace } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
-import { createMockProject, mockPersonalProjectCapacity } from '../utils/test-helpers.js'
+import {
+    createApiError,
+    createMockProject,
+    mockPersonalProjectCapacity,
+} from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { workspaceResolver } from '../utils/workspace-resolver.js'
 import { createProjectFromTemplate } from './create-project-from-template.js'
@@ -119,6 +123,52 @@ describe(`${CREATE_PROJECT_FROM_TEMPLATE} tool`, () => {
             ),
         ).rejects.toThrow('Folders only exist in workspaces')
         expect(mockTodoistApi.createProjectFromTemplateId).not.toHaveBeenCalled()
+    })
+
+    it('creates nothing when the workspace cannot be found', async () => {
+        mockTodoistApi.getWorkspaces.mockResolvedValue([WORKSPACE])
+
+        await expect(
+            createProjectFromTemplate.execute(
+                { templateId: 'product-launch', workspace: 'No such workspace' },
+                mockTodoistApi,
+            ),
+        ).rejects.toThrow()
+        expect(mockTodoistApi.createProjectFromTemplateId).not.toHaveBeenCalled()
+    })
+
+    it('retries the create after a 503', async () => {
+        vi.useFakeTimers()
+        try {
+            mockTodoistApi.createProjectFromTemplateId
+                .mockRejectedValueOnce(
+                    createApiError({ status: 503, error: 'Service Unavailable' }),
+                )
+                .mockResolvedValueOnce({ status: 'ok', projectId: 'new-project' })
+
+            const promise = createProjectFromTemplate.execute(
+                { templateId: 'product-launch' },
+                mockTodoistApi,
+            )
+            await vi.runAllTimersAsync()
+            const result = await promise
+
+            expect(mockTodoistApi.createProjectFromTemplateId).toHaveBeenCalledTimes(2)
+            expect(result.structuredContent.projectId).toBe('new-project')
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    it('does not retry the create after a 502, since the project may already exist', async () => {
+        mockTodoistApi.createProjectFromTemplateId.mockRejectedValue(
+            createApiError({ status: 502, error: 'Bad gateway' }),
+        )
+
+        await expect(
+            createProjectFromTemplate.execute({ templateId: 'product-launch' }, mockTodoistApi),
+        ).rejects.toThrow('502')
+        expect(mockTodoistApi.createProjectFromTemplateId).toHaveBeenCalledTimes(1)
     })
 
     it('still reports the new project when it cannot be read back', async () => {

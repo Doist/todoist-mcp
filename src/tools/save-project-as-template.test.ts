@@ -1,6 +1,6 @@
 import type { Template, TodoistApi } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
-import { createMockProject } from '../utils/test-helpers.js'
+import { createApiError, createMockProject } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { saveProjectAsTemplate } from './save-project-as-template.js'
 
@@ -108,5 +108,102 @@ describe(`${SAVE_PROJECT_AS_TEMPLATE} tool`, () => {
         expect(result.textContent).toContain(
             "It is in the workspace's templates (workspace id=111), not yet shared with members.",
         )
+    })
+
+    it('falls back to charcoal when the project color is not one it recognizes', async () => {
+        mockTodoistApi.getProject.mockResolvedValue(
+            createMockProject({ id: 'project-1', color: 'not-a-color' as never }),
+        )
+
+        await saveProjectAsTemplate.execute(
+            { projectId: 'project-1', name: 'Launch plan', description: 'A launch' },
+            mockTodoistApi,
+        )
+
+        expect(mockTodoistApi.createUserTemplate).toHaveBeenCalledWith(
+            expect.objectContaining({ color: 'charcoal' }),
+        )
+    })
+
+    it('saves nothing when the project cannot be read for its color', async () => {
+        mockTodoistApi.getProject.mockRejectedValue(
+            createApiError({ status: 404, error: 'Project not found' }),
+        )
+
+        await expect(
+            saveProjectAsTemplate.execute(
+                { projectId: 'missing', name: 'Launch plan', description: 'A launch' },
+                mockTodoistApi,
+            ),
+        ).rejects.toThrow('404')
+        expect(mockTodoistApi.createUserTemplate).not.toHaveBeenCalled()
+    })
+
+    it('says a workspace template is shared when the API reports it shared', async () => {
+        mockTodoistApi.createUserTemplate.mockResolvedValue(
+            createTemplate({ workspaceId: '111', sharedWithWorkspaceMembers: true }),
+        )
+
+        const result = await saveProjectAsTemplate.execute(
+            {
+                projectId: 'project-1',
+                name: 'Launch plan',
+                description: 'A launch',
+                color: 'blue',
+                saveToWorkspace: true,
+            },
+            mockTodoistApi,
+        )
+
+        expect(result.textContent).toContain(
+            "It is in the workspace's templates (workspace id=111), shared with members.",
+        )
+    })
+
+    it('retries the save after a 503', async () => {
+        vi.useFakeTimers()
+        try {
+            mockTodoistApi.createUserTemplate
+                .mockRejectedValueOnce(
+                    createApiError({ status: 503, error: 'Service Unavailable' }),
+                )
+                .mockResolvedValueOnce(createTemplate())
+
+            const promise = saveProjectAsTemplate.execute(
+                {
+                    projectId: 'project-1',
+                    name: 'Launch plan',
+                    description: 'A launch',
+                    color: 'blue',
+                },
+                mockTodoistApi,
+            )
+            await vi.runAllTimersAsync()
+            const result = await promise
+
+            expect(mockTodoistApi.createUserTemplate).toHaveBeenCalledTimes(2)
+            expect(result.structuredContent.templateId).toBe('UT_28Ex1')
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    it('does not retry the save after a 502, since the template may already exist', async () => {
+        mockTodoistApi.createUserTemplate.mockRejectedValue(
+            createApiError({ status: 502, error: 'Bad gateway' }),
+        )
+
+        await expect(
+            saveProjectAsTemplate.execute(
+                {
+                    projectId: 'project-1',
+                    name: 'Launch plan',
+                    description: 'A launch',
+                    color: 'blue',
+                },
+                mockTodoistApi,
+            ),
+        ).rejects.toThrow('502')
+        expect(mockTodoistApi.createUserTemplate).toHaveBeenCalledTimes(1)
     })
 })

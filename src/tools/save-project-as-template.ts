@@ -1,8 +1,8 @@
-import type { ColorKey } from '@doist/todoist-sdk'
+import type { ColorKey, TodoistApi } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { ColorKeySchema, ColorSchema } from '../utils/colors.js'
-import { executeWithRetry } from '../utils/retry.js'
+import { ColorKeySchema, colorSchemaWithDefault } from '../utils/colors.js'
+import { executeCreateWithRetry, executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const ArgsSchema = {
@@ -13,7 +13,9 @@ const ArgsSchema = {
         .trim()
         .min(1)
         .describe('Required. If the user gave none, write a one-sentence summary of the project.'),
-    color: ColorSchema.describe("Defaults to the project's color."),
+    color: colorSchemaWithDefault(
+        "Unrecognized colors are omitted and the project's color is used, which is also the default.",
+    ),
     saveToWorkspace: z
         .boolean()
         .optional()
@@ -38,13 +40,16 @@ const saveProjectAsTemplate = {
     async execute({ projectId, name, description, color, saveToWorkspace }, client) {
         const templateColor = color ?? (await getProjectColor(client, projectId))
 
-        const template = await client.createUserTemplate({
-            projectId,
-            name,
-            description,
-            color: templateColor,
-            forWorkspace: saveToWorkspace,
-        })
+        // A create retries only a 503: after a 502 or 504 the template may already exist.
+        const template = await executeCreateWithRetry(() =>
+            client.createUserTemplate({
+                projectId,
+                name,
+                description,
+                color: templateColor,
+                forWorkspace: saveToWorkspace,
+            }),
+        )
 
         const workspaceId = template.workspaceId ?? undefined
 
@@ -54,6 +59,7 @@ const saveProjectAsTemplate = {
                 templateId: template.id,
                 name: template.name,
                 workspaceId,
+                shared: template.sharedWithWorkspaceMembers === true,
             }),
             structuredContent: {
                 templateId: template.id,
@@ -64,10 +70,7 @@ const saveProjectAsTemplate = {
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
 
-async function getProjectColor(
-    client: Parameters<typeof saveProjectAsTemplate.execute>[1],
-    projectId: string,
-): Promise<ColorKey> {
+async function getProjectColor(client: TodoistApi, projectId: string): Promise<ColorKey> {
     const project = await executeWithRetry(() => client.getProject(projectId))
     const parsed = ColorKeySchema.safeParse(project.color)
     return parsed.success ? parsed.data : 'charcoal'
@@ -78,15 +81,18 @@ function generateTextContent({
     templateId,
     name,
     workspaceId,
+    shared,
 }: {
     projectId: string
     templateId: string
     name: string
     workspaceId: string | undefined
+    shared: boolean
 }) {
     const saved = `Saved project (id=${projectId}) as template "${name}" (id=${templateId}).`
+    const sharing = shared ? 'shared with members' : 'not yet shared with members'
     const where = workspaceId
-        ? ` It is in the workspace's templates (workspace id=${workspaceId}), not yet shared with members.`
+        ? ` It is in the workspace's templates (workspace id=${workspaceId}), ${sharing}.`
         : ' It is in your personal templates.'
 
     return `${saved}${where} Use create-project-from-template with this ID to start a new project from it.`

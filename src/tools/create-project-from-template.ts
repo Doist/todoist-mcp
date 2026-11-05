@@ -4,7 +4,7 @@ import {
     assertPersonalProjectCapacity,
     loadPersonalProjectCapacity,
 } from '../utils/personal-project-limit.js'
-import { executeWithRetry } from '../utils/retry.js'
+import { executeCreateWithRetry, executeWithRetry } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { workspaceResolver } from '../utils/workspace-resolver.js'
 import { extractTemplateId } from './import-project-template.js'
@@ -43,7 +43,7 @@ const ArgsSchema = {
 }
 
 const OutputSchema = {
-    projectId: z.string().describe('The ID of the new project.'),
+    projectId: z.string(),
     projectName: z.string().optional().describe('Absent if the project could not be read back.'),
 }
 
@@ -75,13 +75,16 @@ const createProjectFromTemplate = {
             )
         }
 
-        const { projectId } = await client.createProjectFromTemplateId({
-            templateId: resolvedTemplateId,
-            name,
-            locale,
-            workspaceId,
-            folderId,
-        })
+        // A create retries only a 503: after a 502 or 504 the project may already exist.
+        const { projectId } = await executeCreateWithRetry(() =>
+            client.createProjectFromTemplateId({
+                templateId: resolvedTemplateId,
+                name,
+                locale,
+                workspaceId,
+                folderId,
+            }),
+        )
 
         // The endpoint only returns the new ID. The project exists either way, so a
         // failed read must not turn the creation into an error a caller would retry.
