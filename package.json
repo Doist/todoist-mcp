@@ -64,7 +64,7 @@
         "lint:schemas": "npm run build && npx tsx scripts/validate-schemas.ts",
         "check": "oxlint src scripts .agents/scripts && oxfmt --check && npm run lint:schemas",
         "prepublishOnly": "npm run build && npm test",
-        "prepare": "husky"
+        "prepare": "lefthook install --reset-hooks-path"
     },
     "dependencies": {
         "@doist/todoist-sdk": "16.0.0",
@@ -97,8 +97,7 @@
         "concurrently": "9.2.5",
         "conventional-changelog-conventionalcommits": "9.3.1",
         "gpt-tokenizer": "3.4.0",
-        "husky": "9.1.7",
-        "lint-staged": "16.4.0",
+        "lefthook": "2.2.2",
         "morgan": "1.11.0",
         "nodemon": "3.1.14",
         "oxfmt": "0.55.0",
@@ -114,23 +113,5 @@
         "vite-plugin-dts": "4.5.4",
         "vite-plugin-singlefile": "2.3.4",
         "vitest": "4.1.12"
-    },
-    "lint-staged": {
-        "*.{ts,tsx,js,jsx}": [
-            "oxlint --fix",
-            "oxfmt --no-error-on-unmatched-pattern"
-        ],
-        "*.{md,yml,yaml,css,json}": [
-            "oxfmt --no-error-on-unmatched-pattern"
-        ],
-        "src/tools/!(*.test).ts": [
-            "npm run lint:schemas"
-        ],
-        "src/index.ts": [
-            "npm run lint:schemas"
-        ],
-        "scripts/validate-schemas.ts": [
-            "npm run lint:schemas"
-        ]
     }
 }

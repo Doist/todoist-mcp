@@ -36,12 +36,12 @@ const scripts = Object.keys(
     ).scripts,
 )
 
-const ROOTED = /^(src|tools|scripts|docs|\.agents|\.github|\.husky|\.claude|\.codex|\.cursor)\//
+const ROOTED = /^(src|tools|scripts|docs|\.agents|\.github|\.claude|\.codex|\.cursor)\//
 const FILE_NAME = /^[\w.-]+\.(md|json|ts|tsx|js|cjs|mjs|sh|yml|yaml)$/
 // A path relative to the document, like `references/test-rules.md` in a skill.
 const RELATIVE_FILE = /^[\w.-]+(\/[\w.-]+)+\.(md|json|ts|sh)$/
 // Output and state that exist only after a build or run.
-const GENERATED = /^(\.tmp|tmp|dist|node_modules|\.husky\/_)(\/|$)/
+const GENERATED = /^(\.tmp|tmp|dist|node_modules)(\/|$)/
 // MCP method names look like paths.
 const NOT_PATHS = new Set(['tools/list', 'tools/call', 'resources/read'])
 

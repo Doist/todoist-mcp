@@ -175,9 +175,9 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; add
 - **Type-check:** `npm run type-check` (`tsc --noEmit` for `src/`, then `.agents/scripts/tsconfig.json` for the agent tooling).
 - **Format/lint:** `npm run format:check` / `npm run format:fix` — uses **oxlint + oxfmt**, not eslint/prettier.
 - **Behaviour eval:** `npm run eval` — sends the real tool surface to a model and checks which tool it picks (`scripts/eval-instructions.ts`). Not part of `npm test`: it calls paid models and reports a pass rate rather than pass/fail. Run it either side of a change to tool descriptions or `instructions`; see AGENTS.md.
-- **Schema lint:** `npm run lint:schemas` — validates every tool's Zod schema via `scripts/validate-schemas.ts`. Runs automatically on `src/tools/*.ts` via lint-staged.
+- **Schema lint:** `npm run lint:schemas` — validates every tool's Zod schema via `scripts/validate-schemas.ts`. Runs automatically on staged `src/tools/*.ts` files in the `pre-commit` hook.
 - **Release:** `semantic-release` on merge to `main` (GitHub Actions). Commits must follow Conventional Commits — enforced by `check-semantic-pull-request.yml`. The pipeline runs `scripts/bump-plugin-version.mjs` (via `@semantic-release/exec`) to keep `.claude-plugin/plugin.json` in lockstep with `package.json`; both files are committed back together.
-- **Husky:** `prepare` script installs Husky. `.husky/pre-commit` refuses commits on `main`, then runs `lint-staged` and the type check; `.husky/pre-push` refuses pushes to `main`, then runs the tests. See `docs/agents.md`.
+- **Git hooks:** lefthook, configured in `lefthook.yml` and installed by `prepare`. `pre-commit` refuses commits on `main`, then lints and formats staged files and runs the type check; `commit-msg` repeats the branch rule for empty commits; `pre-push` refuses pushes to `main`, then runs the tests. See `docs/agents.md`.
 
 ## Run a tool without MCP
 

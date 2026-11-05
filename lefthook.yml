@@ -1,0 +1,60 @@
+# Git hooks for everyone, people and agents alike. `npm install` installs them (the
+# `prepare` script). See docs/agents.md.
+#
+# Lefthook skips every pre-commit job when nothing is staged, even jobs without a glob, so the
+# branch rule also runs in commit-msg, which empty commits reach.
+# GUI git clients often run hooks without node on PATH: the branch rule is plain sh and always
+# runs; the node checks are skipped with a message, and CI runs them.
+
+pre-commit:
+    piped: true
+    jobs:
+        - name: branch-guard
+          run: sh .agents/scripts/branch-guard.sh commit
+        - name: no-node
+          skip:
+              - run: command -v node >/dev/null 2>&1 && command -v npx >/dev/null 2>&1
+          run: echo "pre-commit - node not found, so lint, format and the type check were skipped. CI still runs them."
+        - name: lint
+          glob: '*.{ts,tsx,js,jsx}'
+          skip: &no-node
+              - run: '! command -v node >/dev/null 2>&1 || ! command -v npx >/dev/null 2>&1'
+          run: npx oxlint --fix {staged_files}
+          stage_fixed: true
+        - name: format
+          glob: '*.{ts,tsx,js,jsx,md,yml,yaml,css,json}'
+          skip: *no-node
+          run: npx oxfmt --no-error-on-unmatched-pattern {staged_files}
+          stage_fixed: true
+        - name: schemas
+          glob:
+              - 'src/tools/*.ts'
+              - 'src/index.ts'
+              - 'scripts/validate-schemas.ts'
+          exclude: '*.test.ts'
+          skip: *no-node
+          run: npm run lint:schemas
+        - name: types
+          skip: *no-node
+          run: npm run type-check
+
+commit-msg:
+    jobs:
+        - name: branch-guard
+          run: sh .agents/scripts/branch-guard.sh commit
+
+pre-push:
+    piped: true
+    jobs:
+        - name: branch-guard
+          # The guard reads the pushed refs from stdin; without this it sees none and allows all.
+          use_stdin: true
+          run: sh .agents/scripts/branch-guard.sh push
+        - name: no-node
+          skip:
+              - run: command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1
+          run: echo "pre-push - node not found, so the tests were skipped. CI still runs them."
+        - name: tests
+          skip:
+              - run: '! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1'
+          run: npm test

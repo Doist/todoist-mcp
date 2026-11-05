@@ -14,10 +14,13 @@ export function isolatedEnv(overrides: Record<string, string | undefined> = {}):
     // Clears the variables git exports to hooks. Left in place, a git command in a test would
     // act on the real repository: `npm test` runs inside the pre-push hook.
     const env = cleanGitEnv()
-    // DISABLE_AGENT_GUARD may be set in the agent running the tests; only the opt-out test wants it.
+    // DISABLE_AGENT_GUARD and LEFTHOOK=0 may be set by the person or agent running the tests; they
+    // would turn off what the tests check.
     for (const name of [
         'GITHUB_ACTIONS',
-        'HUSKY',
+        'LEFTHOOK',
+        'LEFTHOOK_BIN',
+        'LEFTHOOK_CONFIG',
         'GIT_CONFIG_PARAMETERS',
         'DISABLE_AGENT_GUARD',
     ]) {
@@ -95,13 +98,9 @@ export function createTempRepo(): TempRepo {
     return repo
 }
 
-/** Installs the repo's husky hooks the way `npm install` does, using husky from the real checkout. */
-export function installHusky(repo: TempRepo): void {
-    const husky = join(REPO_ROOT, 'node_modules/husky/index.js')
-    const result = repo.run(process.execPath, [
-        '--input-type=module',
-        '-e',
-        `const { default: husky } = await import(${JSON.stringify(husky)}); const m = husky(); if (m) { console.error(m); process.exit(1) }`,
-    ])
-    if (result.status !== 0) throw new Error(`husky install failed: ${result.stderr}`)
+/** Installs the repo's lefthook hooks the way `npm install` does, with the checkout's lefthook. */
+export function installLefthook(repo: TempRepo): void {
+    const lefthook = join(REPO_ROOT, 'node_modules/lefthook/bin/index.js')
+    const result = repo.run(process.execPath, [lefthook, 'install', '--reset-hooks-path'])
+    if (result.status !== 0) throw new Error(`lefthook install failed: ${result.stderr}`)
 }

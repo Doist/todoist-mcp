@@ -89,7 +89,7 @@ describe('classify', () => {
         ['src/notes.md', 'code'],
         ['package-lock.json', 'code'],
         ['.agents/scripts/verify.ts', 'code'],
-        ['.husky/pre-commit', 'code'],
+        ['lefthook.yml', 'code'],
     ])('%s is %s', (path, kind) => {
         expect(classify(path)).toBe(kind)
     })

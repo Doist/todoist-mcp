@@ -1,10 +1,11 @@
 #!/bin/sh
 # Refuses commits on the default branch and pushes to it, for people and agents alike.
-# Called by .husky/pre-commit ("commit") and .husky/pre-push ("push", ref lines on stdin).
+# Called from lefthook.yml: pre-commit and commit-msg ("commit"), pre-push ("push", ref lines
+# on stdin).
 # Plain sh on purpose: it must work in GUI clients that have git but no node or npm.
 #
-# The release workflow commits and pushes to main with semantic-release, and husky
-# installs these hooks there too (npm ci runs `prepare`), so GitHub Actions is exempt.
+# The release workflow commits and pushes to main with semantic-release, and `npm ci` runs
+# `prepare`, which installs these hooks there too, so GitHub Actions is exempt.
 # This is a speed bump, not the enforcement: the "Protect default branch" ruleset is.
 
 set -u
