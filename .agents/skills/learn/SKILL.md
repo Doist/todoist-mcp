@@ -28,7 +28,7 @@ Make the mistake on purpose. The new structure must fail on it. Remove it: it pa
 
 ## 4. Delete what it replaces
 
-Remove instruction lines the new check makes redundant, in `AGENTS.md`, skills or `.cursor/rules/`. Update the rules table in `docs/agents.md`: the rule, what holds it, and how certain it is.
+Remove instruction lines the new check makes redundant, in `AGENTS.md` or the skills. Update the rules table in `docs/agents.md`: the rule, what holds it, and how certain it is.
 
 ## 5. Ship it on its own
 
