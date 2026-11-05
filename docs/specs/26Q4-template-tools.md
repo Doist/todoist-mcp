@@ -37,10 +37,12 @@ Today the server has two template tools, added in #555:
 `save-project-as-csv` returns CSV content only. It drops the `format: "url"` option of `export-project-template`, which uploads the project's CSV and returns a link to it (`GET /templates/url`). Discussed in Doist/Issues#21076:
 
 - **The link is public, unauthenticated and permanent.** Users have no way to see or revoke the links they create; removing one takes a manual request to Platform.
-- **The MCP is the only place that still creates these links.** The web app removed "Export as shareable URL" on purpose in Doist/todoist-web#11771, and no Todoist app calls the route. The MCP created links about 1,166 times for 222 users in the 14 days before 2026-10-21.
+- **No Todoist app creates these links anymore.** The web app removed "Export as shareable URL" on purpose in Doist/todoist-web#11771, and no Todoist app calls the route. Only the MCP and todoist-cli's `td template export-url` still do. The MCP created links about 1,166 times for 222 users in the 14 days before 2026-10-21.
 - **The current tool doesn't warn about any of this.** Its description suggests the link for large projects without saying it is public. Its annotations mark it read-only, so clients can run it without asking the user.
 
 Without the link, `save-project-as-csv` persists nothing and is read-only.
+
+The fix covers todoist-cli too: `td template export-url` is removed, so no Doist client creates these links. `td template export-file` keeps returning the CSV itself.
 
 ## Out of scope
 
