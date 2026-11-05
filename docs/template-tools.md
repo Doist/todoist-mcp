@@ -26,6 +26,8 @@ Today the server has two template tools, added in #555:
 
 `export-project-template` and `import-project-template` are removed once their replacements ship.
 
+> **Note:** Renaming or removing these tools is a breaking change. Callers that use the old names stop working. See open question 5.
+
 ## Migration notes
 
 - **The current import tool uses routes that are being retired.** `import-project-template` calls `templates/import_into_project_from_template_id` and `templates/import_into_project_from_file`. The backend spec gates both behind the `RESTFUL_TEMPLATES` API increment, and returns `410 Gone` to clients on that increment or later. The two import tools should call the new `/projects/{project_id}/…` routes, which needs two new SDK methods first. `GET /templates/file` keeps its path, so `save-project-as-csv` is unaffected.
