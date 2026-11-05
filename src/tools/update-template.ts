@@ -83,7 +83,7 @@ const updateTemplate = {
                   .workspaceId
             : undefined
 
-        const template = await client.updateUserTemplate(id, {
+        const template = await client.updateTemplate(id, {
             name,
             description,
             color,

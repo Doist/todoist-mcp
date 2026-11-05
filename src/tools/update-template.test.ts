@@ -5,7 +5,7 @@ import { workspaceResolver } from '../utils/workspace-resolver.js'
 import { updateTemplate } from './update-template.js'
 
 const mockTodoistApi = {
-    updateUserTemplate: vi.fn(),
+    updateTemplate: vi.fn(),
     getWorkspaces: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
@@ -41,7 +41,7 @@ describe(`${UPDATE_TEMPLATE} tool`, () => {
     beforeEach(() => {
         vi.clearAllMocks()
         workspaceResolver.clearCache()
-        mockTodoistApi.updateUserTemplate.mockResolvedValue(createTemplate({ name: 'Renamed' }))
+        mockTodoistApi.updateTemplate.mockResolvedValue(createTemplate({ name: 'Renamed' }))
     })
 
     it('sends only the fields to change', async () => {
@@ -50,7 +50,7 @@ describe(`${UPDATE_TEMPLATE} tool`, () => {
             mockTodoistApi,
         )
 
-        expect(mockTodoistApi.updateUserTemplate).toHaveBeenCalledWith('UT_28Ex1', {
+        expect(mockTodoistApi.updateTemplate).toHaveBeenCalledWith('UT_28Ex1', {
             name: 'Renamed',
             description: undefined,
             color: 'blue',
@@ -72,7 +72,7 @@ describe(`${UPDATE_TEMPLATE} tool`, () => {
         mockTodoistApi.getWorkspaces.mockResolvedValue([
             { id: '111', name: 'Engineering' } as Workspace,
         ])
-        mockTodoistApi.updateUserTemplate.mockResolvedValue(
+        mockTodoistApi.updateTemplate.mockResolvedValue(
             createTemplate({ workspaceId: '111', sharedWithWorkspaceMembers: true }),
         )
 
@@ -86,7 +86,7 @@ describe(`${UPDATE_TEMPLATE} tool`, () => {
             mockTodoistApi,
         )
 
-        expect(mockTodoistApi.updateUserTemplate).toHaveBeenCalledWith(
+        expect(mockTodoistApi.updateTemplate).toHaveBeenCalledWith(
             'UT_28Ex1',
             expect.objectContaining({ workspaceId: '111', sharedWithWorkspaceMembers: true }),
         )
@@ -99,14 +99,14 @@ describe(`${UPDATE_TEMPLATE} tool`, () => {
             mockTodoistApi,
         )
 
-        expect(mockTodoistApi.updateUserTemplate).toHaveBeenCalledWith(
+        expect(mockTodoistApi.updateTemplate).toHaveBeenCalledWith(
             'UT_28Ex1',
             expect.objectContaining({ projectId: 'project-1', name: undefined }),
         )
     })
 
     it('stops sharing when that is the only change', async () => {
-        mockTodoistApi.updateUserTemplate.mockResolvedValue(
+        mockTodoistApi.updateTemplate.mockResolvedValue(
             createTemplate({ workspaceId: '111', sharedWithWorkspaceMembers: false }),
         )
 
@@ -115,7 +115,7 @@ describe(`${UPDATE_TEMPLATE} tool`, () => {
             mockTodoistApi,
         )
 
-        expect(mockTodoistApi.updateUserTemplate).toHaveBeenCalledWith(
+        expect(mockTodoistApi.updateTemplate).toHaveBeenCalledWith(
             'UT_28Ex1',
             expect.objectContaining({ sharedWithWorkspaceMembers: false }),
         )
@@ -126,13 +126,13 @@ describe(`${UPDATE_TEMPLATE} tool`, () => {
         await expect(
             updateTemplate.execute({ templateId: 'product-launch', name: 'Mine' }, mockTodoistApi),
         ).rejects.toThrow('is not a saved template ID')
-        expect(mockTodoistApi.updateUserTemplate).not.toHaveBeenCalled()
+        expect(mockTodoistApi.updateTemplate).not.toHaveBeenCalled()
     })
 
     it('refuses a call that changes nothing', async () => {
         await expect(
             updateTemplate.execute({ templateId: 'UT_28Ex1' }, mockTodoistApi),
         ).rejects.toThrow('Nothing to update')
-        expect(mockTodoistApi.updateUserTemplate).not.toHaveBeenCalled()
+        expect(mockTodoistApi.updateTemplate).not.toHaveBeenCalled()
     })
 })
