@@ -50,7 +50,7 @@ const OutputSchema = {
 const createProjectFromTemplate = {
     name: ToolNames.CREATE_PROJECT_FROM_TEMPLATE,
     description:
-        'Create a new project from a Todoist template, with its sections, tasks and comments. To add a template to an existing project, use import-project-template.',
+        'Create a new project from a Todoist template, with its sections, tasks and comments. To add a template to an existing project, use import-template-into-project.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
