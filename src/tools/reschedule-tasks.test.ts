@@ -14,9 +14,12 @@ const { RESCHEDULE_TASKS } = ToolNames
 describe(`${RESCHEDULE_TASKS} tool`, () => {
     beforeEach(() => {
         vi.clearAllMocks()
-        mockTodoistApi.sync.mockResolvedValue({
-            syncStatus: {},
-        })
+        // Todoist reports each applied command as 'ok' under its uuid.
+        mockTodoistApi.sync.mockImplementation(async ({ commands }) => ({
+            syncStatus: Object.fromEntries(
+                (commands ?? []).map((command) => [command.uuid, 'ok' as const]),
+            ),
+        }))
     })
 
     describe('rescheduling non-recurring tasks', () => {
@@ -184,41 +187,146 @@ describe(`${RESCHEDULE_TASKS} tool`, () => {
         })
     })
 
-    describe('error handling', () => {
-        it('should throw when task has no due date', async () => {
-            const task = createMockTask({
-                id: 'task-1',
-                content: 'No date task',
-                due: null,
+    describe('per-task failures', () => {
+        const dated = (id: string) =>
+            createMockTask({
+                id,
+                content: `Task ${id}`,
+                due: { date: '2026-03-15', string: 'Mar 15', isRecurring: false },
             })
-            mockTodoistApi.getTask.mockResolvedValue(task)
 
-            await expect(
-                rescheduleTasks.execute(
-                    { tasks: [{ id: 'task-1', date: '2026-03-20' }] },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('has no due date')
+        it('moves only the due date of a task that has both a due date and a deadline', async () => {
+            mockTodoistApi.getTask.mockResolvedValue(
+                createMockTask({
+                    id: 'task-1',
+                    due: { date: '2026-03-15', string: 'Mar 15', isRecurring: false },
+                    deadline: { date: '2026-03-10', lang: 'en' },
+                }),
+            )
+
+            await rescheduleTasks.execute(
+                { tasks: [{ id: 'task-1', date: '2026-03-20' }] },
+                mockTodoistApi,
+            )
+
+            const args = mockTodoistApi.sync.mock.calls[0]?.[0].commands?.[0]?.args
+            expect(args).toMatchObject({ id: 'task-1', due: { date: '2026-03-20' } })
+            expect(args).not.toHaveProperty('deadline')
         })
 
-        it('should throw when sync fails', async () => {
-            const task = createMockTask({
-                id: 'task-1',
-                due: {
-                    date: '2026-03-15',
-                    string: 'Mar 15',
-                    isRecurring: false,
-                },
+        it('moves the deadline of a task that has a deadline but no due date', async () => {
+            const undated = createMockTask({
+                id: 'task-2',
+                content: 'Deadline only',
+                due: null,
+                deadline: { date: '2026-03-10', lang: 'en' },
             })
-            mockTodoistApi.getTask.mockResolvedValue(task)
+            mockTodoistApi.getTask.mockImplementation(async (id: string) =>
+                id === 'task-2' ? undated : dated(id),
+            )
+
+            const result = await rescheduleTasks.execute(
+                {
+                    tasks: [
+                        { id: 'task-1', date: '2026-03-20' },
+                        { id: 'task-2', date: '2026-03-20' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const syncCall = mockTodoistApi.sync.mock.calls[0]
+            if (!syncCall) throw new Error('Expected sync to have been called')
+            expect(syncCall[0].commands?.map((command) => command.args)).toEqual([
+                expect.objectContaining({ id: 'task-1' }),
+                { id: 'task-2', deadline: { date: '2026-03-20' } },
+            ])
+            expect(result.structuredContent).toEqual(
+                expect.objectContaining({
+                    totalCount: 2,
+                    rescheduledTaskIds: ['task-1', 'task-2'],
+                    failures: [],
+                }),
+            )
+        })
+
+        it('leaves a task with neither a due date nor a deadline unchanged', async () => {
+            mockTodoistApi.getTask.mockResolvedValue(
+                createMockTask({ id: 'task-1', due: null, deadline: null }),
+            )
+
+            const result = await rescheduleTasks.execute(
+                { tasks: [{ id: 'task-1', date: '2026-03-20' }] },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.sync).not.toHaveBeenCalled()
+            expect(result.structuredContent.totalCount).toBe(0)
+            expect(result.structuredContent.failures).toEqual([])
+        })
+
+        it('keeps a deadline date-only when given a datetime', async () => {
+            mockTodoistApi.getTask.mockResolvedValue(
+                createMockTask({
+                    id: 'task-1',
+                    due: null,
+                    deadline: { date: '2026-03-10', lang: 'en' },
+                }),
+            )
+
+            await rescheduleTasks.execute(
+                { tasks: [{ id: 'task-1', date: '2026-03-20T09:00:00' }] },
+                mockTodoistApi,
+            )
+
+            const syncCall = mockTodoistApi.sync.mock.calls[0]
+            if (!syncCall) throw new Error('Expected sync to have been called')
+            expect(syncCall[0].commands?.[0]?.args).toEqual({
+                id: 'task-1',
+                deadline: { date: '2026-03-20' },
+            })
+        })
+
+        it('reports a task that cannot be read, and reschedules the rest', async () => {
+            mockTodoistApi.getTask.mockImplementation(async (id: string) => {
+                if (id === 'missing') throw new Error('Task not found')
+                return dated(id)
+            })
+
+            const result = await rescheduleTasks.execute(
+                {
+                    tasks: [
+                        { id: 'missing', date: '2026-03-20' },
+                        { id: 'task-1', date: '2026-03-20' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.rescheduledTaskIds).toEqual(['task-1'])
+            expect(result.structuredContent.failures).toEqual([
+                { item: 'missing', error: expect.stringContaining('Task not found') },
+            ])
+        })
+
+        it('reports every task when the sync request fails', async () => {
+            mockTodoistApi.getTask.mockResolvedValue(dated('task-1'))
             mockTodoistApi.sync.mockRejectedValue(new Error('Sync API error'))
 
-            await expect(
-                rescheduleTasks.execute(
-                    { tasks: [{ id: 'task-1', date: '2026-03-20' }] },
-                    mockTodoistApi,
-                ),
-            ).rejects.toThrow('Reschedule failed: Sync API error')
+            const result = await rescheduleTasks.execute(
+                { tasks: [{ id: 'task-1', date: '2026-03-20' }] },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent).toEqual(
+                expect.objectContaining({
+                    totalCount: 0,
+                    rescheduledTaskIds: [],
+                    failures: [
+                        { item: 'task-1', error: expect.stringContaining('Sync API error') },
+                    ],
+                }),
+            )
         })
     })
 

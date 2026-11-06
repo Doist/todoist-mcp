@@ -14,8 +14,6 @@ import { ToolNames } from '../utils/tool-names.js'
 const EXCEPTIONS: Partial<Record<string, string>> = {
     [ToolNames.MANAGE_ASSIGNMENTS]:
         "reports each task's outcome in its own results and throws only when every task failed, so no write is hidden",
-    [ToolNames.RESCHEDULE_TASKS]:
-        'not converted yet: it sends one Sync request and throws on the first failed command, hiding the ones that were applied',
 }
 
 type JsonSchemaObject = { properties?: Record<string, { type?: unknown }> }
