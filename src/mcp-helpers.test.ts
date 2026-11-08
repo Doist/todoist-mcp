@@ -223,6 +223,53 @@ describe('registerTool config', () => {
     })
 })
 
+describe('registerTool strip_emails', () => {
+    const collaboratorResult = {
+        textContent: '• Ada (ada@example.com) - ID: 1',
+        structuredContent: { collaborators: [{ id: '1', name: 'Ada', email: 'ada@example.com' }] },
+    }
+
+    async function callWith(toolName: string, features: RegisterToolArgs['features']) {
+        const { mock, server, client } = captureRegisterToolMock()
+        registerTool({
+            tool: buildToolFixture({
+                name: toolName,
+                outputSchema: {},
+                execute: async () => collaboratorResult,
+            }),
+            server,
+            client,
+            features,
+        })
+        const callback = mock.mock.calls[0]?.[2] as (
+            args: Record<string, unknown>,
+            context: unknown,
+        ) => Promise<unknown>
+        return callback({}, {})
+    }
+
+    it('strips emails from a collaborator tool when the feature is on', async () => {
+        expect(await callWith('find-project-collaborators', [{ name: 'strip_emails' }])).toEqual({
+            content: [{ type: 'text', text: '• Ada - ID: 1' }],
+            structuredContent: { collaborators: [{ id: '1', name: 'Ada' }] },
+        })
+    })
+
+    it('leaves tools outside the email list alone when the feature is on', async () => {
+        expect(await callWith('find-tasks', [{ name: 'strip_emails' }])).toEqual({
+            content: [{ type: 'text', text: '• Ada (ada@example.com) - ID: 1' }],
+            structuredContent: collaboratorResult.structuredContent,
+        })
+    })
+
+    it('leaves collaborator tools alone when the feature is off', async () => {
+        expect(await callWith('find-project-collaborators', [])).toEqual({
+            content: [{ type: 'text', text: '• Ada (ada@example.com) - ID: 1' }],
+            structuredContent: collaboratorResult.structuredContent,
+        })
+    })
+})
+
 describe('registerTool error path', () => {
     it('keeps raw file content out of error logs', async () => {
         const { mock, server, client } = captureRegisterToolMock()
