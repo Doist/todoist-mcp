@@ -1,0 +1,25 @@
+{
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "net.todoist/mcp",
+    "title": "Todoist",
+    "description": "Manage tasks, projects, and reminders in Todoist. Official server with OAuth sign-in.",
+    "version": "1.0.1",
+    "repository": {
+        "url": "https://github.com/Doist/todoist-mcp",
+        "source": "github"
+    },
+    "websiteUrl": "https://developer.todoist.com/",
+    "icons": [
+        {
+            "src": "https://app.todoist.com/apple-touch-icon.png",
+            "mimeType": "image/png",
+            "sizes": ["180x180"]
+        }
+    ],
+    "remotes": [
+        {
+            "type": "streamable-http",
+            "url": "https://ai.todoist.net/mcp"
+        }
+    ]
+}
