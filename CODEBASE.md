@@ -21,8 +21,9 @@ TypeScript · ESM-only · Node >=24 · npm >=11 · `zod` v4 for schemas · MCP S
 /
 ├─ src/                   # All source. See tree below.
 ├─ scripts/               # run-tool.ts (direct tool invocation), eval-instructions.ts (does a model still pick the right tool — see AGENTS.md), validate-schemas.ts, test-executable.cjs, bump-plugin-version.mjs (semantic-release plugin manifest sync)
-├─ .claude-plugin/        # Claude Code plugin manifest (plugin.json) + marketplace entry (marketplace.json)
+├─ .claude-plugin/        # Compatibility root plugin + official marketplace pointing to plugins/todoist/
 ├─ .mcp.json              # MCP server declaration consumed by the Claude Code plugin (HTTP transport → ai.todoist.net/mcp)
+├─ plugins/todoist/       # Self-contained directory plugin: hosted MCP config, listing, license and icon; no local dependencies
 ├─ dist/                  # Build output (Vite). Never edit.
 ├─ AGENTS.md              # Prescriptive rules for people and agents: definition of done, schema design, new-tool checklist
 ├─ CLAUDE.md              # Imports AGENTS.md for Claude Code; nothing else
@@ -176,7 +177,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; add
 - **Format/lint:** `npm run format:check` / `npm run format:fix` — uses **oxlint + oxfmt**, not eslint/prettier.
 - **Behaviour eval:** `npm run eval` — sends the real tool surface to a model and checks which tool it picks (`scripts/eval-instructions.ts`). Not part of `npm test`: it calls paid models and reports a pass rate rather than pass/fail. Run it either side of a change to tool descriptions or `instructions`; see AGENTS.md.
 - **Schema lint:** `npm run lint:schemas` — validates every tool's Zod schema via `scripts/validate-schemas.ts`. Runs automatically on staged `src/tools/*.ts` files in the `pre-commit` hook.
-- **Release:** `semantic-release` on merge to `main` (GitHub Actions). Commits must follow Conventional Commits — enforced by `check-semantic-pull-request.yml`. The pipeline runs `scripts/bump-plugin-version.mjs` (via `@semantic-release/exec`) to keep `.claude-plugin/plugin.json` in lockstep with `package.json`; both files are committed back together.
+- **Release:** `semantic-release` on merge to `main` (GitHub Actions). Commits must follow Conventional Commits — enforced by `check-semantic-pull-request.yml`. The pipeline runs `scripts/bump-plugin-version.mjs` (via `@semantic-release/exec`) to keep the root and `plugins/todoist/` plugin manifests in lockstep with `package.json`; all three files are committed back together.
 - **Git hooks:** lefthook, configured in `lefthook.yml` and installed by `prepare`. `pre-commit` refuses commits on `main`, then lints and formats staged files and runs the type check; `commit-msg` repeats the branch rule for empty commits; `pre-push` refuses pushes to `main`, then runs the tests. See `docs/agents.md`.
 
 ## Run a tool without MCP

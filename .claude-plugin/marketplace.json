@@ -1,17 +1,15 @@
 {
     "name": "doist",
+    "description": "Official Todoist plugins.",
     "owner": {
-        "name": "Doist",
-        "url": "https://doist.com"
+        "name": "Todoist",
+        "url": "https://www.todoist.com/"
     },
     "plugins": [
         {
             "name": "todoist",
-            "description": "Todoist for Claude Code — manage tasks, projects, labels, and workflows from your terminal.",
-            "source": {
-                "source": "url",
-                "url": "https://github.com/doist/todoist-mcp.git"
-            }
+            "description": "Manage your Todoist tasks and projects in Claude.",
+            "source": "./plugins/todoist"
         }
     ]
 }
