@@ -1,3 +1,9 @@
+## [13.11.0](https://github.com/Doist/todoist-mcp/compare/v13.10.2...v13.11.0) (2026-11-08)
+
+### Features
+
+* Add Todoist's Gemini CLI extension ([#688](https://github.com/Doist/todoist-mcp/issues/688)) ([a8b157b](https://github.com/Doist/todoist-mcp/commit/a8b157bf544fe68175c4505a5108cad60aa93edd))
+
 ## [13.10.2](https://github.com/Doist/todoist-mcp/compare/v13.10.1...v13.10.2) (2026-11-08)
 
 ### Bug Fixes
