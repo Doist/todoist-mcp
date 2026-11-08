@@ -21,7 +21,7 @@ TypeScript · ESM-only · Node >=24 · npm >=11 · `zod` v4 for schemas · MCP S
 /
 ├─ src/                   # All source. See tree below.
 ├─ scripts/               # run-tool.ts (direct tool invocation), eval-instructions.ts (does a model still pick the right tool — see AGENTS.md), validate-schemas.ts, test-executable.cjs, bump-plugin-version.mjs (semantic-release plugin manifest sync)
-├─ .claude-plugin/        # Compatibility root plugin + Doist marketplace pointing to plugins/todoist/
+├─ .claude-plugin/        # Compatibility root plugin + official marketplace pointing to plugins/todoist/
 ├─ .mcp.json              # MCP server declaration consumed by the Claude Code plugin (HTTP transport → ai.todoist.net/mcp)
 ├─ plugins/todoist/       # Self-contained directory plugin: hosted MCP config, listing, license and icon; no local dependencies
 ├─ dist/                  # Build output (Vite). Never edit.

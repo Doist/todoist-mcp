@@ -1,10 +1,10 @@
 {
     "name": "todoist",
     "version": "13.10.1",
-    "description": "Todoist for Claude Code — manage tasks, projects, labels, and workflows from your terminal.",
+    "description": "Todoist for Claude Code \u2014 manage tasks, projects, labels, and workflows from your terminal.",
     "author": {
-        "name": "Doist",
-        "url": "https://doist.com"
+        "name": "Todoist",
+        "url": "https://www.todoist.com/"
     },
     "homepage": "https://github.com/doist/todoist-mcp",
     "repository": "https://github.com/doist/todoist-mcp"

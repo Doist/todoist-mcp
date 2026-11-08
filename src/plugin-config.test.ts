@@ -20,7 +20,7 @@ describe('Claude Code plugin manifests', () => {
             expect(plugin.name).toBe('todoist')
             expect(plugin.version).toBe(pkg.version)
             expect(plugin.description).toMatch(/Todoist/)
-            expect(plugin.author?.name).toBe('Doist')
+            expect(plugin.author?.name).toBe('Todoist')
             expect(plugin.repository).toMatch(/todoist-mcp/)
         },
     )
@@ -28,7 +28,7 @@ describe('Claude Code plugin manifests', () => {
     it('marketplace.json wires the todoist plugin to this repo', () => {
         const marketplace = readJson('.claude-plugin/marketplace.json')
         expect(marketplace.name).toBe('doist')
-        expect(marketplace.owner?.name).toBe('Doist')
+        expect(marketplace.owner?.name).toBe('Todoist')
         expect(marketplace.plugins).toHaveLength(1)
         const [plugin] = marketplace.plugins
         expect(plugin.name).toBe('todoist')
