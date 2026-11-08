@@ -128,38 +128,39 @@ function stripEmailsFromText(text: string): string {
     return text.replace(emailInParensPattern, '').replace(emailPattern, '[email hidden]')
 }
 
+function exposesUserEmails(toolName: string): boolean {
+    return TOOLS_WITH_USER_EMAILS.includes(toolName as (typeof TOOLS_WITH_USER_EMAILS)[number])
+}
+
 /**
- * Register a Todoist tool in an MCP server.
+ * Register Todoist tools in an MCP server.
  *
  * Schema caching, annotations, MCP Apps `_meta`, result shaping and turning a thrown error into
  * an error result come from `@doist/mcp-core`. What is Todoist's own is wired in here: the API
- * client, retries, usage tracking, `strip_emails`, and the API error formatting.
+ * client, retries, usage tracking, `strip_emails`, and the API error formatting. One registrar
+ * serves every tool, since none of that depends on the tool.
  */
-function registerTool({
-    tool,
+function registerTools({
+    tools,
     server,
     client,
     features = [],
 }: {
-    tool: AnyTodoistTool
+    tools: readonly AnyTodoistTool[]
     server: McpServer
     client: TodoistApi
     features?: Features
 }) {
-    const shouldStripEmails =
-        features.some((f) => f.name === 'strip_emails') &&
-        TOOLS_WITH_USER_EMAILS.includes(tool.name as (typeof TOOLS_WITH_USER_EMAILS)[number])
+    const stripEmails = features.some((f) => f.name === 'strip_emails')
 
     const register = createToolRegistrar<TodoistApi>({
         titlePrefix: 'Todoist',
         createContext: () => client,
         formatError: formatToolExecutionError,
         structuredContentAsText: !USE_STRUCTURED_CONTENT,
-        wrapExecute: async (registered, run) => {
-            const result = await runWithUsageTrackingContext(registered.name, () =>
-                executeWithRetry(run),
-            )
-            if (!shouldStripEmails) {
+        wrapExecute: async (tool, run) => {
+            const result = await runWithUsageTrackingContext(tool.name, () => executeWithRetry(run))
+            if (!stripEmails || !exposesUserEmails(tool.name)) {
                 return result
             }
 
@@ -171,12 +172,14 @@ function registerTool({
                     result.structuredContent && stripEmailsFromObject(result.structuredContent),
             }
         },
-        onError: ({ tool: failed, args, error }) => {
-            console.error(`Error executing tool ${failed.name}:`, { args: redactArgs(args), error })
+        onError: ({ tool, args, error }) => {
+            console.error(`Error executing tool ${tool.name}:`, { args: redactArgs(args), error })
         },
     })
 
-    register(server, tool)
+    for (const tool of tools) {
+        register(server, tool)
+    }
 }
 
 export {
@@ -184,7 +187,7 @@ export {
     type Feature,
     type FeatureName,
     type Features,
-    registerTool,
+    registerTools,
     stripEmailsFromObject,
     stripEmailsFromText,
 }

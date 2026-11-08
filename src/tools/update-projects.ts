@@ -75,7 +75,7 @@ const updateProjects = {
         // rejecting it with a 403 permission error) must not discard the projects that
         // succeeded nor collapse into one opaque batch error that invites a full retry.
         // Per-item calls go through executeWithRetry so transient 5xx failures still get
-        // the same backoff the registerTool() wrapper applies to single-call tools.
+        // the same backoff the registerTools() wrapper applies to single-call tools.
         const settled = await Promise.allSettled(
             projects.map(async (project): Promise<Outcome> => {
                 const skipReason = getSkipReason(project)

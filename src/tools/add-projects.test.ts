@@ -878,7 +878,7 @@ describe(`${ADD_PROJECTS} tool`, () => {
 
         it('retries a transient 5xx failure on a per-item call via the retry helper', async () => {
             // A per-item transient error must still get backoff+retry (it used to bubble
-            // up to the registerTool wrapper before the batch was settled per item). The
+            // up to the registerTools wrapper before the batch was settled per item). The
             // first attempt fails with 503, the retry succeeds, so the item is reported as
             // a success rather than a permanent failure.
             vi.useFakeTimers()

@@ -5,7 +5,7 @@ import {
     type Feature,
     type FeatureName,
     type Features,
-    registerTool,
+    registerTools,
 } from './mcp-helpers.js'
 import { productivityAnalysis } from './prompts/productivity-analysis.js'
 import { registeredTools } from './tool-registry.js'
@@ -132,11 +132,7 @@ function getMcpServer({
      *
      * The surface is defined by `registeredTools`; see `tool-registry.ts`.
      */
-    const toolArgs = { server, client: todoist, features }
-
-    for (const tool of registeredTools) {
-        registerTool({ tool, ...toolArgs })
-    }
+    registerTools({ tools: registeredTools, server, client: todoist, features })
 
     /**
      * Prompts
