@@ -24,6 +24,7 @@ export default {
                     'package-lock.json',
                     '.claude-plugin/plugin.json',
                     'plugins/todoist/.claude-plugin/plugin.json',
+                    'gemini-extension.json',
                 ],
                 // oxlint-disable-next-line no-template-curly-in-string -- semantic-release template
                 message: 'chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}',
