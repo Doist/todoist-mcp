@@ -5,7 +5,11 @@
     "mcpServers": {
         "todoist": {
             "url": "https://ai.todoist.net/mcp",
-            "type": "http"
+            "type": "http",
+            "oauth": {
+                "enabled": false,
+                "scopes": ["data:read_write"]
+            }
         }
     }
 }

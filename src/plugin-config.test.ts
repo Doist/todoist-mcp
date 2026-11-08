@@ -45,12 +45,16 @@ describe('Claude Code plugin manifests', () => {
 })
 
 describe('Gemini CLI extension', () => {
-    it('uses the hosted server without a local command or credentials', () => {
+    it('uses the hosted server with manual authentication limited to Todoist data', () => {
         const extension = readJson('gemini-extension.json')
         expect(extension.name).toBe('todoist')
         expect(extension.version).toBe(readJson('package.json').version)
         expect(extension.mcpServers).toEqual({
-            todoist: { url: 'https://ai.todoist.net/mcp', type: 'http' },
+            todoist: {
+                url: 'https://ai.todoist.net/mcp',
+                type: 'http',
+                oauth: { enabled: false, scopes: ['data:read_write'] },
+            },
         })
     })
 })

@@ -116,7 +116,7 @@ gemini extensions install https://github.com/Doist/todoist-mcp
 
 Start or restart Gemini CLI, then run `/mcp auth todoist` and sign in with your Todoist account. Todoist hosts the server; no API key or local server is needed.
 
-The assistant can read, change, and delete your Todoist data, including tasks and projects. Revoke access at any time in Todoist under Settings → Integrations.
+The assistant can read and change your Todoist tasks and projects. Revoke access at any time in Todoist under Settings → Integrations.
 
 #### Visual Studio Code
 
