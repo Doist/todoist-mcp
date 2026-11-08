@@ -1,3 +1,9 @@
+## [13.10.2](https://github.com/Doist/todoist-mcp/compare/v13.10.1...v13.10.2) (2026-11-08)
+
+### Bug Fixes
+
+* package Todoist for the Claude directory ([#687](https://github.com/Doist/todoist-mcp/issues/687)) ([f78a297](https://github.com/Doist/todoist-mcp/commit/f78a29792f985fa9841b23c5b11609b29eae6eb9))
+
 ## [13.10.1](https://github.com/Doist/todoist-mcp/compare/v13.10.0...v13.10.1) (2026-11-04)
 
 ### Bug Fixes
