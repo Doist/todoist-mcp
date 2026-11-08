@@ -1,17 +1,10 @@
+import { createToolRegistrar } from '@doist/mcp-core'
 import type { TodoistApi } from '@doist/todoist-sdk'
-import type {
-    McpServer,
-    ToolCallback,
-    ContentBlock,
-    ToolAnnotations,
-    StandardSchemaWithJSON,
-} from '@modelcontextprotocol/server'
-import { z } from 'zod'
-import type { AnyTodoistTool, ExecuteResult } from './todoist-tool.js'
+import type { McpServer } from '@modelcontextprotocol/server'
+import type { AnyTodoistTool } from './todoist-tool.js'
 import { formatToolExecutionError } from './tool-execution-error.js'
 import { runWithUsageTrackingContext } from './usage-tracking.js'
 import { executeWithRetry } from './utils/retry.js'
-import { removeNullFields } from './utils/sanitize-data.js'
 import { ToolNames } from './utils/tool-names.js'
 
 /**
@@ -51,10 +44,6 @@ type Feature = {
  */
 type Features = Feature[]
 
-type AppToolMeta =
-    | ({ ui: Record<string, unknown> } & Record<string, unknown>)
-    | ({ 'ui/resourceUri': string } & Record<string, unknown>)
-
 /**
  * Whether to return the structured content directly, vs. in the `content` part of the output.
  *
@@ -62,120 +51,14 @@ type AppToolMeta =
  * supported by all clients. This flag controls wether we return the structured content using this
  * new feature of the MCP protocol or not.
  *
- * If `false`, the `structuredContent` will be returned as stringified JSON in one of the `content`
- * parts.
+ * If `false`, the `structuredContent` will also be returned as stringified JSON in one of the
+ * `content` parts.
  *
  * Eventually we should be able to remove this, and change the code to always work with the
  * structured content returned directly, once most or all MCP clients support it.
  */
 const USE_STRUCTURED_CONTENT =
     process.env.USE_STRUCTURED_CONTENT === 'true' || process.env.NODE_ENV === 'test'
-
-type CachedToolSchemas = {
-    input: StandardSchemaWithJSON<Record<string, unknown>, Record<string, unknown>>
-    output?: StandardSchemaWithJSON<Record<string, unknown>, Record<string, unknown>>
-}
-
-/** Tool schemas are static, so compile their JSON representation once per process. */
-const TOOL_SCHEMAS = new WeakMap<AnyTodoistTool, CachedToolSchemas>()
-
-function withCachedJsonSchema(
-    schema: z.ZodObject<z.ZodRawShape>,
-    io: 'input' | 'output',
-): StandardSchemaWithJSON<Record<string, unknown>, Record<string, unknown>> {
-    const jsonSchema = z.toJSONSchema(schema, { target: 'draft-2020-12', io })
-    const standard = schema['~standard']
-
-    return {
-        '~standard': {
-            ...standard,
-            jsonSchema: {
-                ...standard.jsonSchema,
-                [io]: (options: Parameters<typeof standard.jsonSchema.input>[0]) =>
-                    options.target === 'draft-2020-12' && options.libraryOptions === undefined
-                        ? jsonSchema
-                        : standard.jsonSchema[io](options),
-            },
-        },
-    }
-}
-
-function getToolSchemas(tool: AnyTodoistTool): CachedToolSchemas {
-    const cached = TOOL_SCHEMAS.get(tool)
-    if (cached) {
-        return cached
-    }
-
-    const schemas: CachedToolSchemas = {
-        input: withCachedJsonSchema(z.object(tool.parameters), 'input'),
-        ...(tool.outputSchema
-            ? { output: withCachedJsonSchema(z.object(tool.outputSchema), 'output') }
-            : {}),
-    }
-    TOOL_SCHEMAS.set(tool, schemas)
-    return schemas
-}
-
-/**
- * Get the output payload for a tool, in the correct format expected by MCP client apps.
- *
- * @param textContent - The text content to return.
- * @param structuredContent - The structured content to return.
- * @returns The output payload.
- * @see USE_STRUCTURED_CONTENT - Whether to use the structured content feature of the MCP protocol.
- */
-function getToolOutput<StructuredContent extends Record<string, unknown>>({
-    textContent,
-    structuredContent,
-    contentItems,
-}: {
-    textContent: string | undefined
-    structuredContent: StructuredContent | undefined
-    contentItems?: ContentBlock[]
-}) {
-    // Remove null fields from structured content before returning
-    const sanitizedContent = removeNullFields(structuredContent)
-
-    // Always include structuredContent when available since all tools have outputSchema
-    const result: Record<string, unknown> = {}
-
-    const contentArray: Array<Record<string, unknown>> = []
-
-    // Tool-authored content items (images, embedded resources) come first
-    // so they retain primacy for clients that read content[0].
-    if (contentItems) {
-        contentArray.push(...contentItems)
-    }
-
-    // Stringified JSON ahead of the prose summary so clients that only surface
-    // a text-type content[0] (e.g. OpenAI Responses API, which strips
-    // structuredContent) get the structured payload rather than the summary.
-    if (!USE_STRUCTURED_CONTENT && structuredContent) {
-        contentArray.push({
-            type: 'text' as const,
-            text: JSON.stringify(sanitizedContent),
-        })
-    }
-
-    if (textContent) {
-        contentArray.push({ type: 'text' as const, text: textContent })
-    }
-
-    if (contentArray.length > 0) {
-        result.content = contentArray
-    }
-
-    if (structuredContent) result.structuredContent = sanitizedContent
-
-    return result
-}
-
-function getErrorOutput(error: string) {
-    return {
-        content: [{ type: 'text' as const, text: error }],
-        isError: true,
-    }
-}
 
 // Argument names whose values carry user content rather than identifiers, and so
 // must not reach server logs when a tool throws.
@@ -191,60 +74,6 @@ function redactArgs(args: unknown): unknown {
             REDACTED_ARG_KEYS.has(key) && value !== undefined ? [key, '[redacted]'] : [key, value],
         ),
     )
-}
-
-/**
- * Build MCP ToolAnnotations for a tool.
- *
- * @param tool - The tool information used for annotation generation.
- * @returns MCP annotations.
- */
-function getMcpAnnotations(tool: { name: string; annotations: ToolAnnotations }): ToolAnnotations {
-    const defaultAnnotations: ToolAnnotations = {
-        title: `Todoist: ${formatToolTitle(tool.name)}`,
-        openWorldHint: false,
-    }
-
-    return { ...defaultAnnotations, ...tool.annotations }
-}
-
-function formatToolTitle(toolName: string): string {
-    return toolName
-        .split('-')
-        .filter(Boolean)
-        .map((segment) => `${segment.charAt(0).toUpperCase()}${segment.slice(1)}`)
-        .join(' ')
-}
-
-function hasAppUiMeta(meta: Record<string, unknown> | undefined): meta is AppToolMeta {
-    if (!meta) {
-        return false
-    }
-
-    if (typeof meta['ui/resourceUri'] === 'string') {
-        return true
-    }
-
-    return typeof meta.ui === 'object' && meta.ui !== null
-}
-
-function normalizeAppToolMeta(meta: AppToolMeta): Record<string, unknown> {
-    const ui =
-        typeof meta.ui === 'object' && meta.ui !== null
-            ? (meta.ui as Record<string, unknown>)
-            : undefined
-    const resourceUri = ui?.resourceUri
-    const legacyResourceUri = meta['ui/resourceUri']
-
-    if (typeof resourceUri === 'string' && typeof legacyResourceUri !== 'string') {
-        return { ...meta, 'ui/resourceUri': resourceUri }
-    }
-
-    if (typeof legacyResourceUri === 'string' && typeof resourceUri !== 'string') {
-        return { ...meta, ui: { ...ui, resourceUri: legacyResourceUri } }
-    }
-
-    return meta
 }
 
 /**
@@ -299,75 +128,58 @@ function stripEmailsFromText(text: string): string {
     return text.replace(emailInParensPattern, '').replace(emailPattern, '[email hidden]')
 }
 
+function exposesUserEmails(toolName: string): boolean {
+    return TOOLS_WITH_USER_EMAILS.includes(toolName as (typeof TOOLS_WITH_USER_EMAILS)[number])
+}
+
 /**
- * Register a Todoist tool in an MCP server.
+ * Register Todoist tools in an MCP server.
+ *
+ * Schema caching, annotations, MCP Apps `_meta`, result shaping and turning a thrown error into
+ * an error result come from `@doist/mcp-core`. What is Todoist's own is wired in here: the API
+ * client, retries, usage tracking, `strip_emails`, and the API error formatting. One registrar
+ * serves every tool, since none of that depends on the tool.
  */
-function registerTool({
-    tool,
+function registerTools({
+    tools,
     server,
     client,
     features = [],
 }: {
-    tool: AnyTodoistTool
+    tools: readonly AnyTodoistTool[]
     server: McpServer
     client: TodoistApi
     features?: Features
 }) {
-    const shouldStripEmails =
-        features.some((f) => f.name === 'strip_emails') &&
-        TOOLS_WITH_USER_EMAILS.includes(tool.name as (typeof TOOLS_WITH_USER_EMAILS)[number])
+    const stripEmails = features.some((f) => f.name === 'strip_emails')
 
-    // `AnyTodoistTool` declares `args` as `never` so that tools of every
-    // parameter shape can be held in one collection. Widening it back is safe
-    // here and only here: the SDK has already validated `args` against this
-    // tool's own `inputSchema` before invoking the callback.
-    const execute = tool.execute as (
-        args: Record<string, unknown>,
-        client: TodoistApi,
-    ) => ExecuteResult<z.ZodRawShape>
-
-    const { input: inputSchema, output: outputSchema } = getToolSchemas(tool)
-
-    // `getToolOutput` assembles its result incrementally and so is typed as a
-    // plain record, which does not structurally match `CallToolResult` (that
-    // requires `content`). The values it produces are valid results; only the
-    // static shape is looser.
-    // @ts-expect-error see above
-    const cb: ToolCallback<typeof inputSchema> = async (args, _context) => {
-        try {
-            let { textContent, structuredContent, contentItems } =
-                await runWithUsageTrackingContext(tool.name, () =>
-                    executeWithRetry(() => execute(args, client)),
-                )
-
-            // Strip emails from outputs for ChatGPT clients on collaborator-related tools
-            if (shouldStripEmails) {
-                if (textContent) {
-                    textContent = stripEmailsFromText(textContent)
-                }
-                if (structuredContent) {
-                    structuredContent = stripEmailsFromObject(structuredContent)
-                }
+    const register = createToolRegistrar<TodoistApi>({
+        titlePrefix: 'Todoist',
+        createContext: () => client,
+        formatError: formatToolExecutionError,
+        structuredContentAsText: !USE_STRUCTURED_CONTENT,
+        wrapExecute: async (tool, run) => {
+            const result = await runWithUsageTrackingContext(tool.name, () => executeWithRetry(run))
+            if (!stripEmails || !exposesUserEmails(tool.name)) {
+                return result
             }
 
-            return getToolOutput({ textContent, structuredContent, contentItems })
-        } catch (error) {
+            // Strip emails from outputs for ChatGPT clients on collaborator-related tools
+            return {
+                ...result,
+                textContent: result.textContent && stripEmailsFromText(result.textContent),
+                structuredContent:
+                    result.structuredContent && stripEmailsFromObject(result.structuredContent),
+            }
+        },
+        onError: ({ tool, args, error }) => {
             console.error(`Error executing tool ${tool.name}:`, { args: redactArgs(args), error })
-            return getErrorOutput(formatToolExecutionError(error))
-        }
-    }
+        },
+    })
 
-    const toolConfig = {
-        description: tool.description,
-        inputSchema,
-        ...(outputSchema ? { outputSchema } : {}),
-        annotations: getMcpAnnotations(tool),
-        ...(tool._meta
-            ? { _meta: hasAppUiMeta(tool._meta) ? normalizeAppToolMeta(tool._meta) : tool._meta }
-            : {}),
+    for (const tool of tools) {
+        register(server, tool)
     }
-
-    server.registerTool(tool.name, toolConfig, cb)
 }
 
 export {
@@ -375,7 +187,7 @@ export {
     type Feature,
     type FeatureName,
     type Features,
-    registerTool,
+    registerTools,
     stripEmailsFromObject,
     stripEmailsFromText,
 }

@@ -67,6 +67,7 @@
         "prepare": "lefthook install --reset-hooks-path"
     },
     "dependencies": {
+        "@doist/mcp-core": "0.1.1",
         "@doist/todoist-sdk": "16.0.0",
         "@modelcontextprotocol/ext-apps": "2.0.4",
         "date-fns": "4.1.0",

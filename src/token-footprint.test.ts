@@ -25,7 +25,7 @@ function formatToolTitle(name: string): string {
 }
 
 /**
- * Mirror of the `_meta` normalisation in `registerTool`, which fills in whichever
+ * Mirror of the `_meta` normalisation in `registerTools`, which fills in whichever
  * of the two widget resource-URI spellings the tool did not declare.
  */
 function normalizeAppUiMeta(meta: Record<string, unknown>): Record<string, unknown> {

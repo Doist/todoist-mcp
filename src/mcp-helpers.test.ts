@@ -2,14 +2,14 @@ import type { TodoistApi } from '@doist/todoist-sdk'
 import type { ContentBlock, StandardSchemaWithJSON } from '@modelcontextprotocol/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { registerTool, stripEmailsFromObject, stripEmailsFromText } from './mcp-helpers.js'
+import { registerTools, stripEmailsFromObject, stripEmailsFromText } from './mcp-helpers.js'
 import { addTasks } from './tools/add-tasks.js'
 
-type RegisterToolArgs = Parameters<typeof registerTool>[0]
-type ToolFixture = RegisterToolArgs['tool']
+type RegisterToolsArgs = Parameters<typeof registerTools>[0]
+type ToolFixture = RegisterToolsArgs['tools'][number]
 
 /**
- * Build a minimal `TodoistTool` fixture for `registerTool` tests. Returns a
+ * Build a minimal `TodoistTool` fixture for `registerTools` tests. Returns a
  * shared scaffold (parameters, annotations, server/client casts) so individual
  * tests only have to specify the bits they actually exercise.
  */
@@ -43,12 +43,12 @@ function buildToolFixture(overrides: {
 }
 
 /**
- * Capture the callback `registerTool` registers with the MCP server.
+ * Capture the callback `registerTools` registers with the MCP server.
  */
 function captureRegisterToolMock() {
     const mock = vi.fn()
-    const server = { registerTool: mock } as unknown as RegisterToolArgs['server']
-    const client = {} as RegisterToolArgs['client']
+    const server = { registerTool: mock } as unknown as RegisterToolsArgs['server']
+    const client = {} as RegisterToolsArgs['client']
     return { mock, server, client }
 }
 
@@ -103,16 +103,18 @@ describe('stripEmailsFromText', () => {
     })
 })
 
-describe('registerTool config', () => {
+describe('registerTools config', () => {
     it('omits outputSchema when the tool does not declare one', () => {
         const { mock, server, client } = captureRegisterToolMock()
 
-        registerTool({
-            tool: buildToolFixture({
-                name: 'no-schema-tool',
-                description: 'Tool without output schema',
-                execute: async () => ({ textContent: 'ok' }),
-            }),
+        registerTools({
+            tools: [
+                buildToolFixture({
+                    name: 'no-schema-tool',
+                    description: 'Tool without output schema',
+                    execute: async () => ({ textContent: 'ok' }),
+                }),
+            ],
             server,
             client,
         })
@@ -133,12 +135,12 @@ describe('registerTool config', () => {
             execute: async () => ({ textContent: 'ok' }),
         })
 
-        registerTool({
-            tool,
+        registerTools({
+            tools: [tool],
             server,
             client,
         })
-        registerTool({ tool, server, client })
+        registerTools({ tools: [tool], server, client })
 
         type SchemaConfig = {
             inputSchema: StandardSchemaWithJSON<unknown, unknown>
@@ -169,7 +171,7 @@ describe('registerTool config', () => {
             execute: async () => ({ textContent: 'ok' }),
         })
 
-        registerTool({ tool, server, client })
+        registerTools({ tools: [tool], server, client })
 
         type SchemaConfig = {
             inputSchema: StandardSchemaWithJSON<unknown, unknown>
@@ -200,7 +202,7 @@ describe('registerTool config', () => {
             execute: async () => ({ textContent: 'ok' }),
         })
 
-        registerTool({ tool, server, client })
+        registerTools({ tools: [tool], server, client })
 
         const config = mock.mock.calls[0]?.[1] as {
             inputSchema: StandardSchemaWithJSON<unknown, unknown>
@@ -223,18 +225,98 @@ describe('registerTool config', () => {
     })
 })
 
-describe('registerTool error path', () => {
+describe('registerTools strip_emails', () => {
+    const collaboratorResult = {
+        textContent: '• Ada (ada@example.com) - ID: 1',
+        structuredContent: { collaborators: [{ id: '1', name: 'Ada', email: 'ada@example.com' }] },
+    }
+
+    async function callWith(toolName: string, features: RegisterToolsArgs['features']) {
+        const { mock, server, client } = captureRegisterToolMock()
+        registerTools({
+            tools: [
+                buildToolFixture({
+                    name: toolName,
+                    outputSchema: {},
+                    execute: async () => collaboratorResult,
+                }),
+            ],
+            server,
+            client,
+            features,
+        })
+        const callback = mock.mock.calls[0]?.[2] as (
+            args: Record<string, unknown>,
+            context: unknown,
+        ) => Promise<unknown>
+        return callback({}, {})
+    }
+
+    it('strips emails from a collaborator tool when the feature is on', async () => {
+        expect(await callWith('find-project-collaborators', [{ name: 'strip_emails' }])).toEqual({
+            content: [{ type: 'text', text: '• Ada - ID: 1' }],
+            structuredContent: { collaborators: [{ id: '1', name: 'Ada' }] },
+        })
+    })
+
+    it('leaves tools outside the email list alone when the feature is on', async () => {
+        expect(await callWith('find-tasks', [{ name: 'strip_emails' }])).toEqual({
+            content: [{ type: 'text', text: '• Ada (ada@example.com) - ID: 1' }],
+            structuredContent: collaboratorResult.structuredContent,
+        })
+    })
+
+    it('decides per tool when one call registers several', async () => {
+        const { mock, server, client } = captureRegisterToolMock()
+        registerTools({
+            tools: ['find-tasks', 'find-project-collaborators'].map((name) =>
+                buildToolFixture({
+                    name,
+                    outputSchema: {},
+                    execute: async () => collaboratorResult,
+                }),
+            ),
+            server,
+            client,
+            features: [{ name: 'strip_emails' }],
+        })
+        const [tasks, collaborators] = mock.mock.calls.map(
+            (call) =>
+                call[2] as (args: Record<string, unknown>, context: unknown) => Promise<unknown>,
+        )
+
+        expect(await tasks?.({}, {})).toEqual({
+            content: [{ type: 'text', text: '• Ada (ada@example.com) - ID: 1' }],
+            structuredContent: collaboratorResult.structuredContent,
+        })
+        expect(await collaborators?.({}, {})).toEqual({
+            content: [{ type: 'text', text: '• Ada - ID: 1' }],
+            structuredContent: { collaborators: [{ id: '1', name: 'Ada' }] },
+        })
+    })
+
+    it('leaves collaborator tools alone when the feature is off', async () => {
+        expect(await callWith('find-project-collaborators', [])).toEqual({
+            content: [{ type: 'text', text: '• Ada (ada@example.com) - ID: 1' }],
+            structuredContent: collaboratorResult.structuredContent,
+        })
+    })
+})
+
+describe('registerTools error path', () => {
     it('keeps raw file content out of error logs', async () => {
         const { mock, server, client } = captureRegisterToolMock()
         const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-        registerTool({
-            tool: buildToolFixture({
-                outputSchema: {},
-                execute: async () => {
-                    throw new Error('boom')
-                },
-            }),
+        registerTools({
+            tools: [
+                buildToolFixture({
+                    outputSchema: {},
+                    execute: async () => {
+                        throw new Error('boom')
+                    },
+                }),
+            ],
             server,
             client,
         })
@@ -257,18 +339,20 @@ describe('registerTool error path', () => {
     it('applies centralized API formatting in MCP callback errors', async () => {
         const { mock, server, client } = captureRegisterToolMock()
 
-        registerTool({
-            tool: buildToolFixture({
-                outputSchema: {},
-                execute: async () => {
-                    throw {
-                        httpStatusCode: 500,
-                        responseData: {
-                            error: 'Internal API failure',
-                        },
-                    }
-                },
-            }),
+        registerTools({
+            tools: [
+                buildToolFixture({
+                    outputSchema: {},
+                    execute: async () => {
+                        throw {
+                            httpStatusCode: 500,
+                            responseData: {
+                                error: 'Internal API failure',
+                            },
+                        }
+                    },
+                }),
+            ],
             server,
             client,
         })
@@ -302,7 +386,7 @@ describe('registerTool error path', () => {
             addTask: vi.fn().mockRejectedValue(invalidDueString),
         } as unknown as TodoistApi
 
-        registerTool({ tool: addTasks, server, client })
+        registerTools({ tools: [addTasks], server, client })
 
         const callback = mock.mock.calls[0]?.[2] as (
             args: Record<string, unknown>,
@@ -345,7 +429,7 @@ describe('registerTool error path', () => {
     })
 })
 
-describe('registerTool content ordering', () => {
+describe('registerTools content ordering', () => {
     afterEach(() => {
         vi.unstubAllEnvs()
         vi.resetModules()
@@ -362,15 +446,17 @@ describe('registerTool content ordering', () => {
         // are read at module evaluation (the USE_STRUCTURED_CONTENT and
         // NODE_ENV checks both run at import time).
         vi.resetModules()
-        const { registerTool: registerToolFresh } = await import('./mcp-helpers.js')
+        const { registerTools: registerToolsFresh } = await import('./mcp-helpers.js')
         const { mock, server, client } = captureRegisterToolMock()
 
-        registerToolFresh({
-            tool: buildToolFixture({
-                name: 'ordering-tool',
-                outputSchema: {},
-                execute: async () => ({ textContent, structuredContent, contentItems }),
-            }),
+        registerToolsFresh({
+            tools: [
+                buildToolFixture({
+                    name: 'ordering-tool',
+                    outputSchema: {},
+                    execute: async () => ({ textContent, structuredContent, contentItems }),
+                }),
+            ],
             server,
             client,
         })

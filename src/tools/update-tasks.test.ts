@@ -1378,7 +1378,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
         })
 
         it('retries a transient 5xx response on a per-item call', async () => {
-            // A per-item 503 must be retried (the registerTool wrapper no longer fires now
+            // A per-item 503 must be retried (the registerTools wrapper no longer fires now
             // that we settle each task, and the SDK transport doesn't retry 5xx responses).
             // The first attempt fails with 503, the retry succeeds, so the task is reported
             // as updated rather than a permanent failure.

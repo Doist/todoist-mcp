@@ -54,6 +54,7 @@ export default defineConfig({
             external: [
                 '@modelcontextprotocol/node',
                 '@modelcontextprotocol/server',
+                '@doist/mcp-core',
                 '@doist/todoist-sdk',
                 'date-fns',
                 'dotenv',

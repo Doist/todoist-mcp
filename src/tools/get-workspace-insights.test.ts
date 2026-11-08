@@ -1,7 +1,7 @@
+import { removeNullFields } from '@doist/mcp-core'
 import type { TodoistApi, WorkspaceInsights } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
-import { removeNullFields } from '../utils/sanitize-data.js'
 import { TEST_ERRORS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { workspaceResolver } from '../utils/workspace-resolver.js'
