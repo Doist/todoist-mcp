@@ -1,0 +1,11 @@
+{
+    "name": "todoist",
+    "version": "13.10.2",
+    "description": "Official Todoist extension. Manage tasks and projects with Todoist's hosted MCP server.",
+    "mcpServers": {
+        "todoist": {
+            "url": "https://ai.todoist.net/mcp",
+            "type": "http"
+        }
+    }
+}

@@ -10,7 +10,11 @@ if (!version) {
 
 const paths = manifestPath
     ? [manifestPath]
-    : ['.claude-plugin/plugin.json', 'plugins/todoist/.claude-plugin/plugin.json']
+    : [
+          '.claude-plugin/plugin.json',
+          'plugins/todoist/.claude-plugin/plugin.json',
+          'gemini-extension.json',
+      ]
 
 for (const path of paths) {
     const manifest = JSON.parse(readFileSync(path, 'utf8'))

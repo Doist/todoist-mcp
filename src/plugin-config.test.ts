@@ -44,8 +44,19 @@ describe('Claude Code plugin manifests', () => {
     })
 })
 
+describe('Gemini CLI extension', () => {
+    it('uses the hosted server without a local command or credentials', () => {
+        const extension = readJson('gemini-extension.json')
+        expect(extension.name).toBe('todoist')
+        expect(extension.version).toBe(readJson('package.json').version)
+        expect(extension.mcpServers).toEqual({
+            todoist: { url: 'https://ai.todoist.net/mcp', type: 'http' },
+        })
+    })
+})
+
 describe('release config plugin-version sync', () => {
-    it('release.config.js bumps and commits both plugin manifests', async () => {
+    it('release.config.js bumps and commits all client manifests', async () => {
         const { default: config } = await import(
             pathToFileURL(join(repoRoot, 'release.config.js')).href
         )
@@ -60,15 +71,20 @@ describe('release config plugin-version sync', () => {
             expect.arrayContaining([
                 '.claude-plugin/plugin.json',
                 'plugins/todoist/.claude-plugin/plugin.json',
+                'gemini-extension.json',
             ]),
         )
     })
 })
 
 describe('bump-plugin-version script', () => {
-    it('keeps both installable plugins on the released version by default', () => {
+    it('keeps all installable clients on the released version by default', () => {
         const dir = mkdtempSync(join(tmpdir(), 'plugin-release-'))
-        const paths = ['.claude-plugin/plugin.json', 'plugins/todoist/.claude-plugin/plugin.json']
+        const paths = [
+            '.claude-plugin/plugin.json',
+            'plugins/todoist/.claude-plugin/plugin.json',
+            'gemini-extension.json',
+        ]
         for (const path of paths) {
             mkdirSync(join(dir, path, '..'), { recursive: true })
             writeFileSync(join(dir, path), JSON.stringify({ name: 'todoist', version: '0.0.0' }))
