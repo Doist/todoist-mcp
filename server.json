@@ -1,0 +1,25 @@
+{
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "net.todoist/mcp",
+    "title": "Todoist",
+    "description": "Official Todoist MCP server. Manage tasks and projects. Hosted, no API key needed.",
+    "version": "1.0.1",
+    "repository": {
+        "url": "https://github.com/Doist/todoist-mcp",
+        "source": "github"
+    },
+    "websiteUrl": "https://www.todoist.com/help/todoist/todoist-and-ai/connect-todoist-to-an-ai-assistant-xMSzFfHng",
+    "icons": [
+        {
+            "src": "https://app.todoist.com/apple-touch-icon.png",
+            "mimeType": "image/png",
+            "sizes": ["180x180"]
+        }
+    ],
+    "remotes": [
+        {
+            "type": "streamable-http",
+            "url": "https://ai.todoist.net/mcp"
+        }
+    ]
+}
