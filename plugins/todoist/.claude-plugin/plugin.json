@@ -1,0 +1,14 @@
+{
+    "name": "todoist",
+    "version": "13.10.1",
+    "description": "Manage your Todoist tasks and projects in Claude.",
+    "author": {
+        "name": "Doist",
+        "url": "https://doist.com"
+    },
+    "homepage": "https://www.todoist.com/",
+    "repository": "https://github.com/Doist/todoist-mcp",
+    "license": "MIT",
+    "privacyPolicyUrl": "https://www.todoist.com/privacy",
+    "icon": "./.claude-plugin/icon.png"
+}
