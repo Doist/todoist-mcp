@@ -10,12 +10,12 @@ You saw the test fail once: before the fix, or with the feature undone. A test t
 
 Assert what the caller gets or what reaches the API: `toHaveBeenCalledWith(<exact args>)`, `structuredContent` fields, the text. Flag an assertion that cannot tell right from wrong.
 
-| Flag                                                                                                         | Fine                                                                                                                                                                      |
-| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `toHaveBeenCalled()` as the only evidence the behaviour happened: nothing checks the arguments or the result | `toHaveBeenCalled()` next to assertions on the result or on another call, when those carry the test's point (`src/tools/find-projects.test.ts:439`)                       |
-|                                                                                                              | `.not.toHaveBeenCalled()`: proves a call did **not** happen (about 130 in this repo, e.g. a refused move never reaches `moveTasks`)                                       |
-| `toBeDefined()` / `toBeTruthy()` as the last word on a value                                                 | The same as a guard right before reading the value's fields (`src/tool-schema-dialect.test.ts:42`, `src/usage-tracking.test.ts:238`); `rejects.toBeDefined()` on an abort |
-| A test whose only assertion is that no error was thrown, when the behaviour is a result                      | `resolves.toBeDefined()` when accepting the input **is** the behaviour (a validator that must not reject, `src/tools/set-user-status.test.ts:198`)                        |
+| Flag                                                                                                         | Fine                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `toHaveBeenCalled()` as the only evidence the behaviour happened: nothing checks the arguments or the result | `toHaveBeenCalled()` next to assertions on the result or on another call, when those carry the test's point (`src/tools/find-projects.test.ts:439`) |
+|                                                                                                              | `.not.toHaveBeenCalled()`: proves a call did **not** happen (about 130 in this repo, e.g. a refused move never reaches `moveTasks`)                 |
+| `toBeDefined()` / `toBeTruthy()` as the last word on a value                                                 | The same as a guard right before reading the value's fields (`src/usage-tracking.test.ts:238`); `rejects.toBeDefined()` on an abort                 |
+| A test whose only assertion is that no error was thrown, when the behaviour is a result                      | `resolves.toBeDefined()` when accepting the input **is** the behaviour (a validator that must not reject, `src/tools/set-user-status.test.ts:198`)  |
 
 Judge a test by its point, the behaviour its name describes. A weak assertion beside the ones that carry that point is fine.
 
