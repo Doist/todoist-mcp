@@ -1,3 +1,9 @@
+## [13.11.1](https://github.com/Doist/todoist-mcp/compare/v13.11.0...v13.11.1) (2026-11-08)
+
+### Bug Fixes
+
+* build tool registration on @doist/mcp-core ([#689](https://github.com/Doist/todoist-mcp/issues/689)) ([77d9fd4](https://github.com/Doist/todoist-mcp/commit/77d9fd4d76ca663d629db37ad85f2ea84a34b438))
+
 ## [13.11.0](https://github.com/Doist/todoist-mcp/compare/v13.10.2...v13.11.0) (2026-11-08)
 
 ### Features
