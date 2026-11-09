@@ -266,6 +266,35 @@ describe('requireValidTodoistToken', () => {
         })
     })
 
+    describe('cache capacity', () => {
+        it('drops the oldest verdict once 10,000 tokens are cached, and keeps the rest', async () => {
+            mockValidate.mockResolvedValue('valid')
+            const middleware = requireValidTodoistToken({
+                type: 'dynamic',
+                getApiKey: (req) => (req.headers as Record<string, string>)['x-token'],
+                // A TTL of its own, so no other test's verdicts share this cache.
+                cacheTtlMs: 60_001,
+            })
+            const call = (token: string) =>
+                middleware(
+                    { headers: { 'x-token': token } } as unknown as Request,
+                    createMockRes(),
+                    next,
+                )
+
+            for (let i = 0; i <= 10_000; i++) await call(`token-${i}`)
+            expect(mockValidate).toHaveBeenCalledTimes(10_001)
+
+            mockValidate.mockClear()
+            await call('token-1')
+            await call('token-10000')
+            expect(mockValidate).not.toHaveBeenCalled()
+
+            await call('token-0')
+            expect(mockValidate).toHaveBeenCalledExactlyOnceWith('token-0', undefined)
+        })
+    })
+
     describe('transient errors', () => {
         it('should fail open on transient errors and call next()', async () => {
             const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -279,7 +308,7 @@ describe('requireValidTodoistToken', () => {
 
             expect(next).toHaveBeenCalledOnce()
             expect(consoleSpy).toHaveBeenCalledWith(
-                '[Token validation] Transient error, proceeding:',
+                '[Token validation] Validation failed, proceeding:',
                 expect.any(Error),
             )
         })
