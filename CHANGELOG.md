@@ -1,3 +1,9 @@
+## [14.0.3](https://github.com/Doist/todoist-mcp/compare/v14.0.2...v14.0.3) (2026-11-09)
+
+### Bug Fixes
+
+* stop shipping the developer scripts in the npm package ([#694](https://github.com/Doist/todoist-mcp/issues/694)) ([b619be4](https://github.com/Doist/todoist-mcp/commit/b619be4b8132952f38f089166157ce1b7a6e7f3e))
+
 ## [14.0.2](https://github.com/Doist/todoist-mcp/compare/v14.0.1...v14.0.2) (2026-11-09)
 
 ### Bug Fixes
