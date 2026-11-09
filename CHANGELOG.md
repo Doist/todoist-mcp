@@ -1,3 +1,9 @@
+## [14.0.2](https://github.com/Doist/todoist-mcp/compare/v14.0.1...v14.0.2) (2026-11-09)
+
+### Bug Fixes
+
+* **deps:** move to @doist/mcp-core 0.4.0, its shared suites and host helpers ([#693](https://github.com/Doist/todoist-mcp/issues/693)) ([4f986dd](https://github.com/Doist/todoist-mcp/commit/4f986dd9c27a83b1f7a3cd5c66af7f9ee8f77fec)), closes [Doist/mcp-core#7](https://github.com/Doist/mcp-core/issues/7) [Doist/mcp-core#8](https://github.com/Doist/mcp-core/issues/8)
+
 ## [14.0.1](https://github.com/Doist/todoist-mcp/compare/v14.0.0...v14.0.1) (2026-11-09)
 
 ### Bug Fixes
