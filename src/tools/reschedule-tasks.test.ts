@@ -1,4 +1,4 @@
-import type { TodoistApi } from '@doist/todoist-sdk'
+import { type TodoistApi, TodoistSyncError } from '@doist/todoist-sdk'
 import { type Mocked, vi } from 'vitest'
 import { createMockTask } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -307,6 +307,96 @@ describe(`${RESCHEDULE_TASKS} tool`, () => {
             expect(result.structuredContent.failures).toEqual([
                 { item: 'missing', error: expect.stringContaining('Task not found') },
             ])
+        })
+
+        it('reports the rejected commands and keeps the applied ones', async () => {
+            // `skipped` sends no command, so command positions differ from input positions.
+            mockTodoistApi.getTask.mockImplementation(async (id: string) =>
+                id === 'skipped' ? createMockTask({ id, due: null, deadline: null }) : dated(id),
+            )
+            const rejection = {
+                error: 'Invalid argument value',
+                errorCode: 20,
+                errorExtra: { argument: 'due' },
+                errorTag: 'INVALID_ARGUMENT_VALUE',
+                httpCode: 400,
+            }
+            mockTodoistApi.sync.mockImplementation(async ({ commands = [] }) => {
+                const [first, applied, last] = commands
+                throw new TodoistSyncError(rejection, {
+                    syncStatus: {
+                        [first?.uuid ?? '']: rejection,
+                        [applied?.uuid ?? '']: 'ok',
+                        [last?.uuid ?? '']: rejection,
+                    },
+                    tempIdMapping: {},
+                })
+            })
+
+            const result = await rescheduleTasks.execute(
+                {
+                    tasks: [
+                        { id: 'skipped', date: '2026-03-20' },
+                        { id: 'task-1', date: '2026-03-20' },
+                        { id: 'task-2', date: '2026-03-20' },
+                        { id: 'task-3', date: '2026-03-20' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            const error = 'Invalid argument value (HTTP 400, code 20, tag INVALID_ARGUMENT_VALUE)'
+            expect(result.structuredContent).toEqual(
+                expect.objectContaining({
+                    totalCount: 1,
+                    rescheduledTaskIds: ['task-2'],
+                    failures: [
+                        { item: 'task-1', error },
+                        { item: 'task-3', error },
+                    ],
+                }),
+            )
+            expect(result.textContent).toContain('Failed (2)')
+        })
+
+        it('reports the tasks it could not read back, keeping the ones it could', async () => {
+            const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+            try {
+                // Both initial reads succeed; only task-2's read after the update fails.
+                mockTodoistApi.getTask
+                    .mockResolvedValueOnce(dated('task-1'))
+                    .mockResolvedValueOnce(dated('task-2'))
+                    .mockResolvedValueOnce(dated('task-1'))
+                    .mockRejectedValueOnce(new Error('Connection reset'))
+
+                const result = await rescheduleTasks.execute(
+                    {
+                        tasks: [
+                            { id: 'task-1', date: '2026-03-20' },
+                            { id: 'task-2', date: '2026-03-20' },
+                        ],
+                    },
+                    mockTodoistApi,
+                )
+
+                expect(result.structuredContent).toEqual(
+                    expect.objectContaining({
+                        totalCount: 2,
+                        rescheduledTaskIds: ['task-1', 'task-2'],
+                        tasks: [expect.objectContaining({ id: 'task-1' })],
+                        failures: [],
+                    }),
+                )
+                expect(result.textContent).toContain('Rescheduled 2 tasks: task-1, task-2')
+                expect(result.textContent).toContain('Could not read back task-2: Connection reset')
+                expect(consoleErrorSpy).toHaveBeenCalledWith('reschedule-tasks: read-back failed', {
+                    updated: 2,
+                    unread: 1,
+                    error: expect.stringContaining('Connection reset'),
+                })
+            } finally {
+                consoleErrorSpy.mockRestore()
+            }
         })
 
         it('reports every task when the sync request fails', async () => {

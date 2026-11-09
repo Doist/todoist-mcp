@@ -1,4 +1,4 @@
-import type { SyncCommand, Task } from '@doist/todoist-sdk'
+import type { SyncCommand, Task, TaskUpdateArgs } from '@doist/todoist-sdk'
 import { createCommand } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
@@ -109,21 +109,35 @@ const rescheduleTasks = {
         logBatchFailures(ToolNames.RESCHEDULE_TASKS, taskInputs.length, failures)
 
         // The reschedules are already applied, so a failed read-back is reported, not thrown.
-        let mappedTasks: Array<z.infer<typeof TaskOutputSchema>> = []
+        // Each read is settled on its own so one failed read keeps the others.
+        const mappedTasks: Array<z.infer<typeof TaskOutputSchema>> = []
+        const unreadIds: string[] = []
         let readBackError: string | undefined
         if (rescheduledIds.length > 0) {
-            try {
-                const updatedTasks = await Promise.all(
-                    rescheduledIds.map((id) => executeWithRetry(() => client.getTask(id))),
-                )
-                mappedTasks = updatedTasks.map(mapTask)
-            } catch (error) {
-                readBackError = formatBatchItemError(error)
+            const readBack = await Promise.allSettled(
+                rescheduledIds.map((id) => executeWithRetry(() => client.getTask(id))),
+            )
+            // Mapping stays outside the settled reads: a task that fails to map is a
+            // schema mismatch, which should still fail loudly.
+            for (const [index, outcome] of readBack.entries()) {
+                if (outcome.status === 'fulfilled') {
+                    mappedTasks.push(mapTask(outcome.value))
+                    continue
+                }
+                unreadIds.push(rescheduledIds[index] ?? `Task ${index + 1}`)
+                readBackError ??= formatBatchItemError(outcome.reason)
+            }
+            if (readBackError) {
+                console.error(`${ToolNames.RESCHEDULE_TASKS}: read-back failed`, {
+                    updated: rescheduledIds.length,
+                    unread: unreadIds.length,
+                    error: readBackError,
+                })
             }
         }
 
         const summary = readBackError
-            ? `Rescheduled ${rescheduledIds.length} task${rescheduledIds.length === 1 ? '' : 's'}: ${rescheduledIds.join(', ')}\nThe rescheduled tasks could not be read back: ${readBackError}`
+            ? `Rescheduled ${rescheduledIds.length} task${rescheduledIds.length === 1 ? '' : 's'}: ${rescheduledIds.join(', ')}\nCould not read back ${unreadIds.join(', ')}: ${readBackError}`
             : summarizeTaskOperation('Rescheduled', mappedTasks, {
                   showDetails: mappedTasks.length <= 5,
               })
@@ -147,7 +161,7 @@ const rescheduleTasks = {
 function buildRescheduleFields(
     inputDate: string,
     task: Pick<Task, 'due' | 'deadline'>,
-): { due: Record<string, unknown> } | { deadline: { date: string } } | undefined {
+): Pick<TaskUpdateArgs, 'due' | 'deadline'> | undefined {
     if (task.due) {
         return {
             due: {
