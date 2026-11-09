@@ -1,3 +1,9 @@
+## [14.0.1](https://github.com/Doist/todoist-mcp/compare/v14.0.0...v14.0.1) (2026-11-09)
+
+### Bug Fixes
+
+* **reschedule-tasks:** handle tasks without a due date and report per-task failures ([#684](https://github.com/Doist/todoist-mcp/issues/684)) ([44c2e7d](https://github.com/Doist/todoist-mcp/commit/44c2e7d4653cb67759386aa710a7b171e1051ed9))
+
 ## [14.0.0](https://github.com/Doist/todoist-mcp/compare/v13.11.2...v14.0.0) (2026-11-09)
 
 ### ⚠ BREAKING CHANGES
