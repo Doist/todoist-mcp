@@ -28,7 +28,7 @@ TypeScript · ESM-only · Node >=24 · npm >=11 · `zod` v4 for schemas · MCP S
 ├─ dist/                  # Build output (Vite). Never edit.
 ├─ AGENTS.md              # Prescriptive rules for people and agents: definition of done, schema design, new-tool checklist
 ├─ CLAUDE.md              # Imports AGENTS.md for Claude Code; nothing else
-├─ .agents/scripts/          # Agent tooling (verify, git hook guard) and its tests. Not published, unlike scripts/
+├─ .agents/scripts/          # Agent tooling (verify, git hook guard) and its tests. Not published, like scripts/
 ├─ docs/agents.md         # How the agent tooling fits together, for the owner
 ├─ CODEBASE.md            # This file — descriptive map
 ├─ package.json           # See Scripts section
