@@ -1,3 +1,9 @@
+## [13.11.2](https://github.com/Doist/todoist-mcp/compare/v13.11.1...v13.11.2) (2026-11-09)
+
+### Bug Fixes
+
+* **deps:** update dependency @doist/mcp-core to v0.2.0 ([#690](https://github.com/Doist/todoist-mcp/issues/690)) ([7c0d47a](https://github.com/Doist/todoist-mcp/commit/7c0d47a145be6ba3b94f6f197d9657828ba79d33))
+
 ## [13.11.1](https://github.com/Doist/todoist-mcp/compare/v13.11.0...v13.11.1) (2026-11-08)
 
 ### Bug Fixes
