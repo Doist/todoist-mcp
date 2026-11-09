@@ -6,5 +6,5 @@ import { registeredTools } from './tool-registry.js'
 // Zod conversion of its own shapes.
 describeAdvertisedToolSchemas({
     tools: registeredTools,
-    createServer: () => getMcpServer({ todoistApiKey: 'test-token' }),
+    createServer: () => getMcpServer({ token: 'test-token' }),
 })

@@ -154,7 +154,7 @@ describe('createHttpApp middleware chain', () => {
         // Invalid token: a request that passes the Host/Origin guard reaches the
         // token middleware and gets a 401, which lets us prove the guard ran first
         // (a blocked request would be a 403 before token validation).
-        mockValidate.mockResolvedValue(false)
+        mockValidate.mockResolvedValue('invalid')
     })
 
     afterEach(async () => {
@@ -230,7 +230,7 @@ describe('createHttpApp protocol revisions', () => {
     beforeEach(async () => {
         clearTokenValidationCache()
         mockValidate.mockReset()
-        mockValidate.mockResolvedValue(true)
+        mockValidate.mockResolvedValue('valid')
         port = await startApp()
     })
 

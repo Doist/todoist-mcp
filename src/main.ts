@@ -14,7 +14,7 @@ function main() {
     // client that opens with the per-request `_meta` envelope (revision
     // 2026-07-28 and later) and one that opens with `initialize` are both served
     // from the same factory, so the tools are defined once.
-    serveStdio(() => getMcpServer({ todoistApiKey, baseUrl }), {
+    serveStdio(() => getMcpServer({ token: todoistApiKey, baseUrl }), {
         onerror: (error) => {
             // We use console.error because standard I/O is being used for the MCP server communication.
             console.error('Todoist MCP server error:', error)

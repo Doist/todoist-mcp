@@ -1,44 +1,30 @@
-import { createTodoistClient, runWithUsageTrackingContext } from '../usage-tracking.js'
-import { extractHttpStatusCode } from './retry.js'
+import { type ValidateToken, validateBearerToken } from '@doist/mcp-core/host'
 
-const AUTH_ERROR_CODES = new Set([401, 403])
+import { buildUsageTrackingHeaders, fetchThroughSdkTransport } from '../usage-tracking.js'
 
-/**
- * Extract HTTP status code from an error, checking both top-level fields
- * and nested `error.response.status` (common in HTTP client libraries).
- */
-function extractAuthStatusCode(error: unknown): number | undefined {
-    const direct = extractHttpStatusCode(error)
-    if (direct !== undefined) {
-        return direct
-    }
-
-    // Check nested response object (e.g. { response: { status: 401 } })
-    if (error !== null && typeof error === 'object' && 'response' in error) {
-        return extractHttpStatusCode((error as Record<string, unknown>).response)
-    }
-
-    return undefined
-}
+/** The Todoist SDK's default API base. */
+const DEFAULT_BASE_URL = 'https://api.todoist.com'
 
 /**
- * Validates a Todoist API token by making a lightweight API call.
+ * Validates a Todoist API token with a status-only call to the user endpoint.
  *
- * @returns `true` if the token is valid, `false` if it's an auth error (401/403).
- * @throws On transient errors (network failures, 5xx) so the caller can decide.
+ * Resolves `'valid'`, `'invalid'` (401) or `'forbidden'` (403), so a host can answer a token that
+ * lacks a scope with an RFC 6750 `insufficient_scope` challenge rather than a blanket 401. The
+ * body is never parsed, so a change to the user object can't turn a valid token into an error.
+ *
+ * The request goes out through the SDK's transport, so it honours the same proxy settings as
+ * every tool call, and carries the usage-tracking headers as `auth:validate-token`.
+ *
+ * @throws {TokenValidationError} (from `@doist/mcp-core/host`) for any other status, such as a
+ * 5xx, carrying it as `httpStatusCode`. Network and timeout errors propagate unchanged.
  */
-async function validateTodoistToken(apiKey: string, baseUrl?: string): Promise<boolean> {
-    const client = createTodoistClient(apiKey, { baseUrl })
-    try {
-        await runWithUsageTrackingContext('auth:validate-token', () => client.getUser())
-        return true
-    } catch (error) {
-        const statusCode = extractAuthStatusCode(error)
-        if (statusCode !== undefined && AUTH_ERROR_CODES.has(statusCode)) {
-            return false
-        }
-        throw error
-    }
-}
+const validateTodoistToken: ValidateToken = (token, baseUrl = DEFAULT_BASE_URL) =>
+    validateBearerToken({
+        // Resolved the way the SDK resolves its own requests against a custom base URL.
+        url: new URL('/api/v1/user', baseUrl),
+        token,
+        headers: buildUsageTrackingHeaders({ label: 'auth:validate-token' }),
+        fetch: fetchThroughSdkTransport,
+    })
 
 export { validateTodoistToken }
