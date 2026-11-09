@@ -36,7 +36,7 @@ Reviewers, Doistbot included, apply these to every change:
 
 - Commits and pushes to `main` are refused by the git hooks. Work on a branch.
 - When a turn changes code that `npm run verify` has not passed, the end-of-turn hook (Claude Code, Codex, Cursor) sends you back once. Run verify, or stop on purpose and say what is unverified.
-- Agent tooling lives in `.agents/scripts/`, never in `scripts/` (which ships in the npm package).
+- Agent tooling lives in `.agents/scripts/`, never in `scripts/`, which holds the project's own developer scripts. Neither ships in the npm package; `.agents/scripts/package-contents.test.ts` enforces it.
 - How it all fits together: [`docs/agents.md`](docs/agents.md).
 
 ## Tool Schema Design Rules

@@ -4,11 +4,13 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { isolatedEnv, REPO_ROOT } from './lib/test-repo.ts'
 
-// Agent tooling is development-only. `scripts/` ships in the npm package, so the tooling
-// lives in `.agents/`, and must never be published.
-const DEV_ONLY = ['.agents/', '.claude/', '.codex/', '.cursor/', '.tmp/']
+// Development-only paths, never published: the agent tooling in `.agents/` and the agents'
+// own folders, and `scripts/`, the repo's developer scripts. Those import from `src/`, which
+// doesn't ship, and need dev dependencies, so they could not run from an installed package; they
+// would only put code that reads credentials into every consumer's node_modules.
+const DEV_ONLY = ['.agents/', '.claude/', '.codex/', '.cursor/', '.tmp/', 'scripts/']
 
-it('keeps agent tooling out of the published package', () => {
+it('keeps development-only code out of the published package', () => {
     expect(existsSync(join(REPO_ROOT, '.agents/scripts'))).toBe(true)
 
     const result = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {

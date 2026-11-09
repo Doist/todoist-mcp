@@ -1,6 +1,6 @@
 # Check: privacy and secrets
 
-This repository is public, and the npm package ships `dist/` and `scripts/`.
+This repository is public, and the npm package ships `dist/`.
 
 ## Report
 
