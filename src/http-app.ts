@@ -46,7 +46,7 @@ function createHttpApp({ todoistApiKey, baseUrl, allowedHosts }: CreateHttpAppOp
     // open with `initialize` fall back to stateless serving of that single
     // request. Either way a fresh McpServer is built per request and nothing is
     // kept between requests, so any instance behind a load balancer can answer.
-    const mcpHandler = createMcpHandler(() => getMcpServer({ todoistApiKey, baseUrl }), {
+    const mcpHandler = createMcpHandler(() => getMcpServer({ token: todoistApiKey, baseUrl }), {
         onerror: (error) => {
             console.error('[Error] MCP request rejected:', error)
         },

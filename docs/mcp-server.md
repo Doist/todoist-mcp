@@ -38,7 +38,7 @@ import { getMcpServer } from '@doist/todoist-mcp'
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
 
 async function main() {
-    const server = getMcpServer({ todoistApiKey: process.env.TODOIST_API_KEY })
+    const server = getMcpServer({ token: process.env.TODOIST_API_KEY })
     const transport = new StdioServerTransport()
     await server.connect(transport)
 }

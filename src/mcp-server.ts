@@ -1,3 +1,4 @@
+import type { McpServerOptions } from '@doist/mcp-core/host'
 import { McpServer } from '@modelcontextprotocol/server'
 import { registerTaskListApp } from './mcp-apps/resources.js'
 import {
@@ -87,19 +88,17 @@ const CATALOGUE_CACHE_HINT = { ttlMs: ONE_HOUR_MS, cacheScope: 'private' } as co
 
 /**
  * Create the MCP server.
- * @param todoistApiKey - The API key for the todoist account.
+ * @param token - The user's Todoist API token.
  * @param baseUrl - The base URL for the todoist API.
  * @param features - Features to enable for the server.
  * @returns the MCP server.
  */
 
 function getMcpServer({
-    todoistApiKey,
+    token,
     baseUrl,
     features = [],
-}: {
-    todoistApiKey: string
-    baseUrl?: string
+}: McpServerOptions & {
     features?: Features
 }) {
     const server = new McpServer(
@@ -120,7 +119,7 @@ function getMcpServer({
         },
     )
 
-    const todoist = createTodoistClient(todoistApiKey, { baseUrl })
+    const todoist = createTodoistClient(token, { baseUrl })
 
     /**
      * MCP Apps

@@ -208,6 +208,19 @@ async function resolveRequestFetch(
     return transport.fetch ?? baseFetch
 }
 
+/**
+ * Sends a request the way the SDK sends its own: through its default dispatcher, which honours
+ * `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY`, with the `fetch` paired to it.
+ */
+export async function fetchThroughSdkTransport(
+    url: string | URL,
+    init: RequestInit,
+): Promise<Response> {
+    const options = { ...init }
+    const requestFetch = await resolveRequestFetch(globalThis.fetch, options)
+    return requestFetch(url, options)
+}
+
 function toCustomFetchResponse(response: Response): CustomFetchResponse {
     return {
         ok: response.ok,
