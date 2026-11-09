@@ -18,10 +18,11 @@ const DEFAULT_BASE_URL = 'https://api.todoist.com'
  * @throws {TokenValidationError} (from `@doist/mcp-core/host`) for any other status, such as a
  * 5xx, carrying it as `httpStatusCode`. Network and timeout errors propagate unchanged.
  */
-const validateTodoistToken: ValidateToken = (token, baseUrl = DEFAULT_BASE_URL) =>
+const validateTodoistToken: ValidateToken = (token, baseUrl) =>
     validateBearerToken({
-        // Resolved the way the SDK resolves its own requests against a custom base URL.
-        url: new URL('/api/v1/user', baseUrl),
+        // Resolved the way the SDK resolves its own requests against a custom base URL. An empty
+        // base (`TODOIST_BASE_URL=`) means the default, as it does for the SDK client.
+        url: new URL('/api/v1/user', baseUrl || DEFAULT_BASE_URL),
         token,
         headers: buildUsageTrackingHeaders({ label: 'auth:validate-token' }),
         fetch: fetchThroughSdkTransport,

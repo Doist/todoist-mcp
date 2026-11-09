@@ -3,11 +3,11 @@ import type { AddressInfo } from 'node:net'
 import { TokenValidationError } from '@doist/mcp-core/host'
 import { vi } from 'vitest'
 
+import packageJson from '../../package.json' with { type: 'json' }
 import {
     resetDefaultDispatcherForTests,
     resetDispatcherModuleLoaderForTests,
     setDispatcherModuleLoaderForTests,
-    TODOIST_MCP_VERSION,
 } from '../usage-tracking.js'
 import { validateTodoistToken } from './validate-todoist-token.js'
 
@@ -21,8 +21,9 @@ let received: Received[]
 beforeAll(async () => {
     server = createServer((req, res) => {
         received.push({ method: req.method, url: req.url, headers: req.headers })
+        // Not JSON: the verdict comes from the status alone, so nothing may parse the body.
         res.writeHead(status, { 'content-type': 'application/json' })
-        res.end('{"id":"1"}')
+        res.end('<html>not a user object')
     })
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
@@ -47,9 +48,9 @@ describe('validateTodoistToken', () => {
         expect(received[0]?.url).toBe('/api/v1/user')
         expect(received[0]?.headers).toMatchObject({
             authorization: 'Bearer tok-123',
-            'user-agent': `todoist-mcp/${TODOIST_MCP_VERSION}`,
+            'user-agent': `todoist-mcp/${packageJson.version}`,
             'doist-platform': 'mcp',
-            'doist-version': TODOIST_MCP_VERSION,
+            'doist-version': packageJson.version,
             'mcp-tool': 'auth:validate-token',
         })
     })
@@ -140,5 +141,22 @@ describe('validateTodoistToken transport', () => {
             'https://custom.api.com/api/v1/user',
             'https://custom.api.com/api/v1/user',
         ])
+    })
+
+    // TODOIST_BASE_URL= reaches here as '', which the SDK client treats as unset.
+    it('treats an empty base URL as unset', async () => {
+        const calls: string[] = []
+        setDispatcherModuleLoaderForTests(async () => ({
+            getDefaultTransport: async () => ({
+                dispatcher: {},
+                fetch: (async (url: RequestInfo | URL) => {
+                    calls.push(String(url))
+                    return new Response(null, { status: 401 })
+                }) as typeof fetch,
+            }),
+        }))
+
+        await expect(validateTodoistToken('tok', '')).resolves.toBe('invalid')
+        expect(calls).toEqual(['https://api.todoist.com/api/v1/user'])
     })
 })
