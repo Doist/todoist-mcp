@@ -20,7 +20,7 @@ This repository is set up so coding agents prove their work before they call it 
 | Committed files are linted and formatted                                                                | `pre-commit` (lefthook, staged files only); CI                       | Enforced in CI                           |
 | Type check passes before a commit                                                                       | `pre-commit`; CI                                                     | Enforced in CI                           |
 | Tests pass before a push                                                                                | `pre-push`; CI                                                       | Enforced in CI                           |
-| Agent tooling never ships in the npm package                                                            | `.agents/scripts/package-contents.test.ts`                           | Enforced in CI                           |
+| Agent tooling and developer scripts never ship in the npm package                                       | `.agents/scripts/package-contents.test.ts`                           | Enforced in CI                           |
 | `npm run verify` runs what CI runs                                                                      | `.agents/scripts/lib/steps.test.ts` compares it with `ci.yml`        | Enforced in CI                           |
 | Run `npm run verify` before calling work done                                                           | `AGENTS.md`                                                          | Enforced at turn end (once); `AGENTS.md` |
 | Never weaken a check to pass it                                                                         | `AGENTS.md`                                                          | Asked                                    |
@@ -141,7 +141,7 @@ Your part: answer the decision questions, and read the evidence report, especial
 
 ## Where the tooling lives
 
-- `.agents/scripts/` holds scripts and their tests, next to the skills and review checks. It is not under `scripts/`, which ships in the npm package, nor a top-level "tools" folder, which would read as MCP tools (`src/tools/`).
+- `.agents/scripts/` holds scripts and their tests, next to the skills and review checks. It is not under `scripts/`, which holds the project's own developer scripts, nor a top-level "tools" folder, which would read as MCP tools (`src/tools/`).
 - The tooling runs straight from TypeScript with Node's type stripping, so it only uses erasable syntax (`.agents/scripts/tsconfig.json` enforces this). `npm run type-check` covers it.
 - Tests run in `npm test` and CI. They copy the tools into throwaway git repositories and never touch your checkout. A test helper clears the variables git exports to hooks, since `npm test` itself runs inside `pre-push`.
 
