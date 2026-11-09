@@ -1,11 +1,15 @@
-import type { Task } from '@doist/todoist-sdk'
+import type { SyncCommand, Task, TaskUpdateArgs } from '@doist/todoist-sdk'
 import { createCommand } from '@doist/todoist-sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { formatBatchItemError } from '../tool-execution-error.js'
 import { mapTask } from '../tool-helpers.js'
+import { logBatchFailures } from '../utils/batch-failures.js'
 import { parseItemDuration } from '../utils/duration-parser.js'
-import { TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
-import { summarizeTaskOperation } from '../utils/response-builders.js'
+import { FailureSchema, TaskSchema as TaskOutputSchema } from '../utils/output-schemas.js'
+import { appendFailureSummary, summarizeTaskOperation } from '../utils/response-builders.js'
+import { executeWithRetry } from '../utils/retry.js'
+import { settleSyncCommands } from '../utils/sync-commands.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const TaskRescheduleSchema = z.object({
@@ -34,6 +38,7 @@ const OutputSchema = {
     tasks: z.array(TaskOutputSchema).describe('The rescheduled tasks.'),
     totalCount: z.number().describe('The total number of tasks rescheduled.'),
     rescheduledTaskIds: z.array(z.string()).describe('The IDs of the rescheduled tasks.'),
+    failures: z.array(FailureSchema).describe('Tasks that could not be rescheduled, with reasons.'),
 }
 
 const rescheduleTasks = {
@@ -42,7 +47,8 @@ const rescheduleTasks = {
         'Reschedule tasks to new dates while preserving recurring schedules. ' +
         'Unlike update-tasks (which replaces the entire due string and can wipe recurrence), ' +
         'this tool changes only the date (and duration, if given), keeping recurrence patterns intact. ' +
-        'Use this when moving recurring tasks to a different date or time without altering their repeat pattern.',
+        'Use this when moving recurring tasks to a different date or time without altering their repeat pattern. ' +
+        'Without a due date, the deadline moves.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
@@ -54,66 +60,125 @@ const rescheduleTasks = {
             input.duration ? parseItemDuration(`Task ${input.id}`, input.duration) : undefined,
         )
 
-        // Fetch all tasks in parallel to get current due date info
-        const existingTasks = await Promise.all(
-            taskInputs.map(async (input) => {
-                const task = await client.getTask(input.id)
-                return { input, task }
-            }),
+        const failures: Array<z.infer<typeof FailureSchema>> = []
+
+        // Read each task's current due date, which the new date is built from.
+        const fetched = await Promise.allSettled(
+            taskInputs.map((input) => executeWithRetry(() => client.getTask(input.id))),
         )
 
-        // Validate all tasks have due dates and build sync commands
-        const commands = existingTasks.map(({ input, task }, index) => {
-            if (!task.due) {
-                throw new Error(
-                    `Task "${task.content}" (${task.id}) has no due date. Rescheduling requires an existing due date.`,
-                )
+        const toReschedule: Array<{ id: string; command: SyncCommand }> = []
+        fetched.forEach((outcome, index) => {
+            const input = taskInputs[index]
+            if (!input) return
+            if (outcome.status === 'rejected') {
+                failures.push({ item: input.id, error: formatBatchItemError(outcome.reason) })
+                return
             }
-
-            const newDate = buildRescheduleDate(input.date, task.due)
-
-            return createCommand('item_update', {
+            const task = outcome.value
+            const dateFields = buildRescheduleFields(input.date, task)
+            // A task with neither date is not overdue; leave it alone.
+            if (!dateFields) return
+            toReschedule.push({
                 id: input.id,
-                due: {
-                    date: newDate,
-                    string: task.due.string,
-                    isRecurring: task.due.isRecurring,
-                    timezone: task.due.timezone ?? undefined,
-                    lang: task.due.lang ?? undefined,
-                },
-                ...(durations[index] && { duration: durations[index] }),
+                command: createCommand('item_update', {
+                    id: input.id,
+                    ...dateFields,
+                    ...(durations[index] && { duration: durations[index] }),
+                }),
             })
         })
 
-        // Execute all reschedules in a single sync request.
-        // The SDK throws TodoistRequestError if any syncStatus entry is non-ok,
-        // so we catch and rethrow with task-scoped context.
-        try {
-            await client.sync({ commands })
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            throw new Error(`Reschedule failed: ${message}`)
+        const rescheduledIds: string[] = []
+        if (toReschedule.length > 0) {
+            // One Sync request; each command is settled on its own.
+            const { outcomes } = await settleSyncCommands(
+                client,
+                toReschedule.map(({ command }) => command),
+            )
+            outcomes.forEach((outcome, index) => {
+                const id = toReschedule[index]?.id ?? `Task ${index + 1}`
+                if (outcome.status === 'fulfilled') {
+                    rescheduledIds.push(id)
+                } else {
+                    failures.push({ item: id, error: formatBatchItemError(outcome.reason) })
+                }
+            })
         }
 
-        // Re-fetch tasks via REST to get consistent output format
-        const updatedTasks = await Promise.all(taskInputs.map((input) => client.getTask(input.id)))
+        logBatchFailures(ToolNames.RESCHEDULE_TASKS, taskInputs.length, failures)
 
-        const mappedTasks = updatedTasks.map(mapTask)
+        // The reschedules are already applied, so a failed read-back is reported, not thrown.
+        // Each read is settled on its own so one failed read keeps the others.
+        const mappedTasks: Array<z.infer<typeof TaskOutputSchema>> = []
+        const unreadIds: string[] = []
+        let readBackError: string | undefined
+        if (rescheduledIds.length > 0) {
+            const readBack = await Promise.allSettled(
+                rescheduledIds.map((id) => executeWithRetry(() => client.getTask(id))),
+            )
+            // Mapping stays outside the settled reads: a task that fails to map is a
+            // schema mismatch, which should still fail loudly.
+            for (const [index, outcome] of readBack.entries()) {
+                if (outcome.status === 'fulfilled') {
+                    mappedTasks.push(mapTask(outcome.value))
+                    continue
+                }
+                unreadIds.push(rescheduledIds[index] ?? `Task ${index + 1}`)
+                readBackError ??= formatBatchItemError(outcome.reason)
+            }
+            if (readBackError) {
+                console.error(`${ToolNames.RESCHEDULE_TASKS}: read-back failed`, {
+                    updated: rescheduledIds.length,
+                    unread: unreadIds.length,
+                    error: readBackError,
+                })
+            }
+        }
 
-        const textContent = summarizeTaskOperation('Rescheduled', mappedTasks, {
-            showDetails: mappedTasks.length <= 5,
-        })
+        const summary = readBackError
+            ? `Rescheduled ${rescheduledIds.length} task${rescheduledIds.length === 1 ? '' : 's'}: ${rescheduledIds.join(', ')}\nCould not read back ${unreadIds.join(', ')}: ${readBackError}`
+            : summarizeTaskOperation('Rescheduled', mappedTasks, {
+                  showDetails: mappedTasks.length <= 5,
+              })
 
         return {
-            textContent,
+            textContent: appendFailureSummary(summary, failures),
             structuredContent: {
                 tasks: mappedTasks,
-                totalCount: mappedTasks.length,
-                rescheduledTaskIds: updatedTasks.map((task) => task.id),
+                totalCount: rescheduledIds.length,
+                rescheduledTaskIds: rescheduledIds,
+                failures,
             },
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
+
+/**
+ * The date a reschedule moves: the due date when there is one, else the deadline
+ * (a deadline-only task is overdue by its deadline), else nothing.
+ */
+function buildRescheduleFields(
+    inputDate: string,
+    task: Pick<Task, 'due' | 'deadline'>,
+): Pick<TaskUpdateArgs, 'due' | 'deadline'> | undefined {
+    if (task.due) {
+        return {
+            due: {
+                date: buildRescheduleDate(inputDate, task.due),
+                string: task.due.string,
+                isRecurring: task.due.isRecurring,
+                timezone: task.due.timezone ?? undefined,
+                lang: task.due.lang ?? undefined,
+            },
+        }
+    }
+    // Deadlines are date-only.
+    if (task.deadline) {
+        return { deadline: { date: inputDate.slice(0, 10) } }
+    }
+    return undefined
+}
 
 function buildRescheduleDate(inputDate: string, existingDue: NonNullable<Task['due']>): string {
     const isInputDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(inputDate)

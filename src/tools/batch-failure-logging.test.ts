@@ -15,6 +15,7 @@ import { addReminders } from './add-reminders.js'
 import { addSections } from './add-sections.js'
 import { addTasks } from './add-tasks.js'
 import { completeTasks } from './complete-tasks.js'
+import { rescheduleTasks } from './reschedule-tasks.js'
 import { uncompleteTasks } from './uncomplete-tasks.js'
 import { updateComments } from './update-comments.js'
 import { updateFilters } from './update-filters.js'
@@ -213,6 +214,24 @@ const cases = [
         },
     },
     {
+        toolName: ToolNames.RESCHEDULE_TASKS,
+        of: 1,
+        item: TEST_IDS.TASK_1,
+        run: (client: Mocked<TodoistApi>) => {
+            client.getTask.mockResolvedValue(
+                createMockTask({
+                    id: TEST_IDS.TASK_1,
+                    due: { date: '2026-03-15', string: 'Mar 15', isRecurring: false },
+                }),
+            )
+            client.sync.mockRejectedValue(apiError)
+            return rescheduleTasks.execute(
+                { tasks: [{ id: TEST_IDS.TASK_1, date: '2026-03-20' }] },
+                client,
+            )
+        },
+    },
+    {
         toolName: ToolNames.UPDATE_FILTERS,
         of: 1,
         item: 'filter-1',
@@ -231,6 +250,7 @@ describe('batch tools log the items they could not act on', () => {
         consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
         mockTodoistApi = {
             closeTask: vi.fn(),
+            getTask: vi.fn(),
             reopenTask: vi.fn(),
             updateTask: vi.fn(),
             moveTask: vi.fn(),
