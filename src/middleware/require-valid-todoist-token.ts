@@ -41,8 +41,25 @@ const DEFAULT_STATIC_TTL_MS = 300_000 // 5 minutes
 const DEFAULT_DYNAMIC_TTL_MS = 120_000 // 2 minutes
 const MAX_CACHE_SIZE = 10_000
 
-/** Every middleware's verdict cache, so `clearTokenValidationCache` can empty them all. */
-const caches = new Set<TokenVerdictCache>()
+/**
+ * One verdict cache per TTL, shared by every middleware with that TTL, so the number of caches
+ * stays bounded however many middlewares are built.
+ */
+const caches = new Map<number, TokenVerdictCache>()
+
+function cacheFor(ttlMs: number): TokenVerdictCache {
+    let verdicts = caches.get(ttlMs)
+    if (!verdicts) {
+        // Reads the clock on every call, so a test's fake timers apply whenever this was created.
+        verdicts = createTokenVerdictCache({
+            ttlMs,
+            maxEntries: MAX_CACHE_SIZE,
+            now: () => Date.now(),
+        })
+        caches.set(ttlMs, verdicts)
+    }
+    return verdicts
+}
 
 function sendUnauthorized(res: Response, resourceMetadataUrl?: string): void {
     res.status(401).set('WWW-Authenticate', buildBearerChallenge({ resourceMetadataUrl })).json({
@@ -91,11 +108,7 @@ function respond(
  */
 function requireValidTodoistToken(options: RequireValidTodoistTokenOptions): RequestHandler {
     const defaultTtl = options.type === 'static' ? DEFAULT_STATIC_TTL_MS : DEFAULT_DYNAMIC_TTL_MS
-    const verdicts = createTokenVerdictCache({
-        ttlMs: options.cacheTtlMs ?? defaultTtl,
-        maxEntries: MAX_CACHE_SIZE,
-    })
-    caches.add(verdicts)
+    const verdicts = cacheFor(options.cacheTtlMs ?? defaultTtl)
     const { resourceMetadataUrl } = options
 
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -118,7 +131,7 @@ function requireValidTodoistToken(options: RequireValidTodoistTokenOptions): Req
         } catch (error) {
             // Fail open on any error, transient or not — don't block all requests
             // during a Todoist API blip. Tool calls will fail with descriptive errors.
-            console.warn('[Token validation] Transient error, proceeding:', error)
+            console.warn('[Token validation] Validation failed, proceeding:', error)
             next()
             return
         }
@@ -131,7 +144,7 @@ function requireValidTodoistToken(options: RequireValidTodoistTokenOptions): Req
  * Clear the token validation cache. Useful for testing.
  */
 function clearTokenValidationCache(): void {
-    for (const verdicts of caches) verdicts.clear()
+    for (const verdicts of caches.values()) verdicts.clear()
 }
 
 export { clearTokenValidationCache, requireValidTodoistToken, type RequireValidTodoistTokenOptions }

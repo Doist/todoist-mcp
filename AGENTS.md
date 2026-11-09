@@ -126,7 +126,7 @@ Leave it off when the description would restate the field name (`id`, `projectId
 
 `src/tool-registry.test.ts` enforces that steps 1, 3 and 4 agree with what the server actually registers, so a partial registration fails CI instead of silently degrading `lint:schemas` coverage or leaving the tool unreachable from `run-tool.ts`.
 
-If a new tool pushes the combined fixed cost over `TOKEN_BUDGET` in `src/token-footprint.test.ts`, raise the budget in the same PR and call it out in the description.
+If a new tool pushes the combined fixed cost over `DEFAULT_TOKEN_BUDGET` in `src/token-footprint.test.ts`, raise the budget in the same PR and call it out in the description.
 
 ## Testing Requirements
 
