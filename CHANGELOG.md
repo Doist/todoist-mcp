@@ -1,3 +1,13 @@
+## [14.0.0](https://github.com/Doist/todoist-mcp/compare/v13.11.2...v14.0.0) (2026-11-09)
+
+### ⚠ BREAKING CHANGES
+
+* share the host contract from @doist/mcp-core/host (#692)
+
+### Features
+
+* share the host contract from @doist/mcp-core/host ([#692](https://github.com/Doist/todoist-mcp/issues/692)) ([99a1d8d](https://github.com/Doist/todoist-mcp/commit/99a1d8dcc80cadd14db7a74c1a8f4abb7e506f72))
+
 ## [13.11.2](https://github.com/Doist/todoist-mcp/compare/v13.11.1...v13.11.2) (2026-11-09)
 
 ### Bug Fixes

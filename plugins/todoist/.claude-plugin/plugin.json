@@ -1,6 +1,6 @@
 {
     "name": "todoist",
-    "version": "13.11.2",
+    "version": "14.0.0",
     "description": "Manage your Todoist tasks and projects in Claude.",
     "author": {
         "name": "Todoist",
