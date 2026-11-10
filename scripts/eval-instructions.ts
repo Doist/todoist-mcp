@@ -293,6 +293,29 @@ const SCENARIOS: Scenario[] = [
                 : `not a join of 6XQ3Sales9: ${JSON.stringify(input)}`,
         guards: 'project-management join: joining a workspace project when the user asks',
     },
+    {
+        // A saved template can't be deleted through the API, so a template the
+        // user didn't want stays until they remove it in the app. The ID is in
+        // the prompt so the first call is the save, not a lookup.
+        id: 'save-template-shows-draft',
+        prompt: 'Save my project 6XG4Pr0j3c ("Client onboarding") as a template.',
+        expect: [ToolNames.SAVE_PROJECT_AS_TEMPLATE],
+        check: (input) =>
+            input.preview === false
+                ? 'saved straight away, without showing the user the draft first'
+                : null,
+        guards: 'save-project-as-template: the draft comes first unless the user asked to save as is',
+    },
+    {
+        id: 'save-template-as-is',
+        prompt: 'Save my project 6XG4Pr0j3c ("Client onboarding") as a template called "Onboarding", as it is. No changes needed.',
+        expect: [ToolNames.SAVE_PROJECT_AS_TEMPLATE],
+        check: (input) =>
+            input.preview === false
+                ? null
+                : `preview is ${JSON.stringify(input.preview)}, so the user who asked to save as is gets a draft`,
+        guards: 'save-project-as-template: saving in one call when the user asked for no changes',
+    },
 ]
 
 const DEFAULT_MODELS = ['claude-haiku-4-5', 'claude-sonnet-5']

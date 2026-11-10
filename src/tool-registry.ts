@@ -38,6 +38,7 @@ import { projectManagement } from './tools/project-management.js'
 import { projectMove } from './tools/project-move.js'
 import { reorderObjects } from './tools/reorder-objects.js'
 import { rescheduleTasks } from './tools/reschedule-tasks.js'
+import { saveProjectAsTemplate } from './tools/save-project-as-template.js'
 import { search } from './tools/search.js'
 import { setUserStatus } from './tools/set-user-status.js'
 import { uncompleteTasks } from './tools/uncomplete-tasks.js'
@@ -150,6 +151,7 @@ const toolRegistry = {
     exportProjectTemplate,
     importProjectTemplate,
     createProjectFromTemplate,
+    saveProjectAsTemplate,
 
     // Workspace tools
     listWorkspaces,
