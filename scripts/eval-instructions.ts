@@ -316,6 +316,16 @@ const SCENARIOS: Scenario[] = [
                 : `preview is ${JSON.stringify(input.preview)}, so the user who asked to save as is gets a draft`,
         guards: 'save-project-as-template: saving in one call when the user asked for no changes',
     },
+    {
+        id: 'csv-template-shows-draft',
+        prompt: 'Make a template out of this CSV:\n\nTYPE,CONTENT,PRIORITY\nsection,Week 1,\ntask,Plan the launch,1\ntask,Write the announcement,2',
+        expect: [ToolNames.CREATE_TEMPLATE_FROM_CSV],
+        check: (input) =>
+            input.preview === false
+                ? 'created straight away, without showing the user the draft first'
+                : null,
+        guards: 'create-template-from-csv: the draft comes first unless the user asked to save as is',
+    },
 ]
 
 const DEFAULT_MODELS = ['claude-haiku-4-5', 'claude-sonnet-5']

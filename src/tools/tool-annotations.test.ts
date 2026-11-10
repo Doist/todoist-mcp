@@ -320,6 +320,12 @@ describeToolAnnotations({
             destructiveHint: false,
             idempotentHint: true,
         },
+        [ToolNames.CREATE_TEMPLATE_FROM_CSV]: {
+            title: 'Todoist: Create Template From CSV',
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+        },
         [ToolNames.UPDATE_TEMPLATE]: {
             title: 'Todoist: Update Template',
             readOnlyHint: false,

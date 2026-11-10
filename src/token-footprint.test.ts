@@ -6,7 +6,7 @@ import { getMcpServer } from './mcp-server.js'
 // client receives them. Treat it as a ratchet rather than headroom: it should move down over
 // time, and a rise needs justifying in the PR that causes it. Override at runtime with
 // MCP_TOKEN_BUDGET=NNNN to experiment without editing the source.
-const DEFAULT_TOKEN_BUDGET = 39_700
+const DEFAULT_TOKEN_BUDGET = 40_900
 
 describeTokenFootprint({
     createServer: () => getMcpServer({ token: 'test-token' }),
