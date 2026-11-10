@@ -22,6 +22,7 @@ import { addTasks } from './tools/add-tasks.js'
 import { analyzeProjectHealth } from './tools/analyze-project-health.js'
 import { completeTasks } from './tools/complete-tasks.js'
 import { createProjectFromTemplate } from './tools/create-project-from-template.js'
+import { createTemplate } from './tools/create-template.js'
 // General tools
 import { deleteObject } from './tools/delete-object.js'
 import { exportProjectTemplate } from './tools/export-project-template.js'
@@ -119,6 +120,7 @@ export {
     exportProjectTemplate,
     importProjectTemplate,
     createProjectFromTemplate,
+    createTemplate,
     // Workspace tools
     listWorkspaces,
     // Attachment tools

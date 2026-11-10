@@ -293,6 +293,59 @@ const SCENARIOS: Scenario[] = [
                 : `not a join of 6XQ3Sales9: ${JSON.stringify(input)}`,
         guards: 'project-management join: joining a workspace project when the user asks',
     },
+    {
+        // A saved template can't be deleted through the API, so a template the
+        // user didn't want stays until they remove it in the app. The ID is in
+        // the prompt so the first call is the save, not a lookup.
+        id: 'save-template-shows-draft',
+        prompt: 'Save my project 6XG4Pr0j3c ("Client onboarding") as a template.',
+        expect: [ToolNames.CREATE_TEMPLATE],
+        check: (input) =>
+            input.preview === false
+                ? 'saved straight away, without showing the user the draft first'
+                : input.projectId === '6XG4Pr0j3c'
+                  ? null
+                  : `projectId is ${JSON.stringify(input.projectId)}, so this doesn't start from the user's project`,
+        guards: 'create-template from a project: the draft comes first unless the user asked to save as is',
+    },
+    {
+        id: 'save-template-as-is',
+        prompt: 'Save my project 6XG4Pr0j3c ("Client onboarding") as a template called "Onboarding", as it is. No changes needed.',
+        expect: [ToolNames.CREATE_TEMPLATE],
+        check: (input) =>
+            input.preview === false
+                ? null
+                : `preview is ${JSON.stringify(input.preview)}, so the user who asked to save as is gets a draft`,
+        guards: 'create-template from a project: saving in one call when the user asked for no changes',
+    },
+    {
+        id: 'csv-template-shows-draft',
+        prompt: 'Make a template out of this CSV:\n\nTYPE,CONTENT,PRIORITY\nsection,Week 1,\ntask,Plan the launch,1\ntask,Write the announcement,2',
+        expect: [ToolNames.CREATE_TEMPLATE],
+        check: (input) =>
+            input.preview === false
+                ? 'created straight away, without showing the user the draft first'
+                : typeof input.csvFileContent === 'string'
+                  ? null
+                  : 'the CSV was not passed as csvFileContent',
+        guards: 'create-template from CSV: the draft comes first unless the user asked to save as is',
+    },
+    {
+        // Before create-template, a template from scratch had to borrow an
+        // unrelated project's ID, inheriting its color and workspace.
+        id: 'template-from-scratch',
+        prompt: 'Create a template called "Weekly review" with three tasks: clear the inbox, review the calendar, and plan next week.',
+        expect: [ToolNames.CREATE_TEMPLATE],
+        check: (input) => {
+            if (input.projectId !== undefined) {
+                return `projectId is ${JSON.stringify(input.projectId)}, so the template borrows a project`
+            }
+            return input.preview === false
+                ? 'saved straight away, without showing the user the draft first'
+                : null
+        },
+        guards: 'create-template from scratch: no project, and the draft comes first',
+    },
 ]
 
 const DEFAULT_MODELS = ['claude-haiku-4-5', 'claude-sonnet-5']

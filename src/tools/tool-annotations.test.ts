@@ -308,6 +308,13 @@ describeToolAnnotations({
             destructiveHint: false,
             idempotentHint: false,
         },
+        [ToolNames.CREATE_TEMPLATE]: {
+            title: 'Todoist: Create Template',
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: true,
+        },
         [ToolNames.SEARCH]: {
             title: 'Todoist: Search',
             readOnlyHint: true,
