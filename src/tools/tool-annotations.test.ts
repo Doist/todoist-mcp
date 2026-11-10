@@ -314,6 +314,12 @@ describeToolAnnotations({
             destructiveHint: false,
             idempotentHint: false,
         },
+        [ToolNames.GET_TEMPLATE]: {
+            title: 'Todoist: Get Template',
+            readOnlyHint: true,
+            destructiveHint: false,
+            idempotentHint: true,
+        },
         [ToolNames.UPDATE_TEMPLATE]: {
             title: 'Todoist: Update Template',
             readOnlyHint: false,
