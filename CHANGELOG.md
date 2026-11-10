@@ -1,3 +1,9 @@
+## [14.0.4](https://github.com/Doist/todoist-mcp/compare/v14.0.3...v14.0.4) (2026-11-10)
+
+### Bug Fixes
+
+* **deps:** update dependency @doist/todoist-sdk to v17 ([#691](https://github.com/Doist/todoist-mcp/issues/691)) ([11633d4](https://github.com/Doist/todoist-mcp/commit/11633d475f7a7fbd45f53104443e4b16c45a2f01))
+
 ## [14.0.3](https://github.com/Doist/todoist-mcp/compare/v14.0.2...v14.0.3) (2026-11-09)
 
 ### Bug Fixes
