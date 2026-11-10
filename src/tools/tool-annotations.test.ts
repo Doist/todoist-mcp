@@ -302,6 +302,12 @@ describeToolAnnotations({
             destructiveHint: false,
             idempotentHint: false,
         },
+        [ToolNames.CREATE_PROJECT_FROM_TEMPLATE]: {
+            title: 'Todoist: Create Project From Template',
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+        },
         [ToolNames.SEARCH]: {
             title: 'Todoist: Search',
             readOnlyHint: true,
