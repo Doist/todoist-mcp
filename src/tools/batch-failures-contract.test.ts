@@ -9,7 +9,7 @@ import { ToolNames } from '../utils/tool-names.js'
  * hides the items that were written: the caller sees one error, assumes nothing
  * happened, and a retry of the whole batch writes them a second time.
  *
- * https://github.com/Doist/todoist-mcp/issues/505
+ * https://github.com/todoist/todoist-mcp/issues/505
  */
 const EXCEPTIONS: Partial<Record<string, string>> = {
     [ToolNames.MANAGE_ASSIGNMENTS]:

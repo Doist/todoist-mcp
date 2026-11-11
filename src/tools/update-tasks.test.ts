@@ -2121,7 +2121,7 @@ describe(`${UPDATE_TASKS} tool`, () => {
         })
     })
 
-    describe('recurrence guard (Doist/Issues#21505)', () => {
+    describe('recurrence guard (todoist/Issues#21505)', () => {
         const recurringTask = createMockTask({
             id: 'recurring-1',
             due: {

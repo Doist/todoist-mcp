@@ -3,7 +3,7 @@
     "extends": [
         "config:recommended",
         ":semanticCommitTypeAll(chore)",
-        "github>doist/renovate-config:frontend-base"
+        "github>todoist/renovate-config:frontend-base"
     ],
     "schedule": ["before 4am on Monday"],
     "timezone": "UTC",

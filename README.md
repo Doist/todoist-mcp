@@ -92,7 +92,7 @@ Then enable the server in Cursor settings if prompted.
 The fastest setup is the official Todoist plugin, which wires up the MCP server for you:
 
 ```bash
-/plugin marketplace add doist/todoist-mcp
+/plugin marketplace add todoist/todoist-mcp
 /plugin install todoist@doist
 ```
 
@@ -111,7 +111,7 @@ Then launch `claude`, execute `/mcp`, and select the `todoist` MCP server to aut
 Install the official Todoist extension with [Gemini CLI](https://geminicli.com/docs/get-started/installation/) 0.67.0 or later:
 
 ```bash
-gemini extensions install https://github.com/Doist/todoist-mcp
+gemini extensions install https://github.com/todoist/todoist-mcp
 ```
 
 Start or restart Gemini CLI, then run `/mcp auth todoist` and sign in with your Todoist account. Todoist hosts the server; no API key or local server is needed.

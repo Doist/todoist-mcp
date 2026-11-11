@@ -745,7 +745,7 @@ describe(`${ADD_COMMENTS} tool`, () => {
 
     describe('partial failures', () => {
         it('reports the posted comment alongside the failed one, so a retry can skip it', async () => {
-            // https://github.com/Doist/todoist-mcp/issues/505: the first comment is saved and
+            // https://github.com/todoist/todoist-mcp/issues/505: the first comment is saved and
             // the second targets an invalid task. Reporting only an error led callers to
             // replay the batch and post the first comment twice.
             const invalidTaskId = Object.assign(new Error('HTTP 400: Bad Request'), {

@@ -3,7 +3,7 @@
 Fill in the brackets. Give every reviewer the same brief, plus its role. Leave out your opinion of the change and how you reached it: a reviewer handed a conclusion tends to confirm it.
 
 ```
-Repository: Doist/todoist-mcp, the Todoist MCP server (TypeScript, Vitest).
+Repository: todoist/todoist-mcp, the Todoist MCP server (TypeScript, Vitest).
 The change: `git diff <base>` in <checkout path>, including untracked files.
 
 The task, in the owner's words:

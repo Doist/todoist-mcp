@@ -18,5 +18,5 @@ jobs:
             - name: Add issue to project
               uses: actions/add-to-project@27022a19346d0433f2b9859dd2b69d38f4277808
               with:
-                  project-url: https://github.com/orgs/Doist/projects/83
+                  project-url: https://github.com/orgs/todoist/projects/83
                   github-token: ${{ secrets.HERO_BOARD_PAT }}
