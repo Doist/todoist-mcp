@@ -1,3 +1,9 @@
+## [14.0.5](https://github.com/todoist/todoist-mcp/compare/v14.0.4...v14.0.5) (2026-11-11)
+
+### Bug Fixes
+
+* **ci:** use the todoist GitHub org after the rename ([#697](https://github.com/todoist/todoist-mcp/issues/697)) ([90711ca](https://github.com/todoist/todoist-mcp/commit/90711cae70f86b9e0341596f08d17ce17d1ce61b))
+
 ## [14.0.4](https://github.com/Doist/todoist-mcp/compare/v14.0.3...v14.0.4) (2026-11-10)
 
 ### Bug Fixes
