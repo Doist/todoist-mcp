@@ -1,3 +1,13 @@
+## [15.0.0](https://github.com/todoist/todoist-mcp/compare/v14.0.5...v15.0.0) (2026-11-11)
+
+### ⚠ BREAKING CHANGES
+
+* publish as @todoist/mcp (#698)
+
+### Features
+
+* publish as @todoist/mcp ([#698](https://github.com/todoist/todoist-mcp/issues/698)) ([6f197e6](https://github.com/todoist/todoist-mcp/commit/6f197e66803a775fdbba269b80afa169b2d101bd))
+
 ## [14.0.5](https://github.com/todoist/todoist-mcp/compare/v14.0.4...v14.0.5) (2026-11-11)
 
 ### Bug Fixes
