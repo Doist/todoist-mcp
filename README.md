@@ -11,15 +11,17 @@ integrate them to your own AI conversational interfaces.
 ### 1. Add this repository as a dependency
 
 ```sh
-npm install @doist/todoist-mcp
+npm install @todoist/mcp
 ```
+
+This package was previously published as `@doist/todoist-mcp`.
 
 ### 2. Import the tools and plug them to an AI
 
 Here's an example using [Vercel's AI SDK](https://ai-sdk.dev/docs/ai-sdk-core/generating-text#streamtext).
 
 ```js
-import { findTasksByDate, addTasks } from '@doist/todoist-mcp'
+import { findTasksByDate, addTasks } from '@todoist/mcp'
 import { TodoistApi } from '@doist/todoist-sdk'
 import { streamText } from 'ai'
 
@@ -53,7 +55,7 @@ const result = streamText({
 You can run the MCP server directly with npx:
 
 ```bash
-npx @doist/todoist-mcp
+npx -p @todoist/mcp todoist-mcp
 ```
 
 ### Setup Guide

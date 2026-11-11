@@ -7,7 +7,7 @@ This document outlines the steps necessary to run this MCP server and connect to
 The easiest way to use this MCP server is with npx:
 
 ```bash
-npx @doist/todoist-mcp
+npx -p @todoist/mcp todoist-mcp
 ```
 
 You'll need to set your Todoist API key as an environment variable `TODOIST_API_KEY`.
@@ -34,7 +34,7 @@ This will build the project and run the MCP inspector for manual testing.
 For convenience, we also include a function that initializes an MCP Server with all the tools available:
 
 ```js
-import { getMcpServer } from '@doist/todoist-mcp'
+import { getMcpServer } from '@todoist/mcp'
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
 
 async function main() {
@@ -58,7 +58,7 @@ Add this section to your `mcp.json` config in Claude, Cursor, etc.:
         "todoist-mcp": {
             "type": "stdio",
             "command": "npx",
-            "args": ["@doist/todoist-mcp"],
+            "args": ["-p", "@todoist/mcp", "todoist-mcp"],
             "env": {
                 "TODOIST_API_KEY": "your-todoist-token-here"
             }
@@ -104,14 +104,14 @@ You can run the MCP server as a local HTTP service. This is useful as an alterna
 ### Quick Start with npx
 
 ```bash
-TODOIST_API_KEY=your-key npx -p @doist/todoist-mcp todoist-mcp-http
+TODOIST_API_KEY=your-key npx -p @todoist/mcp todoist-mcp-http
 
 # Custom port
-TODOIST_API_KEY=your-key PORT=8080 npx -p @doist/todoist-mcp todoist-mcp-http
+TODOIST_API_KEY=your-key PORT=8080 npx -p @todoist/mcp todoist-mcp-http
 
 # Explicitly expose on all interfaces. Only do this behind trusted network/auth controls.
 # Set ALLOWED_HOSTS to the hostnames clients use, otherwise their requests are rejected with 403.
-TODOIST_API_KEY=your-key HOST=0.0.0.0 ALLOWED_HOSTS=mcp.example.lan npx -p @doist/todoist-mcp todoist-mcp-http
+TODOIST_API_KEY=your-key HOST=0.0.0.0 ALLOWED_HOSTS=mcp.example.lan npx -p @todoist/mcp todoist-mcp-http
 ```
 
 ### Running from Source

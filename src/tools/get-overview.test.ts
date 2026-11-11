@@ -1,5 +1,5 @@
-import { removeNullFields } from '@doist/mcp-core'
 import type { PersonalProject, Section, Task, TodoistApi } from '@doist/todoist-sdk'
+import { removeNullFields } from '@todoist/mcp-core'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
 import {

@@ -1,5 +1,5 @@
-import type { AnyMcpTool, ExecuteResult, McpTool, RequiredToolAnnotations } from '@doist/mcp-core'
 import type { TodoistApi } from '@doist/todoist-sdk'
+import type { AnyMcpTool, ExecuteResult, McpTool, RequiredToolAnnotations } from '@todoist/mcp-core'
 import type { z } from 'zod'
 
 /**

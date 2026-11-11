@@ -1,5 +1,5 @@
-import type { McpServerOptions } from '@doist/mcp-core/host'
 import { McpServer } from '@modelcontextprotocol/server'
+import type { McpServerOptions } from '@todoist/mcp-core/host'
 import { registerTaskListApp } from './mcp-apps/resources.js'
 import {
     FEATURE_NAMES,

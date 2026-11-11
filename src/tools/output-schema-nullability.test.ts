@@ -1,4 +1,4 @@
-import { describeOutputSchemaNullability } from '@doist/mcp-core/testing'
+import { describeOutputSchemaNullability } from '@todoist/mcp-core/testing'
 import { registeredTools } from '../tool-registry.js'
 
 /**

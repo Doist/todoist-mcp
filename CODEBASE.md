@@ -6,7 +6,7 @@
 
 ## What this project is
 
-`@doist/todoist-mcp` is an **MCP (Model Context Protocol) server** that exposes
+`@todoist/mcp` is an **MCP (Model Context Protocol) server** that exposes
 Todoist as tools for LLMs. It wraps `@doist/todoist-sdk` and publishes two
 binaries:
 
@@ -45,9 +45,9 @@ src/
 ├─ index.ts                   # Public package exports — a curated subset of tools + helpers + types. NOT the full registry.
 ├─ mcp-server.ts              # getMcpServer() factory. Iterates `registeredTools`, registers the productivity-analysis prompt, contains the giant `instructions` string shown to the LLM
 ├─ tool-registry.ts           # **Authoritative tool registry** — the ordered list of every registered tool. mcp-server, index.ts, run-tool.ts, validate-schemas.ts and the token-footprint test all derive from it
-├─ mcp-helpers.ts             # registerTool(): Todoist's wiring of the @doist/mcp-core registrar (client, retry, usage tracking, strip_emails, error formatting). FEATURE_NAMES
+├─ mcp-helpers.ts             # registerTool(): Todoist's wiring of the @todoist/mcp-core registrar (client, retry, usage tracking, strip_emails, error formatting). FEATURE_NAMES
 ├─ usage-tracking.ts          # Shared Todoist request headers + SDK customFetch wrapper for MCP usage attribution
-├─ todoist-tool.ts            # TodoistTool<Params, Output>: @doist/mcp-core's McpTool with the Todoist API client as its context, + AnyTodoistTool for mixed-shape collections
+├─ todoist-tool.ts            # TodoistTool<Params, Output>: @todoist/mcp-core's McpTool with the Todoist API client as its context, + AnyTodoistTool for mixed-shape collections
 ├─ tool-helpers.ts            # Shared transforms: mapTask, fetchAllPages, toWildcardQuery, compileWildcardQuery + matchesWildcardQuery (client-side name match), resolveInboxProjectId, isInboxProjectId, isPersonalProject, isWorkspaceProject. Re-exports filter-helpers.
 ├─ filter-helpers.ts          # appendToQuery, buildResponsibleUserQueryFilter, resolveResponsibleUser
 ├─ tool-execution-error.ts    # formatToolExecutionError (actionable API-error formatting, incl. known error_tag hints like MAX_ITEMS_LIMIT_REACHED) + formatBatchItemError (single-line per-item failure summaries — use in batch tools instead of error.message)
@@ -67,7 +67,7 @@ src/
       `registerTool({ tool, server, client, features })` from `mcp-helpers.ts`,
     - registers the `productivity-analysis` prompt,
     - returns the configured `McpServer`.
-3. `registerTool()` hands the tool to `@doist/mcp-core`'s `createToolRegistrar`,
+3. `registerTool()` hands the tool to `@todoist/mcp-core`'s `createToolRegistrar`,
    which wires MCP's `server.registerTool()` with the cached Zod params/output,
    shapes results (`getToolOutput`: JSON block first, nulls stripped) and turns a
    throw into an error result. Todoist's part is the hooks: `execute()` runs
@@ -78,7 +78,7 @@ src/
 
 ## Tool contract (`src/todoist-tool.ts`)
 
-`TodoistTool` is `McpTool<Params, Output, TodoistApi>` from `@doist/mcp-core`, which the other Doist MCP servers share. Its shape:
+`TodoistTool` is `McpTool<Params, Output, TodoistApi>` from `@todoist/mcp-core`, which the other Doist MCP servers share. Its shape:
 
 ```ts
 type TodoistTool<
@@ -155,7 +155,7 @@ New tool? Full checklist in `AGENTS.md`. Short version: copy `add-tasks.ts`; add
 - `order-keys.ts` — `computeOrderKeys`: the fractional-indexing order keys that place entities at given positions among their siblings, re-keying only what moved. Todoist orders projects, sections and folders by these keys; the integer `*_reorder` Sync commands are deprecated
 - `concurrency.ts` — `getMoveLimiter`/`getWriteLimiter` bound how many write requests a batch tool has in flight. Limiters are per account (registered by `createTodoistClient`), because the HTTP transport builds a client per request. Task moves get their own single-slot lane: the API locks a task's whole tree for a move, so overlapping moves contend
 - `move-planner.ts` — `planMove`/`isMoveRedundant`/`destinationKey`: decides whether a requested container change is a real move, and groups tasks bound for the same destination so they can share one request
-- `validate-todoist-token.ts` — token validation (`'valid' | 'invalid' | 'forbidden'`) for the HTTP middleware and for hosts: `@doist/mcp-core/host`'s `validateBearerToken` against `/api/v1/user`, sent through the SDK's proxy-aware transport
+- `validate-todoist-token.ts` — token validation (`'valid' | 'invalid' | 'forbidden'`) for the HTTP middleware and for hosts: `@todoist/mcp-core/host`'s `validateBearerToken` against `/api/v1/user`, sent through the SDK's proxy-aware transport
 - `test-helpers.ts` — `createMockTask`, `createMockProject`, `createMockSection`, `TEST_IDS`, `TODAY`
 
 ## Todoist SDK + auth

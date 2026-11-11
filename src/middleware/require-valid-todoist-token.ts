@@ -3,7 +3,7 @@ import {
     createTokenVerdictCache,
     type TokenValidationResult,
     type TokenVerdictCache,
-} from '@doist/mcp-core/host'
+} from '@todoist/mcp-core/host'
 import type { NextFunction, Request, RequestHandler, Response } from 'express'
 
 import { validateTodoistToken } from '../utils/validate-todoist-token.js'

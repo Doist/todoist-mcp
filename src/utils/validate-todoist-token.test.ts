@@ -1,6 +1,6 @@
 import { createServer, type IncomingHttpHeaders, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { TokenValidationError } from '@doist/mcp-core/host'
+import { TokenValidationError } from '@todoist/mcp-core/host'
 import { vi } from 'vitest'
 
 import packageJson from '../../package.json' with { type: 'json' }

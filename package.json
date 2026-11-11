@@ -1,5 +1,5 @@
 {
-    "name": "@doist/todoist-mcp",
+    "name": "@todoist/mcp",
     "version": "14.0.5",
     "type": "module",
     "main": "./dist/index.js",
@@ -66,9 +66,9 @@
         "prepare": "lefthook install --reset-hooks-path"
     },
     "dependencies": {
-        "@doist/mcp-core": "0.4.0",
         "@doist/todoist-sdk": "17.0.0",
         "@modelcontextprotocol/ext-apps": "2.0.4",
+        "@todoist/mcp-core": "1.0.0",
         "date-fns": "4.1.0",
         "dompurify": "3.3.3",
         "dotenv": "17.3.1",
