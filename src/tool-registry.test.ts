@@ -34,7 +34,7 @@ describe('tool registry', () => {
 
     it('has a named package export for every tool', async () => {
         // `tools` is derived, but the named re-exports that let consumers write
-        // `import { addTasks } from '@doist/todoist-mcp'` are still written out
+        // `import { addTasks } from '@todoist/mcp'` are still written out
         // by hand, so they can fall behind the registry.
         const packageExports = await import('./index.js')
         const missing = Object.keys(toolRegistry).filter((key) => !(key in packageExports))

@@ -1,4 +1,4 @@
-import { describeTokenFootprint } from '@doist/mcp-core/testing'
+import { describeTokenFootprint } from '@todoist/mcp-core/testing'
 import { encode } from 'gpt-tokenizer'
 import { getMcpServer } from './mcp-server.js'
 

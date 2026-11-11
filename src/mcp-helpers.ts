@@ -1,6 +1,6 @@
-import { createToolRegistrar } from '@doist/mcp-core'
 import type { TodoistApi } from '@doist/todoist-sdk'
 import type { McpServer } from '@modelcontextprotocol/server'
+import { createToolRegistrar } from '@todoist/mcp-core'
 import type { AnyTodoistTool } from './todoist-tool.js'
 import { formatToolExecutionError } from './tool-execution-error.js'
 import { runWithUsageTrackingContext } from './usage-tracking.js'
@@ -136,7 +136,7 @@ function exposesUserEmails(toolName: string): boolean {
  * Register Todoist tools in an MCP server.
  *
  * Schema caching, annotations, MCP Apps `_meta`, result shaping and turning a thrown error into
- * an error result come from `@doist/mcp-core`. What is Todoist's own is wired in here: the API
+ * an error result come from `@todoist/mcp-core`. What is Todoist's own is wired in here: the API
  * client, retries, usage tracking, `strip_emails`, and the API error formatting. One registrar
  * serves every tool, since none of that depends on the tool.
  */

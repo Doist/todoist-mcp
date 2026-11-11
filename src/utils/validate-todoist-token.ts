@@ -1,4 +1,4 @@
-import { type ValidateToken, validateBearerToken } from '@doist/mcp-core/host'
+import { type ValidateToken, validateBearerToken } from '@todoist/mcp-core/host'
 
 import { buildUsageTrackingHeaders, fetchThroughSdkTransport } from '../usage-tracking.js'
 
@@ -15,7 +15,7 @@ const DEFAULT_BASE_URL = 'https://api.todoist.com'
  * The request goes out through the SDK's transport, so it honours the same proxy settings as
  * every tool call, and carries the usage-tracking headers as `auth:validate-token`.
  *
- * @throws {TokenValidationError} (from `@doist/mcp-core/host`) for any other status, such as a
+ * @throws {TokenValidationError} (from `@todoist/mcp-core/host`) for any other status, such as a
  * 5xx, carrying it as `httpStatusCode`. Network and timeout errors propagate unchanged.
  */
 const validateTodoistToken: ValidateToken = (token, baseUrl) =>

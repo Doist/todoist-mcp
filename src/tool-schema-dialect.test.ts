@@ -1,4 +1,4 @@
-import { describeAdvertisedToolSchemas } from '@doist/mcp-core/testing'
+import { describeAdvertisedToolSchemas } from '@todoist/mcp-core/testing'
 import { getMcpServer } from './mcp-server.js'
 import { registeredTools } from './tool-registry.js'
 
