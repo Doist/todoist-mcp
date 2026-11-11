@@ -1,8 +1,4 @@
-import {
-    PROJECT_VIEW_STYLES,
-    type PersonalProject,
-    type WorkspaceProject,
-} from '@doist/todoist-sdk'
+import { PROJECT_VIEW_STYLES, type PersonalProject, type WorkspaceProject } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'

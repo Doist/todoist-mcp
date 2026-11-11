@@ -15,7 +15,7 @@ import {
     type Task,
     type TodoistApi,
     type WorkspaceProject,
-} from '@doist/todoist-sdk'
+} from '@todoist/sdk'
 import z from 'zod'
 import { ApiLimits } from './utils/constants.js'
 import { formatDuration } from './utils/duration-parser.js'

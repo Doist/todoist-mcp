@@ -1,4 +1,4 @@
-import type { AddReminderArgs } from '@doist/todoist-sdk'
+import type { AddReminderArgs } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'

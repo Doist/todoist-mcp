@@ -1,4 +1,4 @@
-import type { TodoistApi } from '@doist/todoist-sdk'
+import type { TodoistApi } from '@todoist/sdk'
 import { vi } from 'vitest'
 import { describeRecipientMismatches, resolveReminderRecipients } from './reminder-recipients.js'
 import { resolveUserRefs } from './user-resolver.js'

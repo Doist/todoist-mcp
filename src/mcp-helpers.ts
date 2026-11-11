@@ -1,6 +1,6 @@
-import type { TodoistApi } from '@doist/todoist-sdk'
 import type { McpServer } from '@modelcontextprotocol/server'
 import { createToolRegistrar } from '@todoist/mcp-core'
+import type { TodoistApi } from '@todoist/sdk'
 import type { AnyTodoistTool } from './todoist-tool.js'
 import { formatToolExecutionError } from './tool-execution-error.js'
 import { runWithUsageTrackingContext } from './usage-tracking.js'

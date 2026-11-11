@@ -1,5 +1,5 @@
-import type { Project, Section, SyncCommand, TodoistApi } from '@doist/todoist-sdk'
-import { createCommand } from '@doist/todoist-sdk'
+import type { Project, Section, SyncCommand, TodoistApi } from '@todoist/sdk'
+import { createCommand } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { formatBatchItemError } from '../tool-execution-error.js'

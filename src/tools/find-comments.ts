@@ -1,4 +1,4 @@
-import type { Comment } from '@doist/todoist-sdk'
+import type { Comment } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { mapComment, normalizePaginationCursor, resolveInboxProjectId } from '../tool-helpers.js'

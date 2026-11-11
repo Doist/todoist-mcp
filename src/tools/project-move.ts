@@ -1,8 +1,4 @@
-import type {
-    MoveProjectToWorkspaceArgs,
-    PersonalProject,
-    WorkspaceProject,
-} from '@doist/todoist-sdk'
+import type { MoveProjectToWorkspaceArgs, PersonalProject, WorkspaceProject } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { isWorkspaceProject, mapProject } from '../tool-helpers.js'

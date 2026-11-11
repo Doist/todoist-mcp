@@ -1,4 +1,4 @@
-import type { TodoistApi, Workspace } from '@doist/todoist-sdk'
+import type { TodoistApi, Workspace } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { looksLikeWorkspaceId, WorkspaceResolver } from './workspace-resolver.js'
 

@@ -1,4 +1,4 @@
-import { escapeFilterToken, getProjectUrl, getTaskUrl } from '@doist/todoist-sdk'
+import { escapeFilterToken, getProjectUrl, getTaskUrl } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { getTasksByFilter, searchAllProjects } from '../tool-helpers.js'

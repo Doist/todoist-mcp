@@ -1,4 +1,4 @@
-import { formatUserShortName, type TodoistApi } from '@doist/todoist-sdk'
+import { formatUserShortName, type TodoistApi } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { type Project } from '../tool-helpers.js'

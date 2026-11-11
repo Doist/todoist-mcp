@@ -1,4 +1,4 @@
-import type { SyncResponse, TodoistApi } from '@doist/todoist-sdk'
+import type { SyncResponse, TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { ToolNames } from '../utils/tool-names.js'
 import { getUserStatus } from './get-user-status.js'

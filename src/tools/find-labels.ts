@@ -1,4 +1,4 @@
-import type { Label } from '@doist/todoist-sdk'
+import type { Label } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { fetchAllSharedLabels, searchAllLabels } from '../tool-helpers.js'

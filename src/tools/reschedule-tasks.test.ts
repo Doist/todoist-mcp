@@ -1,4 +1,4 @@
-import { type TodoistApi, TodoistSyncError } from '@doist/todoist-sdk'
+import { type TodoistApi, TodoistSyncError } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { createMockTask } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'

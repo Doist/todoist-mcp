@@ -1,4 +1,4 @@
-import { getProjectUrl, getTaskUrl } from '@doist/todoist-sdk'
+import { getProjectUrl, getTaskUrl } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { mapProject, mapTask } from '../tool-helpers.js'

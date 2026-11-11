@@ -5,7 +5,7 @@ import type {
     GetRemindersResponse,
     LocationReminder,
     Reminder,
-} from '@doist/todoist-sdk'
+} from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { countRemindersByType, fetchAllPages, mapReminder } from '../tool-helpers.js'

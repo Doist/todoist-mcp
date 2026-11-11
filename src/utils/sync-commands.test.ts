@@ -4,7 +4,7 @@ import {
     type TodoistApi,
     TodoistRequestError,
     TodoistSyncError,
-} from '@doist/todoist-sdk'
+} from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { settleSyncCommands } from './sync-commands.js'
 

@@ -1,4 +1,4 @@
-import type { ProjectHealth, TodoistApi } from '@doist/todoist-sdk'
+import type { ProjectHealth, TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { TEST_ERRORS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'

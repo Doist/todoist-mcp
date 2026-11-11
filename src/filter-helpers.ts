@@ -1,4 +1,4 @@
-import type { TodoistApi } from '@doist/todoist-sdk'
+import type { TodoistApi } from '@todoist/sdk'
 import { resolveUserNameToId } from './utils/user-resolver.js'
 
 export const RESPONSIBLE_USER_FILTERING = ['assigned', 'unassignedOrMe', 'all'] as const

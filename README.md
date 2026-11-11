@@ -22,7 +22,7 @@ Here's an example using [Vercel's AI SDK](https://ai-sdk.dev/docs/ai-sdk-core/ge
 
 ```js
 import { findTasksByDate, addTasks } from '@todoist/mcp'
-import { TodoistApi } from '@doist/todoist-sdk'
+import { TodoistApi } from '@todoist/sdk'
 import { streamText } from 'ai'
 
 // Create Todoist API client
@@ -165,7 +165,7 @@ This server includes `search` and `fetch` tools that follow the [OpenAI MCP spec
 ## Dependencies
 
 - MCP server using the official [@modelcontextprotocol/server](https://github.com/modelcontextprotocol/typescript-sdk)
-- Todoist Typescript API client [@doist/todoist-sdk](https://github.com/Doist/todoist-sdk)
+- Todoist Typescript API client [@todoist/sdk](https://github.com/todoist/todoist-sdk-typescript)
 
 ## MCP Server Setup
 

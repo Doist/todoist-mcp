@@ -1,4 +1,4 @@
-import { TodoistApi } from '@doist/todoist-sdk'
+import { TodoistApi } from '@todoist/sdk'
 import { importProjectTemplate } from './import-project-template.js'
 
 describe('CSV template import through the real SDK', () => {

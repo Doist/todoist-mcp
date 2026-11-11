@@ -1,4 +1,4 @@
-import { ACTIVITY_EVENT_TYPES, ACTIVITY_OBJECT_TYPES } from '@doist/todoist-sdk'
+import { ACTIVITY_EVENT_TYPES, ACTIVITY_OBJECT_TYPES } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { mapActivityEvent } from '../tool-helpers.js'

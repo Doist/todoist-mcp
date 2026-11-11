@@ -1,4 +1,4 @@
-import type { ACTIVITY_EVENT_TYPES, ActivityEvent, TodoistApi } from '@doist/todoist-sdk'
+import type { ACTIVITY_EVENT_TYPES, ActivityEvent, TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
 import { createMockUser } from '../utils/test-helpers.js'

@@ -1,4 +1,4 @@
-import type { CurrentUser, Task, TodoistApi } from '@doist/todoist-sdk'
+import type { CurrentUser, Task, TodoistApi } from '@todoist/sdk'
 import { type Mocked, type MockedFunction, vi } from 'vitest'
 import { z } from 'zod'
 import { createMockTask, createMockUser, TEST_IDS } from '../utils/test-helpers.js'

@@ -1,4 +1,4 @@
-import type { MoveTaskArgs, Task } from '@doist/todoist-sdk'
+import type { MoveTaskArgs, Task } from '@todoist/sdk'
 
 /** The container fields a caller can send to relocate a task. */
 type MoveRequest = {

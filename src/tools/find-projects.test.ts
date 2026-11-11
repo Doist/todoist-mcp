@@ -1,4 +1,4 @@
-import type { ColorKey, TodoistApi } from '@doist/todoist-sdk'
+import type { ColorKey, TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { ColorOutputSchema } from '../utils/colors.js'
 import { ProjectSchema } from '../utils/output-schemas.js'

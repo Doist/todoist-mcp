@@ -1,4 +1,4 @@
-import type { LocationReminder, Reminder, TodoistApi } from '@doist/todoist-sdk'
+import type { LocationReminder, Reminder, TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { ToolNames } from '../utils/tool-names.js'
 import { findReminders } from './find-reminders.js'
