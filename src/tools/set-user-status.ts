@@ -1,4 +1,4 @@
-import { createCommand, type UserStatus, type UserStatusArgs } from '@doist/todoist-sdk'
+import { createCommand, type UserStatus, type UserStatusArgs } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { parseGmtOffsetToMinutes } from '../utils/date.js'

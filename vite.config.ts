@@ -56,7 +56,7 @@ export default defineConfig({
                 '@modelcontextprotocol/server',
                 '@todoist/mcp-core',
                 '@todoist/mcp-core/host',
-                '@doist/todoist-sdk',
+                '@todoist/sdk',
                 'date-fns',
                 'dotenv',
                 'express',

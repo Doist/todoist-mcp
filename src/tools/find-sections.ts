@@ -1,4 +1,4 @@
-import type { Section } from '@doist/todoist-sdk'
+import type { Section } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { resolveInboxProjectId, searchAllSections } from '../tool-helpers.js'

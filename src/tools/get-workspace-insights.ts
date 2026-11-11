@@ -1,4 +1,4 @@
-import { HEALTH_STATUSES } from '@doist/todoist-sdk'
+import { HEALTH_STATUSES } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { ToolNames } from '../utils/tool-names.js'

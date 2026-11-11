@@ -1,4 +1,4 @@
-import { type Filter, type TodoistApi, TodoistSyncError } from '@doist/todoist-sdk'
+import { type Filter, type TodoistApi, TodoistSyncError } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
 import { allApplied, TEST_ERRORS } from '../utils/test-helpers.js'

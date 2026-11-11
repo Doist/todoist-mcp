@@ -1,4 +1,4 @@
-import type { TodoistApi } from '@doist/todoist-sdk'
+import type { TodoistApi } from '@todoist/sdk'
 import { executeWithRetry } from './retry.js'
 import type { ToolName } from './tool-names.js'
 

@@ -1,4 +1,4 @@
-import type { PersonalProject, Section, TodoistApi } from '@doist/todoist-sdk'
+import type { PersonalProject, Section, TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import {
     compileWildcardQuery,

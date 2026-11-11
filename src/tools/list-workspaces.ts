@@ -4,7 +4,7 @@ import {
     WORKSPACE_ROLES,
     type WorkspacePlan,
     type WorkspaceRole,
-} from '@doist/todoist-sdk'
+} from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { ToolNames } from '../utils/tool-names.js'

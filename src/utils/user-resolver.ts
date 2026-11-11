@@ -3,7 +3,7 @@ import {
     type PersonalProject,
     type TodoistApi,
     type WorkspaceProject,
-} from '@doist/todoist-sdk'
+} from '@todoist/sdk'
 import { fetchAllPages } from '../tool-helpers.js'
 
 export type ResolvedUser = {

@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import { type CustomFetch, type CustomFetchResponse, TodoistApi } from '@doist/todoist-sdk'
+import { type CustomFetch, type CustomFetchResponse, TodoistApi } from '@todoist/sdk'
 import packageJson from '../package.json' with { type: 'json' }
 import { registerClientLimiters } from './utils/concurrency.js'
 
@@ -28,7 +28,7 @@ type DispatcherModule = {
 
 let defaultTransportPromise: Promise<DefaultTransport | undefined> | undefined
 const defaultDispatcherModuleLoader = async (): Promise<DispatcherModule> => {
-    const todoistSdkEntry = require.resolve('@doist/todoist-sdk')
+    const todoistSdkEntry = require.resolve('@todoist/sdk')
     const dispatcherModulePath = join(dirname(todoistSdkEntry), 'transport', 'http-dispatcher.js')
     return require(dispatcherModulePath) as DispatcherModule
 }

@@ -1,4 +1,4 @@
-import type { TodoistApi } from '@doist/todoist-sdk'
+import type { TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { ToolNames } from '../utils/tool-names.js'
 import { completeTasks } from './complete-tasks.js'

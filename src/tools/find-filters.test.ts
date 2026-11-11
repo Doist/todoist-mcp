@@ -1,4 +1,4 @@
-import type { Filter, TodoistApi } from '@doist/todoist-sdk'
+import type { Filter, TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { TEST_ERRORS } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'

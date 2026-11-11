@@ -1,9 +1,4 @@
-import {
-    isPersonalProject,
-    isWorkspaceProject,
-    type Section,
-    type TodoistApi,
-} from '@doist/todoist-sdk'
+import { isPersonalProject, isWorkspaceProject, type Section, type TodoistApi } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { mapTask, type Project, resolveInboxProjectId } from '../tool-helpers.js'

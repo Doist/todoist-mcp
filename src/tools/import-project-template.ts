@@ -1,4 +1,4 @@
-import { parseTodoistUrl } from '@doist/todoist-sdk'
+import { parseTodoistUrl } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { mapComment, mapTask } from '../tool-helpers.js'

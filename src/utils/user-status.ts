@@ -1,4 +1,4 @@
-import type { SyncResponse, TodoistApi, UserStatus } from '@doist/todoist-sdk'
+import type { SyncResponse, TodoistApi, UserStatus } from '@todoist/sdk'
 import { z } from 'zod'
 import { executeWithRetry } from './retry.js'
 

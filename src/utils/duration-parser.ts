@@ -17,7 +17,7 @@
  * the API this server talks to.
  */
 
-import type { DurationUnit } from '@doist/todoist-sdk'
+import type { DurationUnit } from '@todoist/sdk'
 
 type ParsedDuration = {
     amount: number

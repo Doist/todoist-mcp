@@ -15,7 +15,7 @@
  * Requires TODOIST_API_KEY in .env file (and optionally TODOIST_BASE_URL).
  */
 import { readFileSync } from 'node:fs'
-import { TodoistApi } from '@doist/todoist-sdk'
+import { TodoistApi } from '@todoist/sdk'
 import { config } from 'dotenv'
 import { registeredTools } from '../src/tool-registry.js'
 import { createTodoistClient, runWithUsageTrackingContext } from '../src/usage-tracking.js'

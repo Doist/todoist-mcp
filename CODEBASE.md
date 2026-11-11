@@ -7,7 +7,7 @@
 ## What this project is
 
 `@todoist/mcp` is an **MCP (Model Context Protocol) server** that exposes
-Todoist as tools for LLMs. It wraps `@doist/todoist-sdk` and publishes two
+Todoist as tools for LLMs. It wraps `@todoist/sdk` and publishes two
 binaries:
 
 - `todoist-mcp` → `dist/main.js` — stdio MCP server (primary)

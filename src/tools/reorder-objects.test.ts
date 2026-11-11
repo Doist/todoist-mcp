@@ -5,7 +5,7 @@ import type {
     SyncRequest,
     TodoistApi,
     WorkspaceProject,
-} from '@doist/todoist-sdk'
+} from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import {
     createMockProject,

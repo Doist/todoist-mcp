@@ -1,4 +1,4 @@
-import type { Comment, GetTaskCommentsArgs, Task, TodoistApi } from '@doist/todoist-sdk'
+import type { Comment, GetTaskCommentsArgs, Task, TodoistApi } from '@todoist/sdk'
 
 /** Value that tells `add-comments` to post without notifying anyone. */
 export const NO_NOTIFY_KEYWORD = 'none'

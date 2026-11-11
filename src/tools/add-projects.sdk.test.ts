@@ -1,4 +1,4 @@
-import { type PersonalProject, TodoistApi } from '@doist/todoist-sdk'
+import { type PersonalProject, TodoistApi } from '@todoist/sdk'
 import { createMockProject } from '../utils/test-helpers.js'
 import { addProjects } from './add-projects.js'
 

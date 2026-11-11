@@ -1,4 +1,4 @@
-import type { TodoistApi } from '@doist/todoist-sdk'
+import type { TodoistApi } from '@todoist/sdk'
 import { type Mocked, type MockedFunction, vi } from 'vitest'
 import { getTasksByFilter } from '../tool-helpers.js'
 import { createMappedTask, createMockUser } from '../utils/test-helpers.js'

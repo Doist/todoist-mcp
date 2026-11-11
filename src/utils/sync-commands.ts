@@ -4,7 +4,7 @@ import {
     type TodoistApi,
     TodoistRequestError,
     TodoistSyncError,
-} from '@doist/todoist-sdk'
+} from '@todoist/sdk'
 import { executeWithRetry } from './retry.js'
 
 type SyncCommandResults = {

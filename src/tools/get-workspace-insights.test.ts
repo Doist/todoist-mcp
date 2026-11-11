@@ -1,5 +1,5 @@
-import type { TodoistApi, WorkspaceInsights } from '@doist/todoist-sdk'
 import { removeNullFields } from '@todoist/mcp-core'
+import type { TodoistApi, WorkspaceInsights } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
 import { TEST_ERRORS } from '../utils/test-helpers.js'

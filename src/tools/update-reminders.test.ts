@@ -1,4 +1,4 @@
-import type { Reminder, TodoistApi } from '@doist/todoist-sdk'
+import type { Reminder, TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { ToolNames } from '../utils/tool-names.js'
 import { resolveUserRefs } from '../utils/user-resolver.js'

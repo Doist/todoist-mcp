@@ -4,7 +4,7 @@ import {
     TodoistRequestError,
     type Workspace,
     type WorkspaceProject,
-} from '@doist/todoist-sdk'
+} from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
 import { ProjectSchema } from '../utils/output-schemas.js'

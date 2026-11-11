@@ -1,4 +1,4 @@
-import { escapeFilterToken, GetTasksArgs } from '@doist/todoist-sdk'
+import { escapeFilterToken, GetTasksArgs } from '@todoist/sdk'
 import { z } from 'zod'
 import {
     appendToQuery,

@@ -8,7 +8,7 @@ import type {
     Task,
     TodoistApi,
     WorkspaceProject,
-} from '@doist/todoist-sdk'
+} from '@todoist/sdk'
 import type { Mocked } from 'vitest'
 import { type MappedTask } from '../tool-helpers'
 import { convertPriorityToNumber, type Priority } from './priorities'

@@ -5,7 +5,7 @@ import {
     type TodoistApi,
     TodoistRequestError,
     type UserStatus,
-} from '@doist/todoist-sdk'
+} from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
 import { formatToolExecutionError } from '../tool-execution-error.js'

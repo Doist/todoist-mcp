@@ -1,4 +1,4 @@
-import { LOCATION_TRIGGERS, REMINDER_DELIVERY_SERVICES } from '@doist/todoist-sdk'
+import { LOCATION_TRIGGERS, REMINDER_DELIVERY_SERVICES } from '@todoist/sdk'
 import { z } from 'zod'
 import { optionalString } from './schema-helpers.js'
 

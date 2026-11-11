@@ -1,4 +1,4 @@
-import type { Comment, TodoistApi } from '@doist/todoist-sdk'
+import type { Comment, TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import {
     NO_NOTIFY_KEYWORD,

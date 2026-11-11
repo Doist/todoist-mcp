@@ -1,4 +1,4 @@
-import type { Filter, TodoistApi } from '@doist/todoist-sdk'
+import type { Filter, TodoistApi } from '@todoist/sdk'
 
 export type ResolvedFilter = {
     filterId: string

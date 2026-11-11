@@ -1,5 +1,5 @@
-import type { TodoistApi } from '@doist/todoist-sdk'
 import type { ContentBlock, StandardSchemaWithJSON } from '@modelcontextprotocol/server'
+import type { TodoistApi } from '@todoist/sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { registerTools, stripEmailsFromObject, stripEmailsFromText } from './mcp-helpers.js'

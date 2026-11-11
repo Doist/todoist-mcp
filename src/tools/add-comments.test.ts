@@ -1,4 +1,4 @@
-import type { Comment, Task, TodoistApi } from '@doist/todoist-sdk'
+import type { Comment, Task, TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
 import { ApiLimits } from '../utils/constants.js'

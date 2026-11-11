@@ -1,4 +1,4 @@
-import type { Section, TodoistApi } from '@doist/todoist-sdk'
+import type { Section, TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
 import { createMockSection } from '../utils/test-helpers.js'

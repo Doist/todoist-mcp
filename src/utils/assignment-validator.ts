@@ -1,4 +1,4 @@
-import type { TodoistApi } from '@doist/todoist-sdk'
+import type { TodoistApi } from '@todoist/sdk'
 import { type Project } from '../tool-helpers.js'
 import { type ResolvedUser, userResolver } from './user-resolver.js'
 

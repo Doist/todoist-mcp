@@ -1,4 +1,4 @@
-import type { PersonalProject, TodoistApi } from '@doist/todoist-sdk'
+import type { PersonalProject, TodoistApi } from '@todoist/sdk'
 import { z } from 'zod'
 import { fetchAllActiveProjects, isPersonalProject, type Project } from '../tool-helpers.js'
 import { ApiLimits } from './constants.js'

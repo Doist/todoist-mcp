@@ -1,4 +1,4 @@
-import type { TodoistApi, Workspace } from '@doist/todoist-sdk'
+import type { TodoistApi, Workspace } from '@todoist/sdk'
 
 export type ResolvedWorkspace = {
     workspaceId: string

@@ -1,4 +1,4 @@
-import type { ProjectActivityStats } from '@doist/todoist-sdk'
+import type { ProjectActivityStats } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import { ToolNames } from '../utils/tool-names.js'
