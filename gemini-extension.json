@@ -1,6 +1,6 @@
 {
     "name": "todoist",
-    "version": "15.0.0",
+    "version": "15.0.1",
     "description": "Official Todoist extension. Manage tasks and projects with Todoist's hosted MCP server.",
     "mcpServers": {
         "todoist": {

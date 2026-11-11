@@ -1,3 +1,9 @@
+## [15.0.1](https://github.com/todoist/todoist-mcp/compare/v15.0.0...v15.0.1) (2026-11-11)
+
+### Bug Fixes
+
+* **deps:** move to @todoist/sdk ([#699](https://github.com/todoist/todoist-mcp/issues/699)) ([c7350d5](https://github.com/todoist/todoist-mcp/commit/c7350d5a2a95d21ba99514a5d60cc11c9c6f9117))
+
 ## [15.0.0](https://github.com/todoist/todoist-mcp/compare/v14.0.5...v15.0.0) (2026-11-11)
 
 ### ⚠ BREAKING CHANGES
