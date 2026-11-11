@@ -88,7 +88,7 @@ const SCENARIOS: Scenario[] = [
         guards: 'instructions: reschedule-tasks vs update-tasks (recurrence loss)',
     },
     {
-        // Doist/Issues#21505: time-blocking needs a time and a duration, and
+        // todoist/Issues#21505: time-blocking needs a time and a duration, and
         // update-tasks used to be the only tool that set both.
         id: 'time-block-recurring',
         prompt: 'Block 10:00-10:15 today for task 6XG4Vw2c9J ("Give meds", repeats every day at 9:00).',

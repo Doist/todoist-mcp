@@ -5,7 +5,7 @@
     "description": "Official Todoist MCP server. Manage tasks and projects. Hosted, no API key needed.",
     "version": "1.0.1",
     "repository": {
-        "url": "https://github.com/Doist/todoist-mcp",
+        "url": "https://github.com/todoist/todoist-mcp",
         "source": "github"
     },
     "websiteUrl": "https://www.todoist.com/help/todoist/todoist-and-ai/connect-todoist-to-an-ai-assistant-xMSzFfHng",

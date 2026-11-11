@@ -519,7 +519,7 @@ async function fetchCurrentTaskStates({
 
 /**
  * Refuses a dueString on a recurring task, since the API replaces the whole due date
- * and the task silently becomes a one-time task (Doist/Issues#21505). Returns the
+ * and the task silently becomes a one-time task (todoist/Issues#21505). Returns the
  * failure reason, or undefined when the update may go ahead.
  *
  * A failed read fails closed: losing a recurrence is hard to notice and hard to undo,

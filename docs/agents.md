@@ -114,7 +114,7 @@ When you say a change is ready, the agent runs `review-changes`:
 
 Findings are fixed, dismissed with evidence (a line or a test run, never an argument), or left open for you. Reviewers that need to run code get their own worktree from `npm run review:worktree -- <dir>`; the shared one stays read-only.
 
-The checks cover tests, architecture, security, privacy, the tool surface and evidence. Two kinds Doist uses elsewhere don't apply here: there are no translations and no database migrations. The closest thing to a destructive migration is a tool that deletes or overwrites Todoist data, which the architecture check covers through tool annotations.
+The checks cover tests, architecture, security, privacy, the tool surface and evidence. Two kinds Todoist uses elsewhere don't apply here: there are no translations and no database migrations. The closest thing to a destructive migration is a tool that deletes or overwrites Todoist data, which the architecture check covers through tool annotations.
 
 A review costs several agent runs, so it runs when you ask, not on every change. A Doistbot run with a failed provider (`providerFailures`) is partial; the agent should say so.
 

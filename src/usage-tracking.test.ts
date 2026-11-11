@@ -353,11 +353,11 @@ describe('usage tracking', () => {
     })
 })
 
-// Regression guard for Doist/Issues#20430. The host allowlist and redirect
+// Regression guard for todoist/Issues#20430. The host allowlist and redirect
 // auth-stripping live in @doist/todoist-sdk, but these exercise the full
 // createTodoistClient -> createTrackedFetch -> SDK path so a future SDK bump
 // that loosens the behaviour fails loudly in this repo.
-describe('createTodoistClient viewAttachment safety (Doist/Issues#20430)', () => {
+describe('createTodoistClient viewAttachment safety (todoist/Issues#20430)', () => {
     afterEach(async () => {
         vi.restoreAllMocks()
         await resetDefaultDispatcherForTests()

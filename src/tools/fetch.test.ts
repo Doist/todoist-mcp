@@ -304,7 +304,7 @@ describe(`${FETCH} tool`, () => {
             ).rejects.toThrow('Task not found')
         })
 
-        // Regression guard for Doist/Issues#20642: the API answers 200 for a
+        // Regression guard for todoist/Issues#20642: the API answers 200 for a
         // soft-deleted task, and fetch used to return it as ordinary content.
         it('should throw error for a deleted task', async () => {
             mockTodoistApi.getTask.mockResolvedValue(

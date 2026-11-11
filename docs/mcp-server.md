@@ -17,7 +17,7 @@ You'll need to set your Todoist API key as an environment variable `TODOIST_API_
 Start by cloning this repository and setting it up locally, if you haven't done so yet.
 
 ```sh
-git clone https://github.com/Doist/todoist-mcp
+git clone https://github.com/todoist/todoist-mcp
 npm run setup
 ```
 
@@ -96,7 +96,7 @@ Update the configuration above as follows
 
 ## Using Streamable HTTP Server Transport
 
-You can run the MCP server as a local HTTP service. This is useful as an alternative to the hosted service at `ai.todoist.net/mcp`, especially if you experience frequent session disconnections ([#239](https://github.com/Doist/todoist-mcp/issues/239)).
+You can run the MCP server as a local HTTP service. This is useful as an alternative to the hosted service at `ai.todoist.net/mcp`, especially if you experience frequent session disconnections ([#239](https://github.com/todoist/todoist-mcp/issues/239)).
 
 > [!IMPORTANT]
 > The standalone HTTP server runs every MCP tool with the `TODOIST_API_KEY` supplied by the operator. It binds to `127.0.0.1` by default and is intended for local MCP clients. Requests to `/mcp` have their `Host` and `Origin` headers validated against a trusted-hostname allowlist (DNS-rebinding protection), so loopback clients work out of the box (`/health` is exempt so deployment health probes keep working). Do not expose it to a LAN or the public internet unless you add your own trusted network and authentication controls — and when you do, set `ALLOWED_HOSTS` to the hostnames your clients use.

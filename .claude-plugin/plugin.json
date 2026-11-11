@@ -6,6 +6,6 @@
         "name": "Todoist",
         "url": "https://www.todoist.com/"
     },
-    "homepage": "https://github.com/doist/todoist-mcp",
-    "repository": "https://github.com/doist/todoist-mcp"
+    "homepage": "https://github.com/todoist/todoist-mcp",
+    "repository": "https://github.com/todoist/todoist-mcp"
 }

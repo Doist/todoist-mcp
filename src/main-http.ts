@@ -28,7 +28,7 @@ import { isIP } from 'node:net'
  * deployment health probes (which use the target's private IP in the Host
  * header) keep working.
  *
- * @see https://github.com/Doist/todoist-mcp/issues/239
+ * @see https://github.com/todoist/todoist-mcp/issues/239
  */
 import dotenv from 'dotenv'
 import { createHttpApp } from './http-app.js'
