@@ -639,9 +639,41 @@ describe(`${FIND_PROJECTS} tool`, () => {
             )
 
             expect(result.structuredContent.unjoinedProjects).toHaveLength(12)
+            expect(result.structuredContent.unjoinedHasMore).toBe(false)
             expect(result.textContent).toContain('Team 9 • id=unjoined-9')
             expect(result.textContent).not.toContain('id=unjoined-10')
             expect(result.textContent).toContain('…and 2 more; narrow with searchText')
+        })
+
+        it('should return at most limit unjoined workspace projects', async () => {
+            mockTodoistApi.getProjects.mockResolvedValue(createMockApiResponse([]))
+            const unjoined = Array.from({ length: 12 }, (_, i) =>
+                createMockWorkspaceProjectSummary({ id: `unjoined-${i}`, name: `Team ${i}` }),
+            )
+            mockTodoistApi.getWorkspaces.mockResolvedValue([createMockWorkspace()])
+            mockTodoistApi.getWorkspaceActiveProjects.mockResolvedValue({
+                results: unjoined,
+                nextCursor: null,
+                hasMore: false,
+            })
+
+            const result = await findProjects.execute(
+                { limit: 5, includeUnjoined: true },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.unjoinedProjects?.map((p) => p.id)).toEqual([
+                'unjoined-0',
+                'unjoined-1',
+                'unjoined-2',
+                'unjoined-3',
+                'unjoined-4',
+            ])
+            expect(result.structuredContent.unjoinedHasMore).toBe(true)
+            expect(result.textContent).toContain("Workspace projects the user hasn't joined (12):")
+            expect(result.textContent).toContain('Team 4 • id=unjoined-4')
+            expect(result.textContent).not.toContain('id=unjoined-5')
+            expect(result.textContent).toContain('…and 7 more; narrow with searchText')
         })
 
         it('should filter unjoined workspace projects by searchText', async () => {
@@ -742,6 +774,21 @@ describe(`${FIND_PROJECTS} tool`, () => {
             expect(result.structuredContent.unjoinedProjects).toBeUndefined()
         })
 
+        it('should list unjoined workspace projects for a search passed a cursor, which searches ignore', async () => {
+            mockTodoistApi.searchProjects.mockResolvedValue(createMockApiResponse([]))
+            mockWorkspaceProjects()
+
+            const result = await findProjects.execute(
+                { limit: 50, searchText: 'sales pipe', includeUnjoined: true, cursor: 'page-2' },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.unjoinedProjects?.map((p) => p.id)).toEqual([
+                'sales-pipeline-id',
+            ])
+            expect(result.textContent).not.toContain('Set includeUnjoined')
+        })
+
         it('should not list unjoined workspace projects for archived projects', async () => {
             mockTodoistApi.getArchivedProjects.mockResolvedValue(createMockApiResponse([]))
             mockWorkspaceProjects()
@@ -753,6 +800,24 @@ describe(`${FIND_PROJECTS} tool`, () => {
 
             expect(mockTodoistApi.getWorkspaces).not.toHaveBeenCalled()
             expect(result.structuredContent.unjoinedProjects).toBeUndefined()
+        })
+
+        it('should not suggest includeUnjoined for an archived search, which never lists them', async () => {
+            mockTodoistApi.getArchivedProjects.mockResolvedValue(createMockApiResponse([]))
+            mockWorkspaceProjects()
+
+            const result = await findProjects.execute(
+                {
+                    limit: 50,
+                    searchText: 'sales',
+                    archivedStatus: 'archived',
+                    includeUnjoined: true,
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.projects).toEqual([])
+            expect(result.textContent).not.toContain('includeUnjoined')
         })
     })
 
