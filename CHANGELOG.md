@@ -1,3 +1,13 @@
+## [15.2.0](https://github.com/todoist/todoist-mcp/compare/v15.1.0...v15.2.0) (2026-11-12)
+
+### Features
+
+* explain an unjoined workspace project's 404 in every tool that reads a project ([#711](https://github.com/todoist/todoist-mcp/issues/711)) ([8328764](https://github.com/todoist/todoist-mcp/commit/8328764d9caf8a448f4d54f55a7a7f7ccab53136))
+
+### Bug Fixes
+
+* **find-projects:** cap unjoined projects at limit, and only suggest includeUnjoined where it applies ([#710](https://github.com/todoist/todoist-mcp/issues/710)) ([450a218](https://github.com/todoist/todoist-mcp/commit/450a218adbdd51a3a22649c6083668a6caa3b631))
+
 ## [15.1.0](https://github.com/todoist/todoist-mcp/compare/v15.0.3...v15.1.0) (2026-11-12)
 
 ### Features
