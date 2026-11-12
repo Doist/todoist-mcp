@@ -219,25 +219,53 @@ export async function fetchUnjoinedWorkspaceProjects(
  * On a 404, look the ID up among the workspace projects they can join, so the
  * model can tell the two apart and offer the fix.
  *
+ * @param listUnjoined - Lists the unjoined workspace projects; pass a shared one
+ * to look several projects up with a single scan (see {@link createProjectLookup})
  * @throws {ProjectAccessError} on a 404, saying which of the two it is
  */
-export async function getProjectOrExplain(client: TodoistApi, id: string): Promise<Project> {
+export async function getProjectOrExplain(
+    client: TodoistApi,
+    id: string,
+    listUnjoined: () => Promise<WorkspaceProjectSummary[]> = () =>
+        fetchUnjoinedWorkspaceProjects(client),
+): Promise<Project> {
     try {
         return await client.getProject(id)
     } catch (error) {
         if (extractHttpStatusCode(error) !== 404) {
             throw error
         }
-        throw await explainMissingProject(client, id)
+        throw await explainMissingProject(id, listUnjoined)
     }
 }
 
-async function explainMissingProject(client: TodoistApi, id: string): Promise<ProjectAccessError> {
+/**
+ * {@link getProjectOrExplain} for a batch: each project is looked up at most
+ * once, with retries, and the workspace scan behind the explanations, which
+ * doesn't depend on the project, runs at most once.
+ */
+export function createProjectLookup(client: TodoistApi): (id: string) => Promise<Project> {
+    const lookups = new Map<string, Promise<Project>>()
+    let unjoinedScan: Promise<WorkspaceProjectSummary[]> | undefined
+    const listUnjoined = () => (unjoinedScan ??= fetchUnjoinedWorkspaceProjects(client))
+
+    return (id) => {
+        let lookup = lookups.get(id)
+        if (!lookup) {
+            lookup = executeWithRetry(() => getProjectOrExplain(client, id, listUnjoined))
+            lookups.set(id, lookup)
+        }
+        return lookup
+    }
+}
+
+async function explainMissingProject(
+    id: string,
+    listUnjoined: () => Promise<WorkspaceProjectSummary[]>,
+): Promise<ProjectAccessError> {
     let unjoined: WorkspaceProjectSummary | undefined
     try {
-        unjoined = (await fetchUnjoinedWorkspaceProjects(client)).find(
-            (project) => project.id === id,
-        )
+        unjoined = (await listUnjoined()).find((project) => project.id === id)
     } catch {
         return new ProjectAccessError(
             `Project ${id} was not found or the user can't access it. If it's a workspace project they haven't joined, ${ToolNames.FIND_PROJECTS} with includeUnjoined lists the ones they can join.`,

@@ -1250,6 +1250,29 @@ describe(`${ADD_TASKS} tool`, () => {
             expect(mockTodoistApi.addTask).not.toHaveBeenCalled()
         })
 
+        it('should scan workspace projects once per batch, however many projects need explaining', async () => {
+            mockUnjoinedWorkspaceProject(mockTodoistApi)
+
+            const result = await addTasks.execute(
+                {
+                    tasks: [
+                        { content: 'Follow up', projectId: 'unjoined-project-id' },
+                        { content: 'Send notes', projectId: 'missing-project-id' },
+                    ],
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.failures.map((failure) => failure.error)).toEqual([
+                expect.stringContaining(
+                    '("Sales Pipeline") is a workspace project the user hasn\'t joined',
+                ),
+                expect.stringContaining('Project missing-project-id was not found.'),
+            ])
+            expect(mockTodoistApi.getProject).toHaveBeenCalledTimes(2)
+            expect(mockTodoistApi.getWorkspaces).toHaveBeenCalledTimes(1)
+        })
+
         it('should look each project up once per batch', async () => {
             mockUnjoinedWorkspaceProject(mockTodoistApi)
 
