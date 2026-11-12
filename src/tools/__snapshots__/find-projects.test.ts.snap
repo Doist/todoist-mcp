@@ -26,7 +26,7 @@ Preview:
 exports[`find-projects tool > searching projects > should handle search with 'no matches' 1`] = `
 "All projects matching "nonexistent": 0.
 Filter: searchText: "nonexistent".
-No results. Try broader search terms; Check spelling; Remove searchText to see all projects."
+No results. No workspace project the user hasn't joined matches either; Try broader search terms; Check spelling; Remove searchText to see all projects."
 `;
 
 exports[`find-projects tool > searching projects > should search projects by name (case insensitive) 1`] = `
@@ -35,4 +35,23 @@ Filter: searchText: "work".
 Preview:
     Work Project • id=work-project-id
     Hobby Work • id=hobby-project-id"
+`;
+
+exports[`find-projects tool > workspace projects the user has not joined > should check unjoined workspace projects when a search matches no joined project 1`] = `
+"All projects matching "sales pipe": 0.
+Filter: searchText: "sales pipe".
+No results. None of the projects the user has joined match.
+Workspace projects the user hasn't joined (1):
+    Sales Pipeline • id=sales-pipeline-id • workspaceId=ws-acme
+Their tasks, comments and activity can't be read until the user joins. Ask the user before joining one with project-management (action: "join")."
+`;
+
+exports[`find-projects tool > workspace projects the user has not joined > should list unjoined workspace projects when includeUnjoined is set 1`] = `
+"Projects: 1 (limit 50).
+Preview:
+    Inbox • id=joined-id
+Workspace projects the user hasn't joined (2):
+    Sales Pipeline • id=sales-pipeline-id • workspaceId=ws-acme
+    Product Roadmap • id=roadmap-id • workspaceId=ws-side
+Their tasks, comments and activity can't be read until the user joins. Ask the user before joining one with project-management (action: "join")."
 `;

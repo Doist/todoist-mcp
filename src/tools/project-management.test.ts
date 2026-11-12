@@ -11,6 +11,7 @@ import { projectManagement } from './project-management.js'
 const mockTodoistApi = {
     archiveProject: vi.fn(),
     unarchiveProject: vi.fn(),
+    joinProject: vi.fn(),
     getProject: vi.fn(),
     getPersonalProjectCapacity: vi.fn(),
 } as unknown as Mocked<TodoistApi>
@@ -103,6 +104,57 @@ describe(`${PROJECT_MANAGEMENT} tool`, () => {
                     mockTodoistApi,
                 ),
             ).rejects.toThrow('API Error: Cannot unarchive project')
+        })
+    })
+
+    describe('joining projects', () => {
+        it('should join a workspace project by ID', async () => {
+            const joined = createMockWorkspaceProject({
+                id: 'sales-pipeline-id',
+                name: 'Sales Pipeline',
+                workspaceId: 'ws-acme',
+            })
+            mockTodoistApi.joinProject.mockResolvedValue({
+                project: joined,
+                tasks: [],
+                sections: [],
+                comments: [],
+                collaborators: [],
+                collaboratorStates: [],
+                folder: null,
+                subprojects: [],
+            })
+
+            const result = await projectManagement.execute(
+                { action: 'join', projectId: 'sales-pipeline-id' },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.joinProject).toHaveBeenCalledWith('sales-pipeline-id')
+            expect(mockTodoistApi.archiveProject).not.toHaveBeenCalled()
+            expect(mockTodoistApi.unarchiveProject).not.toHaveBeenCalled()
+            // Joining a workspace project doesn't count towards the personal limit.
+            expect(mockTodoistApi.getPersonalProjectCapacity).not.toHaveBeenCalled()
+            expect(result.textContent).toBe('Joined project: Sales Pipeline (id=sales-pipeline-id)')
+            expect(result.structuredContent).toEqual({
+                project: expect.objectContaining({
+                    id: 'sales-pipeline-id',
+                    name: 'Sales Pipeline',
+                    workspaceId: 'ws-acme',
+                }),
+                success: true,
+            })
+        })
+
+        it('should propagate join errors', async () => {
+            mockTodoistApi.joinProject.mockRejectedValue(new Error('API Error: Forbidden'))
+
+            await expect(
+                projectManagement.execute(
+                    { action: 'join', projectId: 'restricted-id' },
+                    mockTodoistApi,
+                ),
+            ).rejects.toThrow('API Error: Forbidden')
         })
     })
 

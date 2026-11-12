@@ -1,9 +1,13 @@
 import type { Comment, Section, Task, TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
+import { formatToolExecutionError } from '../tool-execution-error.js'
 import {
+    createApiError,
     createMockProject,
     createMockTask,
+    createMockWorkspace,
     createMockWorkspaceProject,
+    createMockWorkspaceProjectSummary,
 } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { fetchObject } from './fetch-object.js'
@@ -16,6 +20,8 @@ const mockTodoistApi = {
     getSection: vi.fn(),
     getTasks: vi.fn(),
     getProjects: vi.fn(),
+    getWorkspaces: vi.fn(),
+    getWorkspaceActiveProjects: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { FETCH_OBJECT } = ToolNames
@@ -153,6 +159,84 @@ describe(`${FETCH_OBJECT} tool`, () => {
             await expect(
                 fetchObject.execute({ type: 'project', id: 'invalid' }, mockTodoistApi),
             ).rejects.toThrow('Failed to fetch project with id invalid')
+        })
+
+        describe('when the project is not found', () => {
+            // What the model reads: the error as the server formats it for the reply.
+            async function fetchErrorText(id: string): Promise<string> {
+                const error = await fetchObject
+                    .execute({ type: 'project', id }, mockTodoistApi)
+                    .then(() => {
+                        throw new Error('expected fetch-object to fail')
+                    })
+                    .catch((caught: unknown) => caught)
+                return formatToolExecutionError(error)
+            }
+
+            beforeEach(() => {
+                mockTodoistApi.getProject.mockRejectedValue(
+                    createApiError({ status: 404, error: 'Project not found' }),
+                )
+                mockTodoistApi.getWorkspaces.mockResolvedValue([
+                    createMockWorkspace({ id: 'ws-acme' }),
+                ])
+                mockTodoistApi.getWorkspaceActiveProjects.mockResolvedValue({
+                    results: [
+                        createMockWorkspaceProjectSummary({
+                            id: 'sales-pipeline-id',
+                            name: 'Sales Pipeline',
+                            workspaceId: 'ws-acme',
+                        }),
+                        createMockWorkspaceProjectSummary({
+                            id: 'sales-ops-id',
+                            name: 'Sales Ops',
+                            workspaceId: 'ws-acme',
+                            role: 'READ_WRITE',
+                        }),
+                    ],
+                    nextCursor: null,
+                    hasMore: false,
+                })
+            })
+
+            it('should say when it is a workspace project the user has not joined', async () => {
+                await expect(fetchErrorText('sales-pipeline-id')).resolves.toBe(
+                    'Project sales-pipeline-id ("Sales Pipeline") is a workspace project the user hasn\'t joined, so it can\'t be read yet. Ask the user whether to join it. If they agree, join it with project-management (action: "join"), then retry.',
+                )
+                expect(mockTodoistApi.getWorkspaceActiveProjects).toHaveBeenCalledWith({
+                    workspaceId: 'ws-acme',
+                    cursor: null,
+                    limit: 200,
+                })
+            })
+
+            it('should say it was not found when no workspace project the user can join has that ID', async () => {
+                await expect(fetchErrorText('missing-id')).resolves.toBe(
+                    "Project missing-id was not found. It isn't one of the user's projects or a workspace project they can join: the ID may be wrong, the project may have been deleted, or it may be restricted to people who were invited.",
+                )
+            })
+
+            it('should not blame membership when the lookup fails', async () => {
+                mockTodoistApi.getWorkspaces.mockRejectedValue(new Error('workspaces unavailable'))
+
+                await expect(fetchErrorText('sales-pipeline-id')).resolves.toBe(
+                    "Project sales-pipeline-id was not found or the user can't access it. If it's a workspace project they haven't joined, find-projects with includeUnjoined lists the ones they can join.",
+                )
+            })
+
+            it('should not look up workspace projects for other errors', async () => {
+                mockTodoistApi.getProject.mockRejectedValue(
+                    createApiError({ status: 500, error: 'Internal Server Error' }),
+                )
+
+                await expect(
+                    fetchObject.execute(
+                        { type: 'project', id: 'sales-pipeline-id' },
+                        mockTodoistApi,
+                    ),
+                ).rejects.toThrow('Failed to fetch project with id sales-pipeline-id')
+                expect(mockTodoistApi.getWorkspaces).not.toHaveBeenCalled()
+            })
         })
     })
 
