@@ -291,10 +291,9 @@ describeToolAnnotations({
         },
         [ToolNames.EXPORT_PROJECT_AS_CSV]: {
             title: 'Todoist: Export Project As CSV',
-            readOnlyHint: false,
+            readOnlyHint: true,
             destructiveHint: false,
             idempotentHint: true,
-            openWorldHint: true,
         },
         [ToolNames.IMPORT_INTO_PROJECT]: {
             title: 'Todoist: Import Into Project',
