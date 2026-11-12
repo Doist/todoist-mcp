@@ -204,6 +204,8 @@ type SummarizeListParams = {
     limit?: number
     nextCursor?: string
     filterHints?: string[]
+    /** Lines about what the result covers, shown after the filter, whatever the count. */
+    notes?: string[]
     previewLines?: string
     zeroReasonHints?: string[]
     nextSteps?: string[]
@@ -218,6 +220,7 @@ export function summarizeList({
     limit,
     nextCursor,
     filterHints,
+    notes,
     previewLines,
     zeroReasonHints,
     nextSteps,
@@ -233,6 +236,10 @@ export function summarizeList({
     // Filter information
     if (filterHints?.length) {
         bits.push(`Filter: ${filterHints.join('; ')}.`)
+    }
+
+    if (notes?.length) {
+        bits.push(...notes)
     }
 
     // Preview of items

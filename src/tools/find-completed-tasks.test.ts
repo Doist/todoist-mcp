@@ -392,6 +392,72 @@ describe(`${FIND_COMPLETED_TASKS} tool`, () => {
         })
     })
 
+    // Completing an occurrence of a recurring task reschedules it rather than
+    // completing it, so neither completed-tasks endpoint returns it while the
+    // recurrence is still active. Only the activity log has those occurrences.
+    describe('completions of active recurring tasks', () => {
+        const RECURRING_NOTE =
+            'Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed" and the same date range.'
+
+        it.each(['completion', 'due'] as const)(
+            'should say a non-empty getBy "%s" result leaves them out',
+            async (getBy) => {
+                const items = [createMockTask({ id: '8485093748', content: 'One-off report' })]
+                mockTodoistApi.getCompletedTasksByCompletionDate.mockResolvedValue({
+                    items,
+                    nextCursor: null,
+                })
+                mockTodoistApi.getCompletedTasksByDueDate.mockResolvedValue({
+                    items,
+                    nextCursor: null,
+                })
+
+                const result = await findCompletedTasks.execute(
+                    {
+                        getBy,
+                        limit: 50,
+                        since: '2025-10-18',
+                        until: '2025-10-28',
+                        labels: [],
+                        labelsOperator: 'or' as const,
+                    },
+                    mockTodoistApi,
+                )
+
+                expect(result.structuredContent.tasks).toHaveLength(1)
+                expect(result.textContent).toContain(RECURRING_NOTE)
+            },
+        )
+
+        it('should say an empty result leaves them out', async () => {
+            mockTodoistApi.getCompletedTasksByCompletionDate.mockResolvedValue({
+                items: [],
+                nextCursor: null,
+            })
+
+            const result = await findCompletedTasks.execute(
+                {
+                    getBy: 'completion',
+                    limit: 50,
+                    since: '2025-10-18',
+                    until: '2025-10-28',
+                    labels: [],
+                    labelsOperator: 'or' as const,
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.tasks).toEqual([])
+            expect(result.textContent).toContain(RECURRING_NOTE)
+        })
+
+        it('should say in its description that neither getBy mode returns them', () => {
+            expect(findCompletedTasks.description).toContain(
+                'Neither getBy mode returns completions of a recurring task that is still active',
+            )
+        })
+    })
+
     describe('label filtering', () => {
         it.each([
             {

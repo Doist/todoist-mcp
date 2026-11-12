@@ -1,4 +1,4 @@
-import { previewTasks } from './response-builders.js'
+import { previewTasks, summarizeList } from './response-builders.js'
 
 describe('previewTasks', () => {
     const tasks = [
@@ -19,5 +19,40 @@ describe('previewTasks', () => {
 
     it('leaves assignees out when no names were looked up', () => {
         expect(previewTasks(tasks)).not.toContain('+')
+    })
+})
+
+describe('summarizeList', () => {
+    it('puts notes after the filter line, before the preview', () => {
+        const summary = summarizeList({
+            subject: 'Completed tasks',
+            count: 1,
+            filterHints: ['project: home'],
+            notes: ['Recurring tasks are not listed.'],
+            previewLines: '    Fix the tap • P4 • id=1',
+        })
+
+        expect(summary.split('\n')).toEqual([
+            'Completed tasks: 1.',
+            'Filter: project: home.',
+            'Recurring tasks are not listed.',
+            'Preview:',
+            '    Fix the tap • P4 • id=1',
+        ])
+    })
+
+    it('keeps notes when there are no results', () => {
+        const summary = summarizeList({
+            subject: 'Completed tasks',
+            count: 0,
+            notes: ['Recurring tasks are not listed.'],
+            zeroReasonHints: ['Try expanding the date range'],
+        })
+
+        expect(summary.split('\n')).toEqual([
+            'Completed tasks: 0.',
+            'Recurring tasks are not listed.',
+            'No results. Try expanding the date range.',
+        ])
     })
 })

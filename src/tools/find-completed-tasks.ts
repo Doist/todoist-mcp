@@ -10,7 +10,8 @@ import { previewTasks, summarizeList } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { getAssigneeShortNames } from '../utils/user-resolver.js'
 
-// No ToolNames constants needed - we only use cursor-based pagination
+const { FIND_ACTIVITY } = ToolNames
+
 const DEFAULT_DATE_WINDOW_DAYS = 7
 
 /**
@@ -112,7 +113,7 @@ const OutputSchema = {
 const findCompletedTasks = {
     name: ToolNames.FIND_COMPLETED_TASKS,
     description:
-        'Get completed tasks in a date range. For "what did I complete/get done" questions, use find-activity instead — it reports completion events, including every occurrence of a recurring task, which this tool does not. since/until are optional and default to a 7-day window when omitted. Includes all collaborators by default. Person-specific queries (summaries, plans, reports) require responsibleUser.',
+        'Get completed tasks in a date range. Neither getBy mode returns completions of a recurring task that is still active. For "what did I complete/get done" questions, or whenever recurring work should count, use find-activity instead — it reports completion events, including every occurrence of a recurring task. since/until are optional and default to a 7-day window when omitted. Includes all collaborators by default. Person-specific queries (summaries, plans, reports) require responsibleUser.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
@@ -283,6 +284,13 @@ function generateTextContent({
         limit: args.limit,
         nextCursor: nextCursor ?? undefined,
         filterHints,
+        // Completing an occurrence of a recurring task reschedules it instead of
+        // completing it, so the completed-tasks endpoints never return it while the
+        // recurrence is active. Nothing in the response can show the gap, so say it
+        // on every result rather than only when the list is empty.
+        notes: [
+            `Completions of recurring tasks that are still active are not in this list. To include them, call ${FIND_ACTIVITY} with objectType "task", eventType "completed" and the same date range.`,
+        ],
         previewLines: previewTasks(tasks, Math.min(tasks.length, args.limit), assigneeNames),
         zeroReasonHints,
     })
