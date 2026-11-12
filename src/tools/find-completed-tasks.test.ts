@@ -396,44 +396,57 @@ describe(`${FIND_COMPLETED_TASKS} tool`, () => {
     // completing it, so neither completed-tasks endpoint returns it while the
     // recurrence is still active. Only the activity log has those occurrences.
     describe('completions of active recurring tasks', () => {
-        const RECURRING_NOTE =
-            'Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed" and the same date range.'
+        const LEFT_OUT =
+            'Completions of recurring tasks that are still active are not in this list.'
 
-        it.each(['completion', 'due'] as const)(
-            'should say a non-empty getBy "%s" result leaves them out',
-            async (getBy) => {
-                const items = [createMockTask({ id: '8485093748', content: 'One-off report' })]
-                mockTodoistApi.getCompletedTasksByCompletionDate.mockResolvedValue({
-                    items,
-                    nextCursor: null,
-                })
-                mockTodoistApi.getCompletedTasksByDueDate.mockResolvedValue({
-                    items,
-                    nextCursor: null,
-                })
-
-                const result = await findCompletedTasks.execute(
-                    {
-                        getBy,
-                        limit: 50,
-                        since: '2025-10-18',
-                        until: '2025-10-28',
-                        labels: [],
-                        labelsOperator: 'or' as const,
-                    },
-                    mockTodoistApi,
-                )
-
-                expect(result.structuredContent.tasks).toHaveLength(1)
-                expect(result.textContent).toContain(RECURRING_NOTE)
-            },
-        )
-
-        it('should say an empty result leaves them out', async () => {
+        function mockBothModes(items: Task[]) {
             mockTodoistApi.getCompletedTasksByCompletionDate.mockResolvedValue({
-                items: [],
+                items,
                 nextCursor: null,
             })
+            mockTodoistApi.getCompletedTasksByDueDate.mockResolvedValue({
+                items,
+                nextCursor: null,
+            })
+        }
+
+        it('should give the find-activity range for a getBy "completion" result, with an exclusive end in the user\'s offset', async () => {
+            mockTodoistApi.getUser.mockResolvedValue({
+                id: 'test-user-id',
+                fullName: 'Test User',
+                email: 'test@example.com',
+                tzInfo: {
+                    timezone: 'Europe/Athens',
+                    gmtString: '+02:00',
+                    hours: 2,
+                    minutes: 0,
+                    isDst: 0,
+                },
+            } as CurrentUser)
+            mockBothModes([createMockTask({ id: '8485093748', content: 'One-off report' })])
+
+            const result = await findCompletedTasks.execute(
+                {
+                    getBy: 'completion',
+                    limit: 50,
+                    since: '2025-10-18',
+                    until: '2025-10-28',
+                    labels: [],
+                    labelsOperator: 'or' as const,
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.tasks).toHaveLength(1)
+            // find-activity's dateTo is exclusive, so the inclusive `until` becomes
+            // the start of the following day.
+            expect(result.textContent).toContain(
+                `${LEFT_OUT} To include them, call find-activity with objectType "task", eventType "completed", dateFrom "2025-10-18T00:00:00+02:00" and dateTo "2025-10-29T00:00:00+02:00".`,
+            )
+        })
+
+        it('should say an empty result leaves them out', async () => {
+            mockBothModes([])
 
             const result = await findCompletedTasks.execute(
                 {
@@ -448,7 +461,31 @@ describe(`${FIND_COMPLETED_TASKS} tool`, () => {
             )
 
             expect(result.structuredContent.tasks).toEqual([])
-            expect(result.textContent).toContain(RECURRING_NOTE)
+            expect(result.textContent).toContain(
+                'dateFrom "2025-10-18T00:00:00+00:00" and dateTo "2025-10-29T00:00:00+00:00"',
+            )
+        })
+
+        it('should not offer the due-date range to find-activity for a getBy "due" result', async () => {
+            mockBothModes([createMockTask({ id: '8485093748', content: 'One-off report' })])
+
+            const result = await findCompletedTasks.execute(
+                {
+                    getBy: 'due',
+                    limit: 50,
+                    since: '2025-10-18',
+                    until: '2025-10-28',
+                    labels: [],
+                    labelsOperator: 'or' as const,
+                },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.tasks).toHaveLength(1)
+            expect(result.textContent).toContain(
+                `${LEFT_OUT} find-activity with objectType "task" and eventType "completed" reports them, but only by completion time: it cannot match a due-date range.`,
+            )
+            expect(result.textContent).not.toContain('dateTo')
         })
 
         it('should say in its description that neither getBy mode returns them', () => {

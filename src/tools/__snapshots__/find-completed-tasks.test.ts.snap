@@ -3,7 +3,7 @@
 exports[`find-completed-tasks tool > getting completed tasks by completion date (default) > should get completed tasks by completion date 1`] = `
 "Completed tasks (by completed date): 1 (limit 50).
 Filter: completed date: 2025-08-10 to 2025-08-15.
-Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed" and the same date range.
+Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed", dateFrom "2025-08-10T00:00:00+00:00" and dateTo "2025-08-16T00:00:00+00:00".
 Preview:
     Completed task 1 • due 2025-08-14 • P3 • id=8485093748"
 `;
@@ -11,7 +11,7 @@ Preview:
 exports[`find-completed-tasks tool > getting completed tasks by completion date (default) > should handle explicit completion date query 1`] = `
 "Completed tasks (by completed date): 0 (limit 100), more available.
 Filter: completed date: 2025-08-01 to 2025-08-31; project: specific-project-id.
-Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed" and the same date range.
+Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed", dateFrom "2025-08-01T00:00:00+00:00" and dateTo "2025-09-01T00:00:00+00:00".
 No results. No tasks completed in this date range; Try expanding the date range; Try removing project/section/parent filters.
 Possible suggested next step:
 - Pass cursor 'next-cursor' to fetch more results."
@@ -20,7 +20,7 @@ Possible suggested next step:
 exports[`find-completed-tasks tool > getting completed tasks by due date > should get completed tasks by due date 1`] = `
 "Completed tasks (by due date): 1 (limit 50).
 Filter: due date: 2025-08-10 to 2025-08-20.
-Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed" and the same date range.
+Completions of recurring tasks that are still active are not in this list. find-activity with objectType "task" and eventType "completed" reports them, but only by completion time: it cannot match a due-date range.
 Preview:
     Task completed by due date • due 2025-08-15 • P2 • id=8485093750"
 `;
@@ -28,7 +28,7 @@ Preview:
 exports[`find-completed-tasks tool > label filtering > should combine other filters with label filters 1`] = `
 "Completed tasks (by due date): 1 (limit 25).
 Filter: due date: 2025-08-01 to 2025-08-31; project: test-project-id; section: test-section-id; labels: @important.
-Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed" and the same date range.
+Completions of recurring tasks that are still active are not in this list. find-activity with objectType "task" and eventType "completed" reports them, but only by completion time: it cannot match a due-date range.
 Preview:
     Important completed task • P4 • id=8485093748"
 `;
@@ -36,7 +36,7 @@ Preview:
 exports[`find-completed-tasks tool > label filtering > should filter completed tasks by labels: 'multiple labels with AND operator' 1`] = `
 "Completed tasks (by due date): 1 (limit 50).
 Filter: due date: 2025-08-01 to 2025-08-31; labels: @work & @urgent.
-Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed" and the same date range.
+Completions of recurring tasks that are still active are not in this list. find-activity with objectType "task" and eventType "completed" reports them, but only by completion time: it cannot match a due-date range.
 Preview:
     Completed task with label • P4 • id=8485093748"
 `;
@@ -44,7 +44,7 @@ Preview:
 exports[`find-completed-tasks tool > label filtering > should filter completed tasks by labels: 'multiple labels with OR operator' 1`] = `
 "Completed tasks (by completed date): 1 (limit 25).
 Filter: completed date: 2025-08-10 to 2025-08-20; labels: @personal | @shopping.
-Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed" and the same date range.
+Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed", dateFrom "2025-08-10T00:00:00+00:00" and dateTo "2025-08-21T00:00:00+00:00".
 Preview:
     Completed task with label • P4 • id=8485093748"
 `;
@@ -52,7 +52,7 @@ Preview:
 exports[`find-completed-tasks tool > label filtering > should filter completed tasks by labels: 'single label with OR operator' 1`] = `
 "Completed tasks (by completed date): 1 (limit 50).
 Filter: completed date: 2025-08-01 to 2025-08-31; labels: @work.
-Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed" and the same date range.
+Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed", dateFrom "2025-08-01T00:00:00+00:00" and dateTo "2025-09-01T00:00:00+00:00".
 Preview:
     Completed task with label • P4 • id=8485093748"
 `;
@@ -60,7 +60,7 @@ Preview:
 exports[`find-completed-tasks tool > timezone handling > should convert user timezone to UTC correctly (Europe/Madrid) 1`] = `
 "Completed tasks (by completed date): 1 (limit 50).
 Filter: completed date: 2025-10-11 to 2025-10-11.
-Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed" and the same date range.
+Completions of recurring tasks that are still active are not in this list. To include them, call find-activity with objectType "task", eventType "completed", dateFrom "2025-10-11T00:00:00+02:00" and dateTo "2025-10-12T00:00:00+02:00".
 Preview:
     Task completed in Madrid timezone • P4 • id=8485093750"
 `;

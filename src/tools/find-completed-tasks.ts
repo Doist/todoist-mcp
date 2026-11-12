@@ -205,6 +205,7 @@ const findCompletedTasks = {
         const textContent = generateTextContent({
             tasks: mappedTasks,
             args: effectiveArgs,
+            userGmtOffset,
             nextCursor,
             assigneeEmail,
             assigneeNames: await getAssigneeShortNames(client, mappedTasks, user.id),
@@ -229,12 +230,14 @@ type ResolvedFindCompletedTasksArgs = FindCompletedTasksArgs & { since: string; 
 function generateTextContent({
     tasks,
     args,
+    userGmtOffset,
     nextCursor,
     assigneeEmail,
     assigneeNames,
 }: {
     tasks: ReturnType<typeof mapTask>[]
     args: ResolvedFindCompletedTasksArgs
+    userGmtOffset: string
     nextCursor: string | null
     assigneeEmail?: string
     assigneeNames: ReadonlyMap<string, string>
@@ -288,12 +291,31 @@ function generateTextContent({
         // completing it, so the completed-tasks endpoints never return it while the
         // recurrence is active. Nothing in the response can show the gap, so say it
         // on every result rather than only when the list is empty.
-        notes: [
-            `Completions of recurring tasks that are still active are not in this list. To include them, call ${FIND_ACTIVITY} with objectType "task", eventType "completed" and the same date range.`,
-        ],
+        notes: [recurringCompletionsNote(args, userGmtOffset)],
         previewLines: previewTasks(tasks, Math.min(tasks.length, args.limit), assigneeNames),
         zeroReasonHints,
     })
+}
+
+/**
+ * Where the completions this tool cannot return can be found instead.
+ *
+ * find-activity filters by when an event happened, so it can stand in for a
+ * completion-date query but not a due-date one. Its `dateTo` is exclusive where
+ * this tool's `until` is inclusive, so the range is spelled out rather than left
+ * for the model to translate.
+ */
+function recurringCompletionsNote(
+    args: ResolvedFindCompletedTasksArgs,
+    userGmtOffset: string,
+): string {
+    const leftOut = 'Completions of recurring tasks that are still active are not in this list.'
+    if (args.getBy === 'due') {
+        return `${leftOut} ${FIND_ACTIVITY} with objectType "task" and eventType "completed" reports them, but only by completion time: it cannot match a due-date range.`
+    }
+    const dateFrom = `${args.since}T00:00:00${userGmtOffset}`
+    const dateTo = `${shiftDateStringByDays(args.until, 1)}T00:00:00${userGmtOffset}`
+    return `${leftOut} To include them, call ${FIND_ACTIVITY} with objectType "task", eventType "completed", dateFrom "${dateFrom}" and dateTo "${dateTo}".`
 }
 
 export { findCompletedTasks }
