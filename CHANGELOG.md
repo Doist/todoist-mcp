@@ -1,3 +1,9 @@
+## [15.0.3](https://github.com/todoist/todoist-mcp/compare/v15.0.2...v15.0.3) (2026-11-12)
+
+### Bug Fixes
+
+* say find-completed-tasks leaves out active recurring tasks ([#704](https://github.com/todoist/todoist-mcp/issues/704)) ([434e5af](https://github.com/todoist/todoist-mcp/commit/434e5af6dd99c137e46e306fdc8eddd55758a537))
+
 ## [15.0.2](https://github.com/todoist/todoist-mcp/compare/v15.0.1...v15.0.2) (2026-11-12)
 
 ### Bug Fixes
