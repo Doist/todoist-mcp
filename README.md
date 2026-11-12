@@ -6,6 +6,9 @@ enabling them to access and modify a Todoist account on the user's behalf.
 These tools can be used both through an MCP server, or imported directly in other projects to
 integrate them to your own AI conversational interfaces.
 
+**Hosted MCP server:** `https://ai.todoist.net/mcp`. Add it to your AI client and sign in with your
+Todoist account. See the [setup guide](#setup-guide) for per-client steps.
+
 ## Using tools
 
 ### 1. Add this repository as a dependency
@@ -49,14 +52,6 @@ const result = streamText({
 ```
 
 ## Using as an MCP server
-
-### Quick Start
-
-You can run the MCP server directly with npx:
-
-```bash
-npx -p @todoist/mcp todoist-mcp
-```
 
 ### Setup Guide
 
@@ -140,6 +135,14 @@ The assistant can read and change your Todoist tasks and projects. Revoke access
 
 ```bash
 npx -y mcp-remote https://ai.todoist.net/mcp
+```
+
+### Running locally
+
+You can run the MCP server directly with npx:
+
+```bash
+npx -p @todoist/mcp todoist-mcp
 ```
 
 For more details on setting up and using the MCP server, including creating custom servers, see [docs/mcp-server.md](docs/mcp-server.md).
