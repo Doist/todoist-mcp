@@ -1,6 +1,7 @@
 import { isWorkspaceProject } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
+import { getProjectOrExplain } from '../tool-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const entityTypes = [
@@ -39,7 +40,7 @@ const deleteObject = {
     async execute(args, client) {
         switch (args.type) {
             case 'project': {
-                const project = await client.getProject(args.id)
+                const project = await getProjectOrExplain(client, args.id)
                 if (isWorkspaceProject(project) && !project.isArchived) {
                     throw new Error(
                         `Workspace project "${project.name}" must be archived before it can be deleted. Archive the project first, then delete it.`,

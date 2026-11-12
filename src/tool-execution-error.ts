@@ -537,7 +537,7 @@ export class ProjectAccessError extends Error {
  * recognizable after aggregation.
  */
 export function formatBatchItemError(error: unknown): string {
-    if (error instanceof DueStringParseError) {
+    if (error instanceof DueStringParseError || error instanceof ProjectAccessError) {
         return error.message
     }
 

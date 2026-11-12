@@ -1,7 +1,12 @@
 import { isPersonalProject, isWorkspaceProject, type Section, type TodoistApi } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { mapTask, type Project, resolveInboxProjectId } from '../tool-helpers.js'
+import {
+    getProjectOrExplain,
+    mapTask,
+    type Project,
+    resolveInboxProjectId,
+} from '../tool-helpers.js'
 import { ApiLimits } from '../utils/constants.js'
 import { SectionSchema, type SectionSummary, toSectionSummary } from '../utils/output-schemas.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -374,10 +379,18 @@ async function generateProjectOverview(
     client: TodoistApi,
     projectId: string,
 ): Promise<{ textContent: string; structuredContent: ProjectOverviewStructured }> {
+    const projectRequest = getProjectOrExplain(client, projectId)
+    // The sections and tasks requests also 404 for a project the user can't
+    // read, and sooner than the explanation is ready. Let that explanation win.
+    const afterProject = <T>(request: Promise<T>) =>
+        request.catch(async (error: unknown) => {
+            await projectRequest
+            throw error
+        })
     const [project, sections, allTasks] = await Promise.all([
-        client.getProject(projectId),
-        getProjectSections(client, projectId),
-        getAllTasksForProject(client, projectId),
+        projectRequest,
+        afterProject(getProjectSections(client, projectId)),
+        afterProject(getAllTasksForProject(client, projectId)),
     ])
     const assigneeNames = await getAssigneeShortNames(client, allTasks)
 

@@ -20,10 +20,12 @@ import {
     type WorkspaceProjectSummary,
 } from '@todoist/sdk'
 import z from 'zod'
+import { ProjectAccessError } from './tool-execution-error.js'
 import { ApiLimits } from './utils/constants.js'
 import { formatDuration } from './utils/duration-parser.js'
 import { convertNumberToPriority } from './utils/priorities.js'
-import { executeWithRetry } from './utils/retry.js'
+import { executeWithRetry, extractHttpStatusCode } from './utils/retry.js'
+import { ToolNames } from './utils/tool-names.js'
 
 // Re-export filter helpers for backward compatibility
 export {
@@ -209,6 +211,76 @@ export async function fetchUnjoinedWorkspaceProjects(
     )
     // A null role means the user has no membership in the project.
     return projectsByWorkspace.flat().filter((project) => project.role === null)
+}
+
+/**
+ * `getProject` only finds projects the user has joined, and answers 404 alike
+ * for one that doesn't exist and for a workspace project they haven't joined.
+ * On a 404, look the ID up among the workspace projects they can join, so the
+ * model can tell the two apart and offer the fix.
+ *
+ * @param listUnjoined - Lists the unjoined workspace projects; pass a shared one
+ * to look several projects up with a single scan (see {@link createProjectLookup})
+ * @throws {ProjectAccessError} on a 404, saying which of the two it is
+ */
+export async function getProjectOrExplain(
+    client: TodoistApi,
+    id: string,
+    listUnjoined: () => Promise<WorkspaceProjectSummary[]> = () =>
+        fetchUnjoinedWorkspaceProjects(client),
+): Promise<Project> {
+    try {
+        return await client.getProject(id)
+    } catch (error) {
+        if (extractHttpStatusCode(error) !== 404) {
+            throw error
+        }
+        throw await explainMissingProject(id, listUnjoined)
+    }
+}
+
+/**
+ * {@link getProjectOrExplain} for a batch: each project is looked up at most
+ * once, with retries, and the workspace scan behind the explanations, which
+ * doesn't depend on the project, runs at most once.
+ */
+export function createProjectLookup(client: TodoistApi): (id: string) => Promise<Project> {
+    const lookups = new Map<string, Promise<Project>>()
+    let unjoinedScan: Promise<WorkspaceProjectSummary[]> | undefined
+    const listUnjoined = () => (unjoinedScan ??= fetchUnjoinedWorkspaceProjects(client))
+
+    return (id) => {
+        let lookup = lookups.get(id)
+        if (!lookup) {
+            lookup = executeWithRetry(() => getProjectOrExplain(client, id, listUnjoined))
+            lookups.set(id, lookup)
+        }
+        return lookup
+    }
+}
+
+async function explainMissingProject(
+    id: string,
+    listUnjoined: () => Promise<WorkspaceProjectSummary[]>,
+): Promise<ProjectAccessError> {
+    let unjoined: WorkspaceProjectSummary | undefined
+    try {
+        unjoined = (await listUnjoined()).find((project) => project.id === id)
+    } catch {
+        return new ProjectAccessError(
+            `Project ${id} was not found or the user can't access it. If it's a workspace project they haven't joined, ${ToolNames.FIND_PROJECTS} with includeUnjoined lists the ones they can join.`,
+        )
+    }
+
+    if (unjoined) {
+        return new ProjectAccessError(
+            `Project ${id} ("${unjoined.name}") is a workspace project the user hasn't joined, so it can't be read yet. Ask the user whether to join it. If they agree, join it with ${ToolNames.PROJECT_MANAGEMENT} (action: "join"), then retry.`,
+        )
+    }
+
+    return new ProjectAccessError(
+        `Project ${id} was not found. It isn't one of the user's projects or a workspace project they can join: the ID may be wrong, the project may have been archived or deleted, or it may be restricted to people who were invited.`,
+    )
 }
 
 /**

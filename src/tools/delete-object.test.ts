@@ -1,6 +1,11 @@
 import type { TodoistApi } from '@todoist/sdk'
 import { beforeEach, describe, expect, it, type Mocked, vi } from 'vitest'
-import { createMockProject, createMockWorkspaceProject } from '../utils/test-helpers.js'
+import { formatToolExecutionError } from '../tool-execution-error.js'
+import {
+    createMockProject,
+    createMockWorkspaceProject,
+    mockUnjoinedWorkspaceProject,
+} from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { deleteObject } from './delete-object.js'
 
@@ -15,6 +20,8 @@ const mockTodoistApi = {
     deleteReminder: vi.fn(),
     deleteLocationReminder: vi.fn(),
     deleteFilter: vi.fn(),
+    getWorkspaces: vi.fn(),
+    getWorkspaceActiveProjects: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { DELETE_OBJECT } = ToolNames
@@ -85,6 +92,17 @@ describe(`${DELETE_OBJECT} tool`, () => {
 
             expect(mockTodoistApi.deleteProject).toHaveBeenCalledWith('archived-ws-proj')
             expect(result.structuredContent.success).toBe(true)
+        })
+
+        it('should explain a 404 for a workspace project the user has not joined', async () => {
+            const expected = mockUnjoinedWorkspaceProject(mockTodoistApi)
+
+            const error = await deleteObject
+                .execute({ type: 'project', id: 'unjoined-project-id' }, mockTodoistApi)
+                .catch((caught: unknown) => caught)
+
+            expect(formatToolExecutionError(error)).toBe(expected)
+            expect(mockTodoistApi.deleteProject).not.toHaveBeenCalled()
         })
     })
 

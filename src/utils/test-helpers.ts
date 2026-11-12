@@ -329,6 +329,23 @@ export function createApiError({
 }
 
 /**
+ * Answers for a workspace project the user hasn't joined as the API does:
+ * `getProject` 404s, while the workspace's project listing shows it with no
+ * role. Returns the error the model should then see.
+ */
+export function mockUnjoinedWorkspaceProject(api: Mocked<TodoistApi>): string {
+    const project = createMockWorkspaceProjectSummary()
+    api.getProject.mockRejectedValue(createApiError({ status: 404, error: 'Project not found' }))
+    api.getWorkspaces.mockResolvedValue([createMockWorkspace()])
+    api.getWorkspaceActiveProjects.mockResolvedValue({
+        results: [project],
+        nextCursor: null,
+        hasMore: false,
+    })
+    return `Project ${project.id} ("${project.name}") is a workspace project the user hasn't joined, so it can't be read yet. Ask the user whether to join it. If they agree, join it with project-management (action: "join"), then retry.`
+}
+
+/**
  * Creates multiple test cases for parameterized testing.
  */
 export function createTestCases<T, E = unknown>(

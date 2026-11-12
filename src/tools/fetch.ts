@@ -1,7 +1,7 @@
 import { getProjectUrl, getTaskUrl } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { mapProject, mapTask } from '../tool-helpers.js'
+import { getProjectOrExplain, mapProject, mapTask } from '../tool-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 
 const ArgsSchema = {
@@ -104,7 +104,7 @@ const fetch = {
             }
         } else {
             // Fetch project
-            const project = await client.getProject(objectId)
+            const project = await getProjectOrExplain(client, objectId)
             const mappedProject = mapProject(project)
 
             // Build text content

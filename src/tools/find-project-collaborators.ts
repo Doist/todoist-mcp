@@ -1,7 +1,8 @@
 import { formatUserShortName, type TodoistApi } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { type Project } from '../tool-helpers.js'
+import { ProjectAccessError } from '../tool-execution-error.js'
+import { getProjectOrExplain, type Project } from '../tool-helpers.js'
 import { CollaboratorSchema } from '../utils/output-schemas.js'
 import { summarizeList } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -61,7 +62,7 @@ const findProjectCollaborators = {
         let projectName = projectId
         let project: Project
         try {
-            project = await client.getProject(projectId)
+            project = await getProjectOrExplain(client, projectId)
             if (!project) {
                 throw new Error(`Project with ID "${projectId}" not found or not accessible`)
             }
@@ -85,6 +86,9 @@ const findProjectCollaborators = {
                 }
             }
         } catch (error) {
+            if (error instanceof ProjectAccessError) {
+                throw error
+            }
             throw new Error(
                 `Failed to access project "${projectId}": ${error instanceof Error ? error.message : 'Unknown error'}`,
             )

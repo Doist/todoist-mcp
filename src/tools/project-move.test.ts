@@ -1,9 +1,11 @@
 import type { TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
+import { formatToolExecutionError } from '../tool-execution-error.js'
 import {
     createMockProject,
     createMockWorkspaceProject,
     mockPersonalProjectCapacity,
+    mockUnjoinedWorkspaceProject,
     TEST_IDS,
 } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
@@ -14,6 +16,8 @@ const mockTodoistApi = {
     moveProjectToPersonal: vi.fn(),
     getProject: vi.fn(),
     getPersonalProjectCapacity: vi.fn(),
+    getWorkspaces: vi.fn(),
+    getWorkspaceActiveProjects: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { PROJECT_MOVE } = ToolNames
@@ -190,6 +194,20 @@ describe(`${PROJECT_MOVE} tool`, () => {
                 }),
                 success: true,
             })
+        })
+
+        it('should explain a 404 for a workspace project the user has not joined', async () => {
+            const expected = mockUnjoinedWorkspaceProject(mockTodoistApi)
+
+            const error = await projectMove
+                .execute(
+                    { action: 'move-to-personal', projectId: 'unjoined-project-id' },
+                    mockTodoistApi,
+                )
+                .catch((caught: unknown) => caught)
+
+            expect(formatToolExecutionError(error)).toBe(expected)
+            expect(mockTodoistApi.moveProjectToPersonal).not.toHaveBeenCalled()
         })
     })
 

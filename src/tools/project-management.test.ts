@@ -1,9 +1,11 @@
 import type { TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
+import { formatToolExecutionError } from '../tool-execution-error.js'
 import {
     createMockProject,
     createMockWorkspaceProject,
     mockPersonalProjectCapacity,
+    mockUnjoinedWorkspaceProject,
 } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { projectManagement } from './project-management.js'
@@ -14,6 +16,8 @@ const mockTodoistApi = {
     joinProject: vi.fn(),
     getProject: vi.fn(),
     getPersonalProjectCapacity: vi.fn(),
+    getWorkspaces: vi.fn(),
+    getWorkspaceActiveProjects: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { PROJECT_MANAGEMENT } = ToolNames
@@ -104,6 +108,17 @@ describe(`${PROJECT_MANAGEMENT} tool`, () => {
                     mockTodoistApi,
                 ),
             ).rejects.toThrow('API Error: Cannot unarchive project')
+        })
+
+        it('should explain a 404 for a workspace project the user has not joined', async () => {
+            const expected = mockUnjoinedWorkspaceProject(mockTodoistApi)
+
+            const error = await projectManagement
+                .execute({ action: 'unarchive', projectId: 'unjoined-project-id' }, mockTodoistApi)
+                .catch((caught: unknown) => caught)
+
+            expect(formatToolExecutionError(error)).toBe(expected)
+            expect(mockTodoistApi.unarchiveProject).not.toHaveBeenCalled()
         })
     })
 
