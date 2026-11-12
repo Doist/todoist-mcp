@@ -36,6 +36,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import { instructions } from '../src/mcp-server.js'
 import { registeredTools } from '../src/tool-registry.js'
+import type { findProjects } from '../src/tools/find-projects.js'
+import type { listWorkspaces } from '../src/tools/list-workspaces.js'
 import type { UserInfoStructured } from '../src/tools/user-info.js'
 import { createLimiter } from '../src/utils/concurrency.js'
 import { ToolNames } from '../src/utils/tool-names.js'
@@ -48,6 +50,14 @@ import { ToolNames } from '../src/utils/tool-names.js'
 const EVAL_USER_ID = '2671355'
 
 type Check = (input: Record<string, unknown>) => string | null
+
+/** A tool's structuredContent, so a canned result is checked against the real shape. */
+type StructuredOutput<T extends { outputSchema: z.ZodRawShape }> = z.infer<
+    z.ZodObject<T['outputSchema']>
+>
+
+/** The workspace the scenario-specific canned lookups below belong to. */
+const EVAL_WORKSPACE_ID = '90210'
 
 /** First item of a batch tool's array argument, e.g. add-tasks' `tasks`. */
 function firstItem(input: Record<string, unknown>, key: string): Record<string, unknown> | null {
@@ -71,6 +81,13 @@ type Scenario = {
     forbid?: string[]
     /** Extra assertion on the arguments; return a reason on failure. */
     check?: Check
+    /**
+     * Canned results for lookups this scenario makes reasonable, on top of
+     * CONTEXT_TOOLS. A model asked to join a project by ID may confirm it
+     * exists first; without a result to read, that check would be judged as
+     * its answer.
+     */
+    context?: Record<string, unknown>
     /** What this scenario is protecting. */
     guards: string
 }
@@ -217,6 +234,64 @@ const SCENARIOS: Scenario[] = [
                 : null
         },
         guards: 'instructions: never echo projectId/sectionId/parentId back',
+    },
+    {
+        // find-projects lists joined projects only unless told otherwise, so a
+        // plain listing cannot answer this.
+        id: 'list-unjoined-projects',
+        prompt: "Which projects in my team's workspace haven't I joined yet?",
+        expect: [ToolNames.FIND_PROJECTS],
+        // "My team's workspace" invites a look at which workspaces there are.
+        context: {
+            [ToolNames.LIST_WORKSPACES]: {
+                type: 'workspaces',
+                workspaces: [
+                    {
+                        id: EVAL_WORKSPACE_ID,
+                        name: 'Acme Team',
+                        plan: 'BUSINESS',
+                        role: 'MEMBER',
+                        isLinkSharingEnabled: true,
+                        isGuestAllowed: false,
+                        creatorId: '1234567',
+                    },
+                ],
+                count: 1,
+            } satisfies StructuredOutput<typeof listWorkspaces>,
+        },
+        check: (input) =>
+            input.includeUnjoined === true
+                ? null
+                : `includeUnjoined is ${JSON.stringify(input.includeUnjoined)}, so only joined projects are listed`,
+        guards: 'find-projects includeUnjoined: discovering workspace projects the user has not joined',
+    },
+    {
+        id: 'join-workspace-project',
+        prompt: 'Join the workspace project 6XQ3Sales9 ("Sales Pipeline") so I can see its tasks.',
+        expect: [ToolNames.PROJECT_MANAGEMENT],
+        // Checking the project exists before writing is reasonable; the stub
+        // shows it as one the user can join.
+        context: {
+            [ToolNames.FIND_PROJECTS]: {
+                projects: [],
+                totalCount: 0,
+                hasMore: false,
+                appliedFilters: { searchText: 'Sales Pipeline', includeUnjoined: true },
+                unjoinedProjects: [
+                    {
+                        id: '6XQ3Sales9',
+                        name: 'Sales Pipeline',
+                        workspaceId: EVAL_WORKSPACE_ID,
+                        url: 'https://app.todoist.com/app/project/6XQ3Sales9',
+                    },
+                ],
+            } satisfies StructuredOutput<typeof findProjects>,
+        },
+        check: (input) =>
+            input.action === 'join' && input.projectId === '6XQ3Sales9'
+                ? null
+                : `not a join of 6XQ3Sales9: ${JSON.stringify(input)}`,
+        guards: 'project-management join: joining a workspace project when the user asks',
     },
 ]
 
@@ -402,8 +477,9 @@ async function runAttempt(
             // A tool a scenario expects is never treated as context, or a
             // scenario testing the route *to* user-info could never pass: its
             // expected call would be stubbed instead of judged.
+            const context = { ...CONTEXT_TOOLS, ...scenario.context }
             const isContext = (c: Anthropic.ToolUseBlock) =>
-                Object.hasOwn(CONTEXT_TOOLS, c.name) && !scenario.expect?.includes(c.name)
+                Object.hasOwn(context, c.name) && !scenario.expect?.includes(c.name)
             const substantive =
                 calls.find((c) => scenario.forbid?.includes(c.name)) ??
                 calls.find((c) => !isContext(c))
@@ -430,7 +506,7 @@ async function runAttempt(
                 content: calls.map((c) => ({
                     type: 'tool_result' as const,
                     tool_use_id: c.id,
-                    content: JSON.stringify(CONTEXT_TOOLS[c.name]),
+                    content: JSON.stringify(context[c.name]),
                 })),
             })
         }

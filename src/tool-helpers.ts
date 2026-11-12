@@ -7,6 +7,8 @@ import {
     type CurrentUser,
     type GetProjectsArgs,
     type GetProjectsResponse,
+    type GetWorkspaceProjectsArgs,
+    type GetWorkspaceProjectsResponse,
     type Label,
     type MoveTaskArgs,
     type PersonalProject,
@@ -15,6 +17,7 @@ import {
     type Task,
     type TodoistApi,
     type WorkspaceProject,
+    type WorkspaceProjectSummary,
 } from '@todoist/sdk'
 import z from 'zod'
 import { ApiLimits } from './utils/constants.js'
@@ -172,6 +175,40 @@ export async function fetchAllActiveProjects(client: TodoistApi): Promise<Projec
         args: {},
         limit: ApiLimits.PROJECTS_MAX,
     })
+}
+
+/**
+ * Fetches the active workspace projects the user can see but hasn't joined,
+ * across every workspace they belong to.
+ *
+ * The user's own project list (`getProjects`, `searchProjects`, `getProject`)
+ * only covers projects they have joined, so this is the only way to find the
+ * rest. Workspace guests are only shown projects they have joined, so for them
+ * this is always empty.
+ *
+ * @param client - The Todoist API client
+ * @returns Promise resolving to the unjoined projects, workspace by workspace
+ */
+export async function fetchUnjoinedWorkspaceProjects(
+    client: TodoistApi,
+): Promise<WorkspaceProjectSummary[]> {
+    const workspaces = await executeWithRetry(() => client.getWorkspaces())
+    const projectsByWorkspace = await Promise.all(
+        workspaces.map((workspace) =>
+            fetchAllPages<
+                GetWorkspaceProjectsArgs,
+                GetWorkspaceProjectsResponse,
+                WorkspaceProjectSummary
+            >({
+                apiMethod: (args) =>
+                    executeWithRetry(() => client.getWorkspaceActiveProjects(args)),
+                args: { workspaceId: workspace.id },
+                limit: ApiLimits.PROJECTS_MAX,
+            }),
+        ),
+    )
+    // A null role means the user has no membership in the project.
+    return projectsByWorkspace.flat().filter((project) => project.role === null)
 }
 
 /**

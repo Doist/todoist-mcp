@@ -1,6 +1,8 @@
+import type { Project, TodoistApi } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { mapComment, mapProject, mapTask } from '../tool-helpers.js'
+import { ProjectAccessError } from '../tool-execution-error.js'
+import { fetchUnjoinedWorkspaceProjects, mapComment, mapProject, mapTask } from '../tool-helpers.js'
 import {
     ChildrenOutputSchema,
     formatChildrenSummary,
@@ -15,7 +17,10 @@ import {
     TaskSchema,
     toSectionSummary,
 } from '../utils/output-schemas.js'
+import { extractHttpStatusCode } from '../utils/retry.js'
 import { ToolNames } from '../utils/tool-names.js'
+
+const { FIND_PROJECTS, PROJECT_MANAGEMENT } = ToolNames
 
 const ObjectTypes = ['task', 'project', 'comment', 'section'] as const
 
@@ -72,7 +77,7 @@ const fetchObject = {
                     }
                 }
                 case 'project': {
-                    const project = await client.getProject(id)
+                    const project = await getProjectOrExplain(client, id)
                     const mappedProject = mapProject(project)
                     const children = includeChildren
                         ? await resolveChildren(() => getProjectChildren(client, project))
@@ -122,11 +127,54 @@ const fetchObject = {
                 }
             }
         } catch (error) {
+            if (error instanceof ProjectAccessError) {
+                throw error
+            }
             throw new Error(
                 `Failed to fetch ${type} with id ${id}: ${error instanceof Error ? error.message : String(error)}`,
             )
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
+
+/**
+ * `getProject` only finds projects the user has joined, and answers 404 alike
+ * for one that doesn't exist and for a workspace project they haven't joined.
+ * On a 404, look the ID up among the workspace projects they can join, so the
+ * model can tell the two apart and offer the fix.
+ */
+async function getProjectOrExplain(client: TodoistApi, id: string): Promise<Project> {
+    try {
+        return await client.getProject(id)
+    } catch (error) {
+        if (extractHttpStatusCode(error) !== 404) {
+            throw error
+        }
+        throw await explainMissingProject(client, id)
+    }
+}
+
+async function explainMissingProject(client: TodoistApi, id: string): Promise<ProjectAccessError> {
+    let unjoined
+    try {
+        unjoined = (await fetchUnjoinedWorkspaceProjects(client)).find(
+            (project) => project.id === id,
+        )
+    } catch {
+        return new ProjectAccessError(
+            `Project ${id} was not found or the user can't access it. If it's a workspace project they haven't joined, ${FIND_PROJECTS} with includeUnjoined lists the ones they can join.`,
+        )
+    }
+
+    if (unjoined) {
+        return new ProjectAccessError(
+            `Project ${id} ("${unjoined.name}") is a workspace project the user hasn't joined, so it can't be read yet. Ask the user whether to join it. If they agree, join it with ${PROJECT_MANAGEMENT} (action: "join"), then retry.`,
+        )
+    }
+
+    return new ProjectAccessError(
+        `Project ${id} was not found. It isn't one of the user's projects or a workspace project they can join: the ID may be wrong, the project may have been deleted, or it may be restricted to people who were invited.`,
+    )
+}
 
 export { fetchObject }

@@ -1,10 +1,11 @@
-import type { Project } from '@todoist/sdk'
+import type { Project, WorkspaceProjectSummary } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import {
     compileWildcardQuery,
     fetchAllActiveProjects,
     fetchAllArchivedProjects,
+    fetchUnjoinedWorkspaceProjects,
     mapProject,
     searchAllProjects,
 } from '../tool-helpers.js'
@@ -13,7 +14,7 @@ import { ProjectSchema as ProjectOutputSchema } from '../utils/output-schemas.js
 import { formatProjectPreview, summarizeList } from '../utils/response-builders.js'
 import { ToolNames } from '../utils/tool-names.js'
 
-const { ADD_PROJECTS } = ToolNames
+const { ADD_PROJECTS, PROJECT_MANAGEMENT } = ToolNames
 
 const SCOPE_NOUNS = {
     active: 'projects',
@@ -47,7 +48,20 @@ const ArgsSchema = {
         .describe(
             "Which projects to return by archive status: 'active' (default, non-archived only), 'archived' (archived only), or 'all' (both active and archived). Each project includes an isArchived field. Archived projects can be deleted via the delete-object tool (type: 'project').",
         ),
+    includeUnjoined: z
+        .boolean()
+        .optional()
+        .describe(
+            `Also list workspace projects the user can join but hasn't, in unjoinedProjects. They can't be read until joined; join with ${PROJECT_MANAGEMENT} (action 'join') only when the user asks.`,
+        ),
 }
+
+const UnjoinedProjectSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    workspaceId: z.string(),
+    url: z.string(),
+})
 
 const OutputSchema = {
     projects: z.array(ProjectOutputSchema).describe('The found projects.'),
@@ -55,12 +69,16 @@ const OutputSchema = {
     totalCount: z.number().describe('The total number of projects in this page.'),
     hasMore: z.boolean(),
     appliedFilters: z.record(z.string(), z.unknown()),
+    unjoinedProjects: z
+        .array(UnjoinedProjectSchema)
+        .optional()
+        .describe('With includeUnjoined, or when a search matched no joined project.'),
 }
 
 const findProjects = {
     name: ToolNames.FIND_PROJECTS,
     description:
-        "List all projects or search for projects by name. By default only active projects are returned; use archivedStatus ('archived' or 'all') to include archived projects. When searching or when archivedStatus is 'all', all matching projects are returned (pagination is ignored). Otherwise projects are returned with pagination.",
+        "List or search by name the projects the user has joined. By default only active projects are returned; use archivedStatus ('archived' or 'all') to include archived projects. When searching or when archivedStatus is 'all', all matching projects are returned (pagination is ignored). Otherwise projects are returned with pagination. Workspace projects the user hasn't joined are left out unless includeUnjoined is set, or a search matches no joined project.",
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
@@ -105,28 +123,65 @@ const findProjects = {
         }
 
         const projects = results.map(mapProject)
+        const unjoinedProjects = await findUnjoinedProjects(args, projects.length)
 
         return {
-            textContent: generateTextContent({ projects, args, nextCursor }),
+            textContent: generateTextContent({ projects, args, nextCursor, unjoinedProjects }),
             structuredContent: {
                 projects,
                 nextCursor: nextCursor ?? undefined,
                 totalCount: projects.length,
                 hasMore: Boolean(nextCursor),
                 appliedFilters: args,
+                unjoinedProjects: unjoinedProjects?.map(toUnjoinedProject),
             },
+        }
+
+        /**
+         * Lists unjoined workspace projects when asked to, or when a search found
+         * nothing among the user's own projects, since the project they are after
+         * may be one they haven't joined. Only on the first page, and never for
+         * archived projects, which can't be joined from here.
+         */
+        async function findUnjoinedProjects(
+            { includeUnjoined, cursor }: typeof args,
+            joinedMatches: number,
+        ): Promise<WorkspaceProjectSummary[] | undefined> {
+            const emptySearch = Boolean(searchText) && joinedMatches === 0
+            if (cursor || archivedStatus === 'archived' || !(includeUnjoined || emptySearch)) {
+                return undefined
+            }
+
+            let unjoined: WorkspaceProjectSummary[]
+            try {
+                unjoined = await fetchUnjoinedWorkspaceProjects(client)
+            } catch (error) {
+                // Asked for explicitly, a failure must not pass for "there are none".
+                // As a fallback for an empty search, the search result still stands.
+                if (includeUnjoined) throw error
+                return undefined
+            }
+
+            const wildcard = searchText ? compileWildcardQuery(searchText) : null
+            return wildcard ? unjoined.filter((project) => wildcard.test(project.name)) : unjoined
         }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
+
+function toUnjoinedProject({ id, name, workspaceId, url }: WorkspaceProjectSummary) {
+    return { id, name, workspaceId, url }
+}
 
 function generateTextContent({
     projects,
     args,
     nextCursor,
+    unjoinedProjects,
 }: {
     projects: ReturnType<typeof mapProject>[]
     args: z.infer<z.ZodObject<typeof ArgsSchema>>
     nextCursor: string | null
+    unjoinedProjects: WorkspaceProjectSummary[] | undefined
 }) {
     // Generate subject description
     const scopeNoun = SCOPE_NOUNS[args.archivedStatus ?? 'active']
@@ -154,7 +209,15 @@ function generateTextContent({
     // Generate helpful suggestions for empty results
     const zeroReasonHints: string[] = []
     if (projects.length === 0) {
-        if (args.searchText) {
+        if (args.searchText && unjoinedProjects?.length) {
+            // The matches are listed below, among the projects the user hasn't joined.
+            zeroReasonHints.push('None of the projects the user has joined match')
+        } else if (args.searchText) {
+            zeroReasonHints.push(
+                unjoinedProjects
+                    ? "No workspace project the user hasn't joined matches either"
+                    : "Set includeUnjoined to also search workspace projects the user hasn't joined",
+            )
             zeroReasonHints.push('Try broader search terms')
             zeroReasonHints.push('Check spelling')
             zeroReasonHints.push('Remove searchText to see all projects')
@@ -172,7 +235,7 @@ function generateTextContent({
         }
     }
 
-    return summarizeList({
+    const summary = summarizeList({
         subject,
         count: projects.length,
         limit: args.searchText || args.archivedStatus === 'all' ? undefined : args.limit,
@@ -181,6 +244,27 @@ function generateTextContent({
         previewLines: previewWithMore,
         zeroReasonHints,
     })
+
+    if (!unjoinedProjects?.length) {
+        return summary
+    }
+
+    const unjoinedLines = unjoinedProjects
+        .slice(0, previewLimit)
+        .map(
+            (project) =>
+                `    ${project.name} • id=${project.id} • workspaceId=${project.workspaceId}`,
+        )
+    const moreUnjoined = unjoinedProjects.length - previewLimit
+    if (moreUnjoined > 0) {
+        unjoinedLines.push(`    …and ${moreUnjoined} more; narrow with searchText`)
+    }
+    return [
+        summary,
+        `Workspace projects the user hasn't joined (${unjoinedProjects.length}):`,
+        ...unjoinedLines,
+        `Their tasks, comments and activity can't be read until the user joins. Ask the user before joining one with ${PROJECT_MANAGEMENT} (action: "join").`,
+    ].join('\n')
 }
 
 export { findProjects }

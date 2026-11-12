@@ -7,7 +7,9 @@ import type {
     SyncCommand,
     Task,
     TodoistApi,
+    Workspace,
     WorkspaceProject,
+    WorkspaceProjectSummary,
 } from '@todoist/sdk'
 import type { Mocked } from 'vitest'
 import { type MappedTask } from '../tool-helpers'
@@ -139,6 +141,58 @@ export function createMockWorkspaceProject(
         status: 'active',
         isInviteOnly: false,
         isLinkSharingEnabled: true,
+        ...overrides,
+    }
+}
+
+/**
+ * Creates a mock workspace project as the workspace project listing returns it.
+ * Defaults to one the user can see but hasn't joined (`role: null`).
+ */
+export function createMockWorkspaceProjectSummary(
+    overrides: Partial<WorkspaceProjectSummary> = {},
+): WorkspaceProjectSummary {
+    return {
+        id: 'unjoined-project-id',
+        workspaceId: TEST_IDS.WORKSPACE_1,
+        name: 'Sales Pipeline',
+        folderId: null,
+        color: 'blue',
+        icon: null,
+        viewStyle: 'list',
+        description: '',
+        status: 'IN_PROGRESS',
+        role: null,
+        isInviteOnly: false,
+        isFrozen: false,
+        canAssignTasks: true,
+        defaultOrder: 1,
+        defaultOrderKey: null,
+        publicAccess: false,
+        publicKey: 'public-key',
+        access: { visibility: 'team' },
+        isPendingDefaultCollaboratorInvites: false,
+        url: 'https://app.todoist.com/app/project/sales-pipeline-unjoined-project-id',
+        ...overrides,
+    }
+}
+
+/**
+ * Creates a mock Workspace with all required properties and sensible defaults.
+ */
+export function createMockWorkspace(overrides: Partial<Workspace> = {}): Workspace {
+    return {
+        id: TEST_IDS.WORKSPACE_1,
+        name: 'Test Workspace',
+        plan: 'BUSINESS',
+        role: 'MEMBER',
+        inviteCode: 'abc123',
+        isLinkSharingEnabled: true,
+        isGuestAllowed: true,
+        limits: { current: null, next: null },
+        createdAt: new Date('2024-01-15T10:00:00Z'),
+        creatorId: 'user-456',
+        properties: {},
         ...overrides,
     }
 }

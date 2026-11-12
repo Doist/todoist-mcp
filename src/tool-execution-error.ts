@@ -517,6 +517,19 @@ export class DueStringParseError extends Error {
 }
 
 /**
+ * A project lookup that failed for a reason the server could explain, such as
+ * a workspace project the user hasn't joined. The message is the full recovery
+ * guidance for the model, so it is shown as written rather than reformatted or
+ * truncated.
+ */
+export class ProjectAccessError extends Error {
+    constructor(message: string) {
+        super(message)
+        this.name = 'ProjectAccessError'
+    }
+}
+
+/**
  * Compact single-line variant of {@link formatToolExecutionError} for batch
  * tools that report per-item failures. Unlike `error.message` (which for SDK
  * errors is just "HTTP 403: Forbidden"), this preserves the API error signals
@@ -597,7 +610,7 @@ export function formatToolExecutionError(error: unknown): string {
         return error.message
     }
 
-    if (error instanceof DueStringParseError) {
+    if (error instanceof DueStringParseError || error instanceof ProjectAccessError) {
         return error.message
     }
 

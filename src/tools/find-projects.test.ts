@@ -5,6 +5,8 @@ import { ProjectSchema } from '../utils/output-schemas.js'
 import {
     createMockApiResponse,
     createMockProject,
+    createMockWorkspace,
+    createMockWorkspaceProjectSummary,
     TEST_ERRORS,
     TEST_IDS,
 } from '../utils/test-helpers.js'
@@ -16,6 +18,8 @@ const mockTodoistApi = {
     getProjects: vi.fn(),
     searchProjects: vi.fn(),
     getArchivedProjects: vi.fn(),
+    getWorkspaces: vi.fn(),
+    getWorkspaceActiveProjects: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { FIND_PROJECTS } = ToolNames
@@ -23,6 +27,8 @@ const { FIND_PROJECTS } = ToolNames
 describe(`${FIND_PROJECTS} tool`, () => {
     beforeEach(() => {
         vi.clearAllMocks()
+        // A user in no workspaces, unless a test says otherwise.
+        mockTodoistApi.getWorkspaces.mockResolvedValue([])
     })
 
     describe('listing all projects', () => {
@@ -534,6 +540,219 @@ describe(`${FIND_PROJECTS} tool`, () => {
 
             expect(result.structuredContent.totalCount).toBe(0)
             expect(result.textContent).toContain('No archived projects')
+        })
+    })
+
+    describe('workspace projects the user has not joined', () => {
+        const salesPipeline = createMockWorkspaceProjectSummary({
+            id: 'sales-pipeline-id',
+            name: 'Sales Pipeline',
+            workspaceId: 'ws-acme',
+            url: 'https://app.todoist.com/app/project/sales-pipeline-sales-pipeline-id',
+        })
+        const roadmap = createMockWorkspaceProjectSummary({
+            id: 'roadmap-id',
+            name: 'Product Roadmap',
+            workspaceId: 'ws-side',
+            url: 'https://app.todoist.com/app/project/product-roadmap-roadmap-id',
+        })
+        const joinedOps = createMockWorkspaceProjectSummary({
+            id: 'ops-id',
+            name: 'Sales Ops',
+            workspaceId: 'ws-acme',
+            role: 'READ_WRITE',
+        })
+
+        function mockWorkspaceProjects() {
+            mockTodoistApi.getWorkspaces.mockResolvedValue([
+                createMockWorkspace({ id: 'ws-acme', name: 'Acme' }),
+                createMockWorkspace({ id: 'ws-side', name: 'Side Project' }),
+            ])
+            mockTodoistApi.getWorkspaceActiveProjects.mockImplementation(
+                async ({ workspaceId, cursor }) => {
+                    if (workspaceId === 'ws-acme') {
+                        // Two pages, to prove every page is read.
+                        return cursor === 'acme-page-2'
+                            ? { results: [joinedOps], nextCursor: null, hasMore: false }
+                            : { results: [salesPipeline], nextCursor: 'acme-page-2', hasMore: true }
+                    }
+                    return { results: [roadmap], nextCursor: null, hasMore: false }
+                },
+            )
+        }
+
+        it('should list unjoined workspace projects when includeUnjoined is set', async () => {
+            mockTodoistApi.getProjects.mockResolvedValue(
+                createMockApiResponse([createMockProject({ id: 'joined-id', name: 'Inbox' })]),
+            )
+            mockWorkspaceProjects()
+
+            const result = await findProjects.execute(
+                { limit: 50, includeUnjoined: true },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getWorkspaceActiveProjects).toHaveBeenCalledWith({
+                workspaceId: 'ws-acme',
+                cursor: null,
+                limit: 200,
+            })
+            expect(mockTodoistApi.getWorkspaceActiveProjects).toHaveBeenCalledWith({
+                workspaceId: 'ws-acme',
+                cursor: 'acme-page-2',
+                limit: 200,
+            })
+            expect(result.structuredContent.projects.map((p) => p.id)).toEqual(['joined-id'])
+            // The joined "Sales Ops" is left out: it is already in the user's projects.
+            expect(result.structuredContent.unjoinedProjects).toEqual([
+                {
+                    id: 'sales-pipeline-id',
+                    name: 'Sales Pipeline',
+                    workspaceId: 'ws-acme',
+                    url: 'https://app.todoist.com/app/project/sales-pipeline-sales-pipeline-id',
+                },
+                {
+                    id: 'roadmap-id',
+                    name: 'Product Roadmap',
+                    workspaceId: 'ws-side',
+                    url: 'https://app.todoist.com/app/project/product-roadmap-roadmap-id',
+                },
+            ])
+            expect(result.textContent).toMatchSnapshot()
+        })
+
+        it('should preview at most 10 unjoined workspace projects in the text', async () => {
+            mockTodoistApi.getProjects.mockResolvedValue(createMockApiResponse([]))
+            const unjoined = Array.from({ length: 12 }, (_, i) =>
+                createMockWorkspaceProjectSummary({ id: `unjoined-${i}`, name: `Team ${i}` }),
+            )
+            mockTodoistApi.getWorkspaces.mockResolvedValue([createMockWorkspace()])
+            mockTodoistApi.getWorkspaceActiveProjects.mockResolvedValue({
+                results: unjoined,
+                nextCursor: null,
+                hasMore: false,
+            })
+
+            const result = await findProjects.execute(
+                { limit: 50, includeUnjoined: true },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.unjoinedProjects).toHaveLength(12)
+            expect(result.textContent).toContain('Team 9 • id=unjoined-9')
+            expect(result.textContent).not.toContain('id=unjoined-10')
+            expect(result.textContent).toContain('…and 2 more; narrow with searchText')
+        })
+
+        it('should filter unjoined workspace projects by searchText', async () => {
+            mockTodoistApi.searchProjects.mockResolvedValue(
+                createMockApiResponse([createMockProject({ id: 'joined-id', name: 'Product' })]),
+            )
+            mockWorkspaceProjects()
+
+            const result = await findProjects.execute(
+                { limit: 50, searchText: 'product', includeUnjoined: true },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.unjoinedProjects?.map((p) => p.id)).toEqual([
+                'roadmap-id',
+            ])
+        })
+
+        it('should check unjoined workspace projects when a search matches no joined project', async () => {
+            mockTodoistApi.searchProjects.mockResolvedValue(createMockApiResponse([]))
+            mockWorkspaceProjects()
+
+            const result = await findProjects.execute(
+                { limit: 50, searchText: 'sales pipe' },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.projects).toEqual([])
+            expect(result.structuredContent.unjoinedProjects?.map((p) => p.id)).toEqual([
+                'sales-pipeline-id',
+            ])
+            expect(result.textContent).toMatchSnapshot()
+        })
+
+        it('should say when no unjoined workspace project matches an empty search either', async () => {
+            mockTodoistApi.searchProjects.mockResolvedValue(createMockApiResponse([]))
+            mockWorkspaceProjects()
+
+            const result = await findProjects.execute(
+                { limit: 50, searchText: 'nonexistent' },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.unjoinedProjects).toEqual([])
+            expect(result.textContent).toContain(
+                "No workspace project the user hasn't joined matches either",
+            )
+        })
+
+        it('should not check workspace projects when a search matches a joined project', async () => {
+            mockTodoistApi.searchProjects.mockResolvedValue(
+                createMockApiResponse([createMockProject({ name: 'Sales' })]),
+            )
+            mockWorkspaceProjects()
+
+            const result = await findProjects.execute(
+                { limit: 50, searchText: 'sales' },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getWorkspaces).not.toHaveBeenCalled()
+            expect(result.structuredContent.unjoinedProjects).toBeUndefined()
+        })
+
+        it('should still return the search result when the unjoined check fails', async () => {
+            mockTodoistApi.searchProjects.mockResolvedValue(createMockApiResponse([]))
+            mockTodoistApi.getWorkspaces.mockRejectedValue(new Error('workspaces unavailable'))
+
+            const result = await findProjects.execute(
+                { limit: 50, searchText: 'sales pipe' },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.projects).toEqual([])
+            expect(result.structuredContent.unjoinedProjects).toBeUndefined()
+            expect(result.textContent).toContain('includeUnjoined')
+        })
+
+        it('should fail when includeUnjoined is set and the workspace projects cannot be read', async () => {
+            mockTodoistApi.getProjects.mockResolvedValue(createMockApiResponse([]))
+            mockTodoistApi.getWorkspaces.mockRejectedValue(new Error('workspaces unavailable'))
+
+            await expect(
+                findProjects.execute({ limit: 50, includeUnjoined: true }, mockTodoistApi),
+            ).rejects.toThrow('workspaces unavailable')
+        })
+
+        it('should list unjoined workspace projects only on the first page', async () => {
+            mockTodoistApi.getProjects.mockResolvedValue(createMockApiResponse([]))
+            mockWorkspaceProjects()
+
+            const result = await findProjects.execute(
+                { limit: 50, includeUnjoined: true, cursor: 'page-2' },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getWorkspaces).not.toHaveBeenCalled()
+            expect(result.structuredContent.unjoinedProjects).toBeUndefined()
+        })
+
+        it('should not list unjoined workspace projects for archived projects', async () => {
+            mockTodoistApi.getArchivedProjects.mockResolvedValue(createMockApiResponse([]))
+            mockWorkspaceProjects()
+
+            const result = await findProjects.execute(
+                { limit: 50, includeUnjoined: true, archivedStatus: 'archived' },
+                mockTodoistApi,
+            )
+
+            expect(mockTodoistApi.getWorkspaces).not.toHaveBeenCalled()
+            expect(result.structuredContent.unjoinedProjects).toBeUndefined()
         })
     })
 
