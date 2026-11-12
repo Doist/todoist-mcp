@@ -1,3 +1,9 @@
+## [15.1.0](https://github.com/todoist/todoist-mcp/compare/v15.0.3...v15.1.0) (2026-11-12)
+
+### Features
+
+* let agents find and join workspace projects the user hasn't joined ([#705](https://github.com/todoist/todoist-mcp/issues/705)) ([b23753b](https://github.com/todoist/todoist-mcp/commit/b23753b2c50d35be39044c2bdedfb11a9580752c))
+
 ## [15.0.3](https://github.com/todoist/todoist-mcp/compare/v15.0.2...v15.0.3) (2026-11-12)
 
 ### Bug Fixes
