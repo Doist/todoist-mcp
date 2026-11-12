@@ -6,7 +6,7 @@ import {
     formatBatchItemError,
     formatDueStringParseError,
 } from '../tool-execution-error.js'
-import { isInboxProjectId, mapTask } from '../tool-helpers.js'
+import { getProjectOrExplain, isInboxProjectId, mapTask, type Project } from '../tool-helpers.js'
 import { assignmentValidator } from '../utils/assignment-validator.js'
 import { logBatchFailures } from '../utils/batch-failures.js'
 import { BatchLimits } from '../utils/constants.js'
@@ -115,6 +115,9 @@ const addTasks = {
 
         // Resolve each section's project at most once across the whole batch
         const sectionProjectCache = new Map<string, string>()
+        // Look each project up at most once, so a batch aimed at a project the
+        // user can't read explains why only once
+        const projectLookups = new Map<string, Promise<Project>>()
 
         // Process groups in parallel; within each group, process sequentially
         type IndexedResult = { index: number; result: PromiseSettledResult<Task> }
@@ -123,7 +126,10 @@ const addTasks = {
                 const results: IndexedResult[] = []
                 for (const { task, index } of group) {
                     try {
-                        const created = await processTask(task, client, sectionProjectCache)
+                        const created = await processTask(task, client, {
+                            sectionProjectCache,
+                            projectLookups,
+                        })
                         results.push({ index, result: { status: 'fulfilled', value: created } })
                     } catch (error) {
                         results.push({
@@ -191,10 +197,29 @@ function destinationKey(task: z.infer<typeof TaskSchema>): string {
     return `${task.projectId ?? ''}|${task.sectionId ?? ''}|${task.parentId ?? ''}`
 }
 
+function lookUpProject(
+    client: TodoistApi,
+    projectId: string,
+    lookups: Map<string, Promise<Project>>,
+): Promise<Project> {
+    let lookup = lookups.get(projectId)
+    if (!lookup) {
+        lookup = executeWithRetry(() => getProjectOrExplain(client, projectId))
+        lookups.set(projectId, lookup)
+    }
+    return lookup
+}
+
 async function processTask(
     task: z.infer<typeof TaskSchema>,
     client: TodoistApi,
-    sectionProjectCache: Map<string, string>,
+    {
+        sectionProjectCache,
+        projectLookups,
+    }: {
+        sectionProjectCache: Map<string, string>
+        projectLookups: Map<string, Promise<Project>>
+    },
 ): Promise<Task> {
     const {
         duration: durationStr,
@@ -214,7 +239,7 @@ async function processTask(
 
     // Validate project is not archived
     if (resolvedProjectId) {
-        const project = await executeWithRetry(() => client.getProject(resolvedProjectId))
+        const project = await lookUpProject(client, resolvedProjectId, projectLookups)
         if (project.isArchived) {
             throw new Error(
                 `Task "${task.content}": Cannot create task in archived project "${project.name}"`,

@@ -2,12 +2,15 @@ import { removeNullFields } from '@todoist/mcp-core'
 import type { PersonalProject, Section, Task, TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
 import { z } from 'zod'
+import { formatToolExecutionError } from '../tool-execution-error.js'
 import {
+    createApiError,
     createMockProject,
     createMockSection,
     createMockTask,
     createMockUser,
     createMockWorkspaceProject,
+    mockUnjoinedWorkspaceProject,
     TEST_ERRORS,
     TEST_IDS,
 } from '../utils/test-helpers.js'
@@ -23,6 +26,8 @@ const mockTodoistApi = {
     getTasks: vi.fn(),
     getUser: vi.fn(),
     getProjectCollaborators: vi.fn(),
+    getWorkspaces: vi.fn(),
+    getWorkspaceActiveProjects: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { GET_OVERVIEW } = ToolNames
@@ -364,6 +369,20 @@ describe(`${GET_OVERVIEW} tool`, () => {
             mockTodoistApi[mockMethod].mockRejectedValue(apiError)
 
             await expect(getOverview.execute(params, mockTodoistApi)).rejects.toThrow(error)
+        })
+
+        it('should explain a 404 for a workspace project the user has not joined', async () => {
+            const expected = mockUnjoinedWorkspaceProject(mockTodoistApi)
+            // The sections and tasks requests 404 for it too, sooner than the explanation is ready.
+            const notFound = createApiError({ status: 404, error: 'Project not found' })
+            mockTodoistApi.getSections.mockRejectedValue(notFound)
+            mockTodoistApi.getTasks.mockRejectedValue(notFound)
+
+            const error = await getOverview
+                .execute({ projectId: 'unjoined-project-id' }, mockTodoistApi)
+                .catch((caught: unknown) => caught)
+
+            expect(formatToolExecutionError(error)).toBe(expected)
         })
     })
 })

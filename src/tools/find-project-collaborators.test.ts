@@ -1,6 +1,7 @@
 import type { TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
-import { createMockProject } from '../utils/test-helpers.js'
+import { formatToolExecutionError } from '../tool-execution-error.js'
+import { createMockProject, mockUnjoinedWorkspaceProject } from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { userResolver } from '../utils/user-resolver.js'
 import { findProjectCollaborators } from './find-project-collaborators.js'
@@ -39,6 +40,8 @@ describe(`${FIND_PROJECT_COLLABORATORS} tool`, () => {
         mockTodoistApi = {
             getProject: vi.fn(),
             getUser: vi.fn().mockRejectedValue(new Error('getUser not stubbed in test')),
+            getWorkspaces: vi.fn(),
+            getWorkspaceActiveProjects: vi.fn(),
         } as unknown as Mocked<TodoistApi>
     })
 
@@ -126,6 +129,16 @@ describe(`${FIND_PROJECT_COLLABORATORS} tool`, () => {
             await expect(
                 findProjectCollaborators.execute({ projectId: 'missing' }, mockTodoistApi),
             ).rejects.toThrow('Failed to access project "missing"')
+        })
+
+        it('should explain a 404 for a workspace project the user has not joined', async () => {
+            const expected = mockUnjoinedWorkspaceProject(mockTodoistApi)
+
+            const error = await findProjectCollaborators
+                .execute({ projectId: 'unjoined-project-id' }, mockTodoistApi)
+                .catch((caught: unknown) => caught)
+
+            expect(formatToolExecutionError(error)).toBe(expected)
         })
     })
 

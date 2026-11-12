@@ -1,7 +1,7 @@
 import type { Project, TodoistApi } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
-import { isPersonalProject, mapProject } from '../tool-helpers.js'
+import { getProjectOrExplain, isPersonalProject, mapProject } from '../tool-helpers.js'
 import { ProjectSchema } from '../utils/output-schemas.js'
 import {
     assertPersonalProjectCapacity,
@@ -58,7 +58,7 @@ async function performAction(
             return client.archiveProject(projectId)
         case 'unarchive': {
             // Unarchiving a personal project makes it count towards the plan limit again.
-            const archived = await client.getProject(projectId)
+            const archived = await getProjectOrExplain(client, projectId)
             if (isPersonalProject(archived) && archived.isArchived) {
                 assertPersonalProjectCapacity(
                     await loadPersonalProjectCapacity(client, ToolNames.PROJECT_MANAGEMENT),

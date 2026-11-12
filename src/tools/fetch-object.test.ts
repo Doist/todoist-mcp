@@ -212,7 +212,7 @@ describe(`${FETCH_OBJECT} tool`, () => {
 
             it('should say it was not found when no workspace project the user can join has that ID', async () => {
                 await expect(fetchErrorText('missing-id')).resolves.toBe(
-                    "Project missing-id was not found. It isn't one of the user's projects or a workspace project they can join: the ID may be wrong, the project may have been deleted, or it may be restricted to people who were invited.",
+                    "Project missing-id was not found. It isn't one of the user's projects or a workspace project they can join: the ID may be wrong, the project may have been archived or deleted, or it may be restricted to people who were invited.",
                 )
             })
 

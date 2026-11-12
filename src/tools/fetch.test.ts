@@ -1,6 +1,12 @@
 import type { TodoistApi } from '@todoist/sdk'
 import { type Mocked, vi } from 'vitest'
-import { createMockProject, createMockTask, TEST_IDS } from '../utils/test-helpers.js'
+import { formatToolExecutionError } from '../tool-execution-error.js'
+import {
+    createMockProject,
+    createMockTask,
+    mockUnjoinedWorkspaceProject,
+    TEST_IDS,
+} from '../utils/test-helpers.js'
 import { ToolNames } from '../utils/tool-names.js'
 import { fetch } from './fetch.js'
 
@@ -8,6 +14,8 @@ import { fetch } from './fetch.js'
 const mockTodoistApi = {
     getTask: vi.fn(),
     getProject: vi.fn(),
+    getWorkspaces: vi.fn(),
+    getWorkspaceActiveProjects: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { FETCH } = ToolNames
@@ -302,6 +310,16 @@ describe(`${FETCH} tool`, () => {
             await expect(
                 fetch.execute({ id: `task:${TEST_IDS.TASK_1}` }, mockTodoistApi),
             ).rejects.toThrow('Task not found')
+        })
+
+        it('should explain a 404 for a workspace project the user has not joined', async () => {
+            const expected = mockUnjoinedWorkspaceProject(mockTodoistApi)
+
+            const error = await fetch
+                .execute({ id: 'project:unjoined-project-id' }, mockTodoistApi)
+                .catch((caught: unknown) => caught)
+
+            expect(formatToolExecutionError(error)).toBe(expected)
         })
 
         // Regression guard for todoist/Issues#20642: the API answers 200 for a
