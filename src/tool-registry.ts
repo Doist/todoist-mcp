@@ -30,7 +30,7 @@ import { getProjectActivityStats } from './tools/get-project-activity-stats.js'
 import { getProjectHealth } from './tools/get-project-health.js'
 import { getUserStatus } from './tools/get-user-status.js'
 import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
-import { importProjectTemplate } from './tools/import-project-template.js'
+import { importIntoProject } from './tools/import-into-project.js'
 import { listWorkspaces } from './tools/list-workspaces.js'
 import { manageAssignments } from './tools/manage-assignments.js'
 import { projectManagement } from './tools/project-management.js'
@@ -147,7 +147,7 @@ const toolRegistry = {
 
     // Template tools
     exportProjectAsCSV,
-    importProjectTemplate,
+    importIntoProject,
 
     // Workspace tools
     listWorkspaces,

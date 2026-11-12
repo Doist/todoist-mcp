@@ -12,7 +12,7 @@ const ArgsSchema = {
         .enum(TEMPLATE_FORMATS)
         .default('file')
         .describe(
-            'How to return the CSV. "file" returns the CSV content, which can be passed straight back to import-project-template. "url" uploads it and returns a download link instead, which does not return the whole file for large projects. The link is public, permanent and cannot be revoked: anyone holding it can open it, so only use it when the user asks for a link.',
+            'How to return the CSV. "file" returns the CSV content, which can be passed straight back to import-into-project. "url" uploads it and returns a download link instead, which does not return the whole file for large projects. The link is public, permanent and cannot be revoked: anyone holding it can open it, so only use it when the user asks for a link.',
         ),
     useRelativeDates: z
         .boolean()
@@ -45,7 +45,7 @@ const OutputSchema = {
 const exportProjectAsCSV = {
     name: ToolNames.EXPORT_PROJECT_AS_CSV,
     description:
-        'Export a project as CSV, like the app\'s "Export as CSV": as CSV content, or as a download link. Use it to duplicate a project, share its structure, or hand the CSV to import-project-template. To read a project rather than export it, use find-tasks instead — it returns structured tasks rather than raw CSV. The project itself is not modified, but the "url" format uploads a copy and returns a public, permanent link that anyone holding it can open.',
+        'Export a project as CSV, like the app\'s "Export as CSV": as CSV content, or as a download link. Use it to duplicate a project, share its structure, or hand the CSV to import-into-project. To read a project rather than export it, use find-tasks instead — it returns structured tasks rather than raw CSV. The project itself is not modified, but the "url" format uploads a copy and returns a public, permanent link that anyone holding it can open.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     // Not read-only and open world: the "url" format uploads the CSV and returns a public link.
