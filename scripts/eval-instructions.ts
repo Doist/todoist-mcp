@@ -346,6 +346,17 @@ const SCENARIOS: Scenario[] = [
         },
         guards: 'create-template from scratch: no project, and the draft comes first',
     },
+    {
+        // Without find-templates the model had to ask for an ID or guess a slug.
+        id: 'find-template-by-name',
+        prompt: 'Start a new project from my "Team onboarding" template.',
+        expect: [ToolNames.FIND_TEMPLATES],
+        check: (input) =>
+            typeof input.query === 'string' && /onboarding/i.test(input.query)
+                ? null
+                : `query is ${JSON.stringify(input.query)}, not a search for the template's name`,
+        guards: 'find-templates: looking up a template the user named without an ID',
+    },
 ]
 
 const DEFAULT_MODELS = ['claude-haiku-4-5', 'claude-sonnet-5']
