@@ -92,9 +92,7 @@ const findProjects = {
         let results: Project[]
         let nextCursor: string | null = null
 
-        if (searchText || archivedStatus === 'all') {
-            // Fetch-all path: cannot cursor-paginate across two sources or while
-            // filtering archived projects client-side, so all results are returned.
+        if (returnsAllMatches(args)) {
             const empty = Promise.resolve<Project[]>([])
             const [active, archived] = await Promise.all([
                 archivedStatus === 'archived'
@@ -146,20 +144,27 @@ const findProjects = {
 
 type FindProjectsArgs = z.infer<z.ZodObject<typeof ArgsSchema>>
 
+/**
+ * Searches and `archivedStatus: 'all'` return every match at once, ignoring
+ * `limit` and `cursor`: they can't cursor-paginate across two sources, or while
+ * filtering archived projects client-side.
+ */
+function returnsAllMatches({ searchText, archivedStatus }: FindProjectsArgs): boolean {
+    return Boolean(searchText) || archivedStatus === 'all'
+}
+
 /** The unjoined workspace projects to show, capped at `limit`, out of `total` matches. */
 type UnjoinedMatches = { listed: WorkspaceProjectSummary[]; total: number }
 
 /**
  * Unjoined workspace projects are listed alongside the first page only, and
- * never for archived projects, which can't be joined from here. Searches and
- * `archivedStatus: 'all'` return every match at once and ignore the cursor.
+ * never for archived projects, which can't be joined from here.
  */
-function canListUnjoined({ cursor, searchText, archivedStatus }: FindProjectsArgs): boolean {
-    if (archivedStatus === 'archived') {
+function canListUnjoined(args: FindProjectsArgs): boolean {
+    if (args.archivedStatus === 'archived') {
         return false
     }
-    const paginated = !searchText && archivedStatus !== 'all'
-    return !(paginated && cursor)
+    return returnsAllMatches(args) || !args.cursor
 }
 
 /**
@@ -266,7 +271,7 @@ function generateTextContent({
     const summary = summarizeList({
         subject,
         count: projects.length,
-        limit: args.searchText || args.archivedStatus === 'all' ? undefined : args.limit,
+        limit: returnsAllMatches(args) ? undefined : args.limit,
         nextCursor: nextCursor ?? undefined,
         filterHints,
         previewLines: previewWithMore,

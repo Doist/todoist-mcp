@@ -563,6 +563,18 @@ describe(`${FIND_PROJECTS} tool`, () => {
             role: 'READ_WRITE',
         })
 
+        /** One workspace with `count` unjoined projects, named "Team 0" onwards. */
+        function mockUnjoinedProjects(count: number) {
+            mockTodoistApi.getWorkspaces.mockResolvedValue([createMockWorkspace()])
+            mockTodoistApi.getWorkspaceActiveProjects.mockResolvedValue({
+                results: Array.from({ length: count }, (_, i) =>
+                    createMockWorkspaceProjectSummary({ id: `unjoined-${i}`, name: `Team ${i}` }),
+                ),
+                nextCursor: null,
+                hasMore: false,
+            })
+        }
+
         function mockWorkspaceProjects() {
             mockTodoistApi.getWorkspaces.mockResolvedValue([
                 createMockWorkspace({ id: 'ws-acme', name: 'Acme' }),
@@ -623,15 +635,7 @@ describe(`${FIND_PROJECTS} tool`, () => {
 
         it('should preview at most 10 unjoined workspace projects in the text', async () => {
             mockTodoistApi.getProjects.mockResolvedValue(createMockApiResponse([]))
-            const unjoined = Array.from({ length: 12 }, (_, i) =>
-                createMockWorkspaceProjectSummary({ id: `unjoined-${i}`, name: `Team ${i}` }),
-            )
-            mockTodoistApi.getWorkspaces.mockResolvedValue([createMockWorkspace()])
-            mockTodoistApi.getWorkspaceActiveProjects.mockResolvedValue({
-                results: unjoined,
-                nextCursor: null,
-                hasMore: false,
-            })
+            mockUnjoinedProjects(12)
 
             const result = await findProjects.execute(
                 { limit: 50, includeUnjoined: true },
@@ -647,15 +651,7 @@ describe(`${FIND_PROJECTS} tool`, () => {
 
         it('should return at most limit unjoined workspace projects', async () => {
             mockTodoistApi.getProjects.mockResolvedValue(createMockApiResponse([]))
-            const unjoined = Array.from({ length: 12 }, (_, i) =>
-                createMockWorkspaceProjectSummary({ id: `unjoined-${i}`, name: `Team ${i}` }),
-            )
-            mockTodoistApi.getWorkspaces.mockResolvedValue([createMockWorkspace()])
-            mockTodoistApi.getWorkspaceActiveProjects.mockResolvedValue({
-                results: unjoined,
-                nextCursor: null,
-                hasMore: false,
-            })
+            mockUnjoinedProjects(12)
 
             const result = await findProjects.execute(
                 { limit: 5, includeUnjoined: true },
@@ -787,6 +783,22 @@ describe(`${FIND_PROJECTS} tool`, () => {
                 'sales-pipeline-id',
             ])
             expect(result.textContent).not.toContain('Set includeUnjoined')
+        })
+
+        it("should list unjoined workspace projects for archivedStatus 'all' passed a cursor, which it ignores", async () => {
+            mockTodoistApi.getProjects.mockResolvedValue(createMockApiResponse([]))
+            mockTodoistApi.getArchivedProjects.mockResolvedValue(createMockApiResponse([]))
+            mockWorkspaceProjects()
+
+            const result = await findProjects.execute(
+                { limit: 50, archivedStatus: 'all', includeUnjoined: true, cursor: 'page-2' },
+                mockTodoistApi,
+            )
+
+            expect(result.structuredContent.unjoinedProjects?.map((p) => p.id)).toEqual([
+                'sales-pipeline-id',
+                'roadmap-id',
+            ])
         })
 
         it('should not list unjoined workspace projects for archived projects', async () => {
