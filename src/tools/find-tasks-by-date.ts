@@ -28,7 +28,7 @@ export const ArgsSchema = {
         .regex(/^(\d{4}-\d{2}-\d{2}|today)$/)
         .optional()
         .describe(
-            "The start date to get the tasks for. Format: YYYY-MM-DD, or 'today', which by default also includes overdue tasks.",
+            "The start date to get the tasks for. Format: YYYY-MM-DD, or 'today', which by default also includes overdue tasks. Defaults to 'today' when omitted, except with overdueOption='overdue-only'.",
         ),
     overdueOption: z
         .enum(['overdue-only', 'include-overdue', 'exclude-overdue'])
@@ -88,14 +88,12 @@ const findTasksByDate = {
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
-    async execute(args, client) {
+    async execute(input, client) {
+        const args =
+            input.startDate !== undefined || input.overdueOption === 'overdue-only'
+                ? input
+                : { ...input, startDate: 'today' }
         const normalizedCursor = normalizePaginationCursor(args.cursor)
-
-        if (!args.startDate && args.overdueOption !== 'overdue-only') {
-            throw new Error(
-                'Either startDate must be provided or overdueOption must be set to overdue-only',
-            )
-        }
 
         // Resolve assignee name to user ID if provided
         const resolved = await resolveResponsibleUser(client, args.responsibleUser)
