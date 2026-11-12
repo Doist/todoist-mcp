@@ -99,6 +99,10 @@ const collaboratorsCache = new BoundedTtlCache<ProjectCollaborator[]>(
     CACHE_TTL,
 )
 
+// All-collaborator fetches still running, by cache key, so concurrent lookups
+// share one. Entries are removed as soon as their fetch settles.
+const inFlightAllCollaborators = new Map<string, Promise<ProjectCollaborator[]>>()
+
 /** Keyword that resolves to the current authenticated user. */
 export const SELF_USER_KEYWORD = 'me' as const
 
@@ -131,17 +135,19 @@ export class UserResolver {
             }
         }
 
-        // If it looks like a user ID already, return as-is
-        // Support numeric IDs and alphanumeric IDs but avoid obvious user names
-        if (
+        // Numeric and alphanumeric IDs, but not obvious user names. A user ID is
+        // still looked up, because callers need the user's real email: Todoist
+        // filters such as `assigned to:` match an email or name, never an ID. An
+        // ID that matches nobody is returned as given, not tried as a name.
+        const looksLikeUserId =
             /^[0-9]+$/.test(trimmedInput) ||
             (/^[a-f0-9-]{8,}$/i.test(trimmedInput) && trimmedInput.includes('-')) ||
             (/^[a-z0-9_]{6,}$/i.test(trimmedInput) &&
                 !/^[a-z]+[\s-]/.test(trimmedInput) &&
                 /[0-9_]/.test(trimmedInput))
-        ) {
-            return { userId: trimmedInput, displayName: trimmedInput, email: trimmedInput }
-        }
+        const unmatched: ResolvedUser | null = looksLikeUserId
+            ? { userId: trimmedInput, displayName: trimmedInput, email: trimmedInput }
+            : null
 
         const cacheScope = await this.getCacheScope(client)
         const cacheKey = this.getCacheKey(cacheScope, `user_${trimmedInput}`)
@@ -179,7 +185,7 @@ export class UserResolver {
             }
 
             if (allCollaborators.length === 0) {
-                return cacheResult(null)
+                return cacheResult(unmatched)
             }
 
             const searchTerm = nameOrId.toLowerCase().trim()
@@ -192,6 +198,9 @@ export class UserResolver {
                     displayName: match.name,
                     email: match.email,
                 })
+            }
+            if (looksLikeUserId) {
+                return cacheResult(unmatched)
             }
 
             // Try exact name match
@@ -237,8 +246,9 @@ export class UserResolver {
             // No match found
             return cacheResult(null)
         } catch (_error) {
-            // If we can't fetch collaborators, return null instead of dangerous fallback
-            return cacheResult(null)
+            // If we can't fetch collaborators, a name resolves to nothing rather
+            // than a guess, and an ID is returned as given
+            return cacheResult(unmatched)
         }
     }
 
@@ -305,7 +315,30 @@ export class UserResolver {
         const cacheKey = this.getCacheKey(resolvedCacheScope, 'all_collaborators')
         const cached = cacheKey ? collaboratorsCache.get(cacheKey) : undefined
         if (cached !== undefined) return cached
+        if (!cacheKey) return this.fetchAllCollaborators(client, resolvedCacheScope, cacheKey)
 
+        // A batch resolves its users in parallel, before the first fetch has
+        // filled the cache. Sharing the fetch in flight sends the project and
+        // collaborator requests once for the whole batch, not once per user.
+        const pending = inFlightAllCollaborators.get(cacheKey)
+        if (pending) return pending
+
+        const request = this.fetchAllCollaborators(client, resolvedCacheScope, cacheKey).finally(
+            () => {
+                if (inFlightAllCollaborators.get(cacheKey) === request) {
+                    inFlightAllCollaborators.delete(cacheKey)
+                }
+            },
+        )
+        inFlightAllCollaborators.set(cacheKey, request)
+        return request
+    }
+
+    private async fetchAllCollaborators(
+        client: TodoistApi,
+        resolvedCacheScope: string | null,
+        cacheKey: string | null,
+    ): Promise<ProjectCollaborator[]> {
         try {
             // Get all projects to find shared ones (paginated — accounts with
             // more than one page of projects would otherwise miss collaborators
@@ -409,6 +442,7 @@ export class UserResolver {
     clearCache(): void {
         userResolutionCache.clear()
         collaboratorsCache.clear()
+        inFlightAllCollaborators.clear()
     }
 }
 
