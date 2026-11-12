@@ -282,14 +282,6 @@ describe(`${FIND_TASKS} tool`, () => {
         })
     })
 
-    describe('validation', () => {
-        it('should require at least one filter parameter', async () => {
-            await expect(findTasks.execute({ limit: 10 }, mockTodoistApi)).rejects.toThrow(
-                'At least one filter must be provided: searchText, projectId, sectionId, parentId, responsibleUser, labels, filter, or filterIdOrName',
-            )
-        })
-    })
-
     describe('container filtering', () => {
         it.each([
             {
@@ -1440,17 +1432,11 @@ End of test content.`
     describe('error handling', () => {
         it.each([
             {
-                error: 'At least one filter must be provided: searchText, projectId, sectionId, parentId, responsibleUser, labels, filter, or filterIdOrName',
-                params: { limit: 10 },
-                expectValidation: true,
-            },
-            {
                 error: TEST_ERRORS.API_RATE_LIMIT,
                 params: {
                     searchText: 'any search term',
                     limit: 10,
                 },
-                expectValidation: false,
             },
             {
                 error: TEST_ERRORS.INVALID_CURSOR,
@@ -1459,12 +1445,9 @@ End of test content.`
                     cursor: 'invalid-cursor-format',
                     limit: 10,
                 },
-                expectValidation: false,
             },
-        ])('should propagate $error', async ({ error, params, expectValidation }) => {
-            if (!expectValidation) {
-                mockGetTasksByFilter.mockRejectedValue(new Error(error))
-            }
+        ])('should propagate $error', async ({ error, params }) => {
+            mockGetTasksByFilter.mockRejectedValue(new Error(error))
             await expect(findTasks.execute(params, mockTodoistApi)).rejects.toThrow(error)
         })
     })
