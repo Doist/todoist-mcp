@@ -1,4 +1,4 @@
-import type { Project, WorkspaceProjectSummary } from '@todoist/sdk'
+import type { Project, TodoistApi, WorkspaceProjectSummary } from '@todoist/sdk'
 import { z } from 'zod'
 import type { TodoistTool } from '../todoist-tool.js'
 import {
@@ -52,7 +52,7 @@ const ArgsSchema = {
         .boolean()
         .optional()
         .describe(
-            `Also list workspace projects the user can join but hasn't, in unjoinedProjects. They can't be read until joined; join with ${PROJECT_MANAGEMENT} (action 'join') only when the user asks.`,
+            `Also list workspace projects the user can join but hasn't, in unjoinedProjects (first page only). They can't be read until joined; join with ${PROJECT_MANAGEMENT} (action 'join') only when the user asks.`,
         ),
 }
 
@@ -123,7 +123,7 @@ const findProjects = {
         }
 
         const projects = results.map(mapProject)
-        const unjoinedProjects = await findUnjoinedProjects(args, projects.length)
+        const unjoinedProjects = await findUnjoinedProjects(client, args, projects.length)
 
         return {
             textContent: generateTextContent({ projects, args, nextCursor, unjoinedProjects }),
@@ -136,37 +136,40 @@ const findProjects = {
                 unjoinedProjects: unjoinedProjects?.map(toUnjoinedProject),
             },
         }
-
-        /**
-         * Lists unjoined workspace projects when asked to, or when a search found
-         * nothing among the user's own projects, since the project they are after
-         * may be one they haven't joined. Only on the first page, and never for
-         * archived projects, which can't be joined from here.
-         */
-        async function findUnjoinedProjects(
-            { includeUnjoined, cursor }: typeof args,
-            joinedMatches: number,
-        ): Promise<WorkspaceProjectSummary[] | undefined> {
-            const emptySearch = Boolean(searchText) && joinedMatches === 0
-            if (cursor || archivedStatus === 'archived' || !(includeUnjoined || emptySearch)) {
-                return undefined
-            }
-
-            let unjoined: WorkspaceProjectSummary[]
-            try {
-                unjoined = await fetchUnjoinedWorkspaceProjects(client)
-            } catch (error) {
-                // Asked for explicitly, a failure must not pass for "there are none".
-                // As a fallback for an empty search, the search result still stands.
-                if (includeUnjoined) throw error
-                return undefined
-            }
-
-            const wildcard = searchText ? compileWildcardQuery(searchText) : null
-            return wildcard ? unjoined.filter((project) => wildcard.test(project.name)) : unjoined
-        }
     },
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
+
+type FindProjectsArgs = z.infer<z.ZodObject<typeof ArgsSchema>>
+
+/**
+ * Lists unjoined workspace projects when asked to, or when a search found
+ * nothing among the user's own projects, since the project they are after may
+ * be one they haven't joined. Only on the first page, and never for archived
+ * projects, which can't be joined from here.
+ */
+async function findUnjoinedProjects(
+    client: TodoistApi,
+    { includeUnjoined, cursor, searchText, archivedStatus }: FindProjectsArgs,
+    joinedMatches: number,
+): Promise<WorkspaceProjectSummary[] | undefined> {
+    const emptySearch = Boolean(searchText) && joinedMatches === 0
+    if (cursor || archivedStatus === 'archived' || !(includeUnjoined || emptySearch)) {
+        return undefined
+    }
+
+    let unjoined: WorkspaceProjectSummary[]
+    try {
+        unjoined = await fetchUnjoinedWorkspaceProjects(client)
+    } catch (error) {
+        // Asked for explicitly, a failure must not pass for "there are none".
+        // As a fallback for an empty search, the search result still stands.
+        if (includeUnjoined) throw error
+        return undefined
+    }
+
+    const wildcard = searchText ? compileWildcardQuery(searchText) : null
+    return wildcard ? unjoined.filter((project) => wildcard.test(project.name)) : unjoined
+}
 
 function toUnjoinedProject({ id, name, workspaceId, url }: WorkspaceProjectSummary) {
     return { id, name, workspaceId, url }
@@ -179,7 +182,7 @@ function generateTextContent({
     unjoinedProjects,
 }: {
     projects: ReturnType<typeof mapProject>[]
-    args: z.infer<z.ZodObject<typeof ArgsSchema>>
+    args: FindProjectsArgs
     nextCursor: string | null
     unjoinedProjects: WorkspaceProjectSummary[] | undefined
 }) {
