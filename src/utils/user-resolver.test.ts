@@ -374,6 +374,44 @@ describe('UserResolver', () => {
             })
         })
 
+        it('returns a user ID as given when collaborators cannot be fetched', async () => {
+            mockClient.getProjects.mockRejectedValue(new Error('Service unavailable'))
+
+            await expect(resolver.resolveUser(mockClient, '67890')).resolves.toEqual({
+                userId: '67890',
+                displayName: '67890',
+                email: '67890',
+            })
+        })
+
+        it('shares one collaborator fetch between concurrent lookups', async () => {
+            mockClient.getProjects.mockResolvedValue({
+                results: [{ id: 'project-1', isShared: true }],
+                nextCursor: null,
+            } as unknown as Awaited<ReturnType<TodoistApi['getProjects']>>)
+            mockClient.getProjectCollaborators = vi.fn().mockResolvedValue({
+                results: [
+                    { id: '67890', name: 'Ada', email: 'ada@example.com' },
+                    { id: 'Hk8vX2mQpL4rT9wZ', name: 'Bo', email: 'bo@example.com' },
+                ],
+                nextCursor: null,
+            }) as unknown as typeof mockClient.getProjectCollaborators
+
+            const resolved = await Promise.all([
+                resolver.resolveUser(mockClient, '67890'),
+                resolver.resolveUser(mockClient, '67890'),
+                resolver.resolveUser(mockClient, 'Hk8vX2mQpL4rT9wZ'),
+            ])
+
+            expect(resolved.map((user) => user?.email)).toEqual([
+                'ada@example.com',
+                'ada@example.com',
+                'bo@example.com',
+            ])
+            expect(mockClient.getProjects).toHaveBeenCalledTimes(1)
+            expect(mockClient.getProjectCollaborators).toHaveBeenCalledTimes(1)
+        })
+
         it('does not partially match a user ID against names or emails', async () => {
             mockClient.getProjects.mockResolvedValue({
                 results: [{ id: 'project-1', isShared: true }],

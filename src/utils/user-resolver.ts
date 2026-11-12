@@ -99,6 +99,10 @@ const collaboratorsCache = new BoundedTtlCache<ProjectCollaborator[]>(
     CACHE_TTL,
 )
 
+// All-collaborator fetches still running, by cache key, so concurrent lookups
+// share one. Entries are removed as soon as their fetch settles.
+const inFlightAllCollaborators = new Map<string, Promise<ProjectCollaborator[]>>()
+
 /** Keyword that resolves to the current authenticated user. */
 export const SELF_USER_KEYWORD = 'me' as const
 
@@ -311,7 +315,30 @@ export class UserResolver {
         const cacheKey = this.getCacheKey(resolvedCacheScope, 'all_collaborators')
         const cached = cacheKey ? collaboratorsCache.get(cacheKey) : undefined
         if (cached !== undefined) return cached
+        if (!cacheKey) return this.fetchAllCollaborators(client, resolvedCacheScope, cacheKey)
 
+        // A batch resolves its users in parallel, before the first fetch has
+        // filled the cache. Sharing the fetch in flight sends the project and
+        // collaborator requests once for the whole batch, not once per user.
+        const pending = inFlightAllCollaborators.get(cacheKey)
+        if (pending) return pending
+
+        const request = this.fetchAllCollaborators(client, resolvedCacheScope, cacheKey).finally(
+            () => {
+                if (inFlightAllCollaborators.get(cacheKey) === request) {
+                    inFlightAllCollaborators.delete(cacheKey)
+                }
+            },
+        )
+        inFlightAllCollaborators.set(cacheKey, request)
+        return request
+    }
+
+    private async fetchAllCollaborators(
+        client: TodoistApi,
+        resolvedCacheScope: string | null,
+        cacheKey: string | null,
+    ): Promise<ProjectCollaborator[]> {
         try {
             // Get all projects to find shared ones (paginated — accounts with
             // more than one page of projects would otherwise miss collaborators
@@ -415,6 +442,7 @@ export class UserResolver {
     clearCache(): void {
         userResolutionCache.clear()
         collaboratorsCache.clear()
+        inFlightAllCollaborators.clear()
     }
 }
 
