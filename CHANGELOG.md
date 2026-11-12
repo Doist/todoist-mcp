@@ -1,3 +1,9 @@
+## [15.0.2](https://github.com/todoist/todoist-mcp/compare/v15.0.1...v15.0.2) (2026-11-12)
+
+### Bug Fixes
+
+* look up a user ID before filtering by its assignee ([#703](https://github.com/todoist/todoist-mcp/issues/703)) ([db3a591](https://github.com/todoist/todoist-mcp/commit/db3a59107b231e947b49a027fc38c26f927ac0a3))
+
 ## [15.0.1](https://github.com/todoist/todoist-mcp/compare/v15.0.0...v15.0.1) (2026-11-11)
 
 ### Bug Fixes
