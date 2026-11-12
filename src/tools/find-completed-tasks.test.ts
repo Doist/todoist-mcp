@@ -795,6 +795,52 @@ describe(`${FIND_COMPLETED_TASKS} tool`, () => {
             },
         )
 
+        it.each([
+            { name: 'the current user', responsibleUser: '1234567', email: 'brenna@example.com' },
+            {
+                name: 'a collaborator',
+                responsibleUser: 'Hk8vX2mQpL4rT9wZ',
+                email: 'ada@example.com',
+            },
+        ])(
+            'should filter by the email of $name when responsibleUser is their user ID',
+            async ({ responsibleUser, email }) => {
+                mockTodoistApi.getUser.mockResolvedValue({ ...brennaUser, id: '1234567' })
+                mockTodoistApi.getProjects.mockResolvedValue({
+                    results: [{ id: 'shared-project', isShared: true }],
+                    nextCursor: null,
+                } as unknown as Awaited<ReturnType<TodoistApi['getProjects']>>)
+                mockTodoistApi.getProjectCollaborators.mockResolvedValue({
+                    results: [{ id: 'Hk8vX2mQpL4rT9wZ', name: 'Ada', email: 'ada@example.com' }],
+                    nextCursor: null,
+                } as unknown as Awaited<ReturnType<TodoistApi['getProjectCollaborators']>>)
+                mockTodoistApi.getCompletedTasksByCompletionDate.mockResolvedValue({
+                    items: [],
+                    nextCursor: null,
+                })
+
+                await findCompletedTasks.execute(
+                    {
+                        getBy: 'completion',
+                        since: '2025-08-15',
+                        until: '2025-08-15',
+                        responsibleUser,
+                        labels: [],
+                        labelsOperator: 'or' as const,
+                        limit: 50,
+                    },
+                    mockTodoistApi,
+                )
+
+                expect(mockTodoistApi.getCompletedTasksByCompletionDate).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        filterQuery: `assigned to: ${email}`,
+                        filterLang: 'en',
+                    }),
+                )
+            },
+        )
+
         it('should throw error when responsibleUser does not match current user and no collaborators exist', async () => {
             await expect(
                 findCompletedTasks.execute(

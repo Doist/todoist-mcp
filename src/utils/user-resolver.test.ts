@@ -324,6 +324,71 @@ describe('UserResolver', () => {
             })
         })
 
+        it.each([
+            {
+                name: 'the current user',
+                userId: '12345',
+                displayName: 'Test User',
+                email: 'test@example.com',
+            },
+            {
+                name: 'a collaborator',
+                userId: '67890',
+                displayName: 'Ada',
+                email: 'ada@example.com',
+            },
+            {
+                name: 'a collaborator with a v1 ID',
+                userId: 'Hk8vX2mQpL4rT9wZ',
+                displayName: 'Bo',
+                email: 'bo@example.com',
+            },
+        ])(
+            'resolves the user ID of $name to their name and email',
+            async ({ userId, displayName, email }) => {
+                mockClient.getProjects.mockResolvedValue({
+                    results: [{ id: 'project-1', isShared: true }],
+                    nextCursor: null,
+                } as unknown as Awaited<ReturnType<TodoistApi['getProjects']>>)
+                mockClient.getProjectCollaborators = vi.fn().mockResolvedValue({
+                    results: [
+                        { id: '67890', name: 'Ada', email: 'ada@example.com' },
+                        { id: 'Hk8vX2mQpL4rT9wZ', name: 'Bo', email: 'bo@example.com' },
+                    ],
+                    nextCursor: null,
+                }) as unknown as typeof mockClient.getProjectCollaborators
+
+                await expect(resolver.resolveUser(mockClient, userId)).resolves.toEqual({
+                    userId,
+                    displayName,
+                    email,
+                })
+            },
+        )
+
+        it('returns a user ID nobody in the account has as given', async () => {
+            await expect(resolver.resolveUser(mockClient, '424242')).resolves.toEqual({
+                userId: '424242',
+                displayName: '424242',
+                email: '424242',
+            })
+        })
+
+        it('does not partially match a user ID against names or emails', async () => {
+            mockClient.getProjects.mockResolvedValue({
+                results: [{ id: 'project-1', isShared: true }],
+                nextCursor: null,
+            } as unknown as Awaited<ReturnType<TodoistApi['getProjects']>>)
+            mockClient.getProjectCollaborators = vi.fn().mockResolvedValue({
+                results: [{ id: '67890', name: 'Ada', email: 'ada424242@example.com' }],
+                nextCursor: null,
+            }) as unknown as typeof mockClient.getProjectCollaborators
+
+            await expect(resolver.resolveUser(mockClient, '424242')).resolves.toMatchObject({
+                userId: '424242',
+            })
+        })
+
         it('resolves users without caching when the authenticated identity is unavailable', async () => {
             mockClient.getUser.mockRejectedValue(new Error('Auth unavailable'))
             mockClient.getProjects = vi.fn().mockResolvedValue({

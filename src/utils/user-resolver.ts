@@ -131,17 +131,19 @@ export class UserResolver {
             }
         }
 
-        // If it looks like a user ID already, return as-is
-        // Support numeric IDs and alphanumeric IDs but avoid obvious user names
-        if (
+        // Numeric and alphanumeric IDs, but not obvious user names. A user ID is
+        // still looked up, because callers need the user's real email: Todoist
+        // filters such as `assigned to:` match an email or name, never an ID. An
+        // ID that matches nobody is returned as given, not tried as a name.
+        const looksLikeUserId =
             /^[0-9]+$/.test(trimmedInput) ||
             (/^[a-f0-9-]{8,}$/i.test(trimmedInput) && trimmedInput.includes('-')) ||
             (/^[a-z0-9_]{6,}$/i.test(trimmedInput) &&
                 !/^[a-z]+[\s-]/.test(trimmedInput) &&
                 /[0-9_]/.test(trimmedInput))
-        ) {
-            return { userId: trimmedInput, displayName: trimmedInput, email: trimmedInput }
-        }
+        const unmatched: ResolvedUser | null = looksLikeUserId
+            ? { userId: trimmedInput, displayName: trimmedInput, email: trimmedInput }
+            : null
 
         const cacheScope = await this.getCacheScope(client)
         const cacheKey = this.getCacheKey(cacheScope, `user_${trimmedInput}`)
@@ -179,7 +181,7 @@ export class UserResolver {
             }
 
             if (allCollaborators.length === 0) {
-                return cacheResult(null)
+                return cacheResult(unmatched)
             }
 
             const searchTerm = nameOrId.toLowerCase().trim()
@@ -192,6 +194,9 @@ export class UserResolver {
                     displayName: match.name,
                     email: match.email,
                 })
+            }
+            if (looksLikeUserId) {
+                return cacheResult(unmatched)
             }
 
             // Try exact name match
@@ -237,8 +242,9 @@ export class UserResolver {
             // No match found
             return cacheResult(null)
         } catch (_error) {
-            // If we can't fetch collaborators, return null instead of dangerous fallback
-            return cacheResult(null)
+            // If we can't fetch collaborators, a name resolves to nothing rather
+            // than a guess, and an ID is returned as given
+            return cacheResult(unmatched)
         }
     }
 
