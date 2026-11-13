@@ -80,6 +80,7 @@ export const ToolNames = {
     CREATE_PROJECT_FROM_TEMPLATE: 'create-project-from-template',
     CREATE_TEMPLATE: 'create-template',
     GET_TEMPLATE: 'get-template',
+    FIND_TEMPLATES: 'find-templates',
     UPDATE_TEMPLATE: 'update-template',
 
     // Workspace tools

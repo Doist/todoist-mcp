@@ -65,7 +65,7 @@ const ArgsSchema = {
         .string()
         .optional()
         .describe(
-            'The template to import — either a gallery slug ("product-launch"), a personal template ID ("UT_28Ex..."), or a full Todoist template URL, which is reduced to the ID automatically. Gallery templates work for anyone; personal templates only for the account that owns them. There is no way to list templates through this server, so only use the ID or URL the user supplied. Provide either this or `csvFileContent`, not both.',
+            'The template to import — either a gallery slug ("product-launch"), a personal template ID ("UT_28Ex..."), or a full Todoist template URL, which is reduced to the ID automatically. Gallery templates work for anyone; personal templates only for the account that owns them. Find one with find-templates. Provide either this or `csvFileContent`, not both.',
         ),
     csvFileContent: z
         .string()
@@ -99,7 +99,7 @@ const importProjectTemplate = {
     async execute({ projectId, templateId, csvFileContent, locale }, client) {
         if (Boolean(templateId) === Boolean(csvFileContent)) {
             throw new Error(
-                'Provide exactly one template source: either `templateId` or `csvFileContent`. Templates cannot be listed through this server — ask the user for an ID or template URL.',
+                'Provide exactly one template source: either `templateId` or `csvFileContent`. Find template IDs with find-templates.',
             )
         }
 
