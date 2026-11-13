@@ -9,6 +9,7 @@ import { addSections } from './tools/add-sections.js'
 import { addTasks } from './tools/add-tasks.js'
 import { analyzeProjectHealth } from './tools/analyze-project-health.js'
 import { completeTasks } from './tools/complete-tasks.js'
+import { createProjectFromTemplate } from './tools/create-project-from-template.js'
 import { deleteObject } from './tools/delete-object.js'
 import { exportProjectTemplate } from './tools/export-project-template.js'
 import { fetchObject } from './tools/fetch-object.js'
@@ -148,6 +149,7 @@ const toolRegistry = {
     // Template tools
     exportProjectTemplate,
     importProjectTemplate,
+    createProjectFromTemplate,
 
     // Workspace tools
     listWorkspaces,
