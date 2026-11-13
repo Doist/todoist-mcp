@@ -30,6 +30,7 @@ import { getOverview } from './tools/get-overview.js'
 import { getProductivityStats } from './tools/get-productivity-stats.js'
 import { getProjectActivityStats } from './tools/get-project-activity-stats.js'
 import { getProjectHealth } from './tools/get-project-health.js'
+import { getTemplate } from './tools/get-template.js'
 import { getUserStatus } from './tools/get-user-status.js'
 import { getWorkspaceInsights } from './tools/get-workspace-insights.js'
 import { importProjectTemplate } from './tools/import-project-template.js'
@@ -153,6 +154,7 @@ const toolRegistry = {
     importProjectTemplate,
     createProjectFromTemplate,
     createTemplate,
+    getTemplate,
     updateTemplate,
 
     // Workspace tools
