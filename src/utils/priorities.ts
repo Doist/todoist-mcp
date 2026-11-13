@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const PRIORITY_VALUES = ['p1', 'p2', 'p3', 'p4'] as const
+export const PRIORITY_VALUES = ['p1', 'p2', 'p3', 'p4'] as const
 export type Priority = (typeof PRIORITY_VALUES)[number]
 
 export const PRIORITY_INPUT_DESCRIPTION =
