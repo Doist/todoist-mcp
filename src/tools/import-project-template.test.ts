@@ -6,7 +6,7 @@ import { extractTemplateId, importProjectTemplate } from './import-project-templ
 
 const mockTodoistApi = {
     importTemplateFromId: vi.fn(),
-    importTemplateIntoProject: vi.fn(),
+    importCSVIntoProject: vi.fn(),
 } as unknown as Mocked<TodoistApi>
 
 const { IMPORT_PROJECT_TEMPLATE } = ToolNames
@@ -197,7 +197,7 @@ describe(`${IMPORT_PROJECT_TEMPLATE} tool`, () => {
 
     describe('importing by CSV content', () => {
         it('should import raw template content into the project', async () => {
-            mockTodoistApi.importTemplateIntoProject.mockResolvedValue(
+            mockTodoistApi.importCSVIntoProject.mockResolvedValue(
                 createImportResponse({
                     tasks: [createMockTask({ id: TEST_IDS.TASK_1, content: 'Buy milk' })],
                 }),
@@ -211,12 +211,12 @@ describe(`${IMPORT_PROJECT_TEMPLATE} tool`, () => {
                 mockTodoistApi,
             )
 
-            expect(mockTodoistApi.importTemplateIntoProject).toHaveBeenCalledWith({
+            expect(mockTodoistApi.importCSVIntoProject).toHaveBeenCalledWith({
                 projectId: TEST_IDS.PROJECT_TEST,
                 file: expect.any(Blob),
                 fileName: 'template.csv',
             })
-            const file = mockTodoistApi.importTemplateIntoProject.mock.calls[0]?.[0].file as Blob
+            const file = mockTodoistApi.importCSVIntoProject.mock.calls[0]?.[0].file as Blob
             expect(await file.text()).toBe('TYPE,CONTENT\ntask,Buy milk')
             expect(mockTodoistApi.importTemplateFromId).not.toHaveBeenCalled()
             expect(result.textContent).toContain('1 task')
@@ -240,7 +240,7 @@ describe(`${IMPORT_PROJECT_TEMPLATE} tool`, () => {
             ).rejects.toThrow('exactly one template source')
 
             expect(mockTodoistApi.importTemplateFromId).not.toHaveBeenCalled()
-            expect(mockTodoistApi.importTemplateIntoProject).not.toHaveBeenCalled()
+            expect(mockTodoistApi.importCSVIntoProject).not.toHaveBeenCalled()
         })
 
         it('should reject a call with neither templateId nor csvFileContent', async () => {

@@ -7,12 +7,12 @@ const PREVIEW_LINE_COUNT = 5
 const TEMPLATE_FORMATS = ['file', 'url'] as const
 
 const ArgsSchema = {
-    projectId: z.string().min(1).describe('The ID of the project to export as a template.'),
+    projectId: z.string().min(1).describe('The ID of the project to export as CSV.'),
     format: z
         .enum(TEMPLATE_FORMATS)
         .default('file')
         .describe(
-            'How to return the template. "file" returns the CSV content, which can be passed straight back to import-project-template. "url" returns a shareable download link instead, and is the better choice for large projects because it does not return the whole file.',
+            'How to return the CSV. "file" returns the CSV content, which can be passed straight back to import-project-template. "url" uploads it and returns a download link instead, which does not return the whole file for large projects. The link is public, permanent and cannot be revoked: anyone holding it can open it, so only use it when the user asks for a link.',
         ),
     useRelativeDates: z
         .boolean()
@@ -27,7 +27,7 @@ const OutputSchema = {
     content: z
         .string()
         .optional()
-        .describe('The template as CSV content. Only present when format is "file".'),
+        .describe('The project as CSV. Only present when format is "file".'),
     lineCount: z
         .number()
         .optional()
@@ -35,21 +35,22 @@ const OutputSchema = {
     fileName: z
         .string()
         .optional()
-        .describe('The generated template file name. Only present when format is "url".'),
+        .describe('The generated file name. Only present when format is "url".'),
     fileUrl: z
         .string()
         .optional()
         .describe('The shareable download URL. Only present when format is "url".'),
 }
 
-const exportProjectTemplate = {
-    name: ToolNames.EXPORT_PROJECT_TEMPLATE,
+const exportProjectAsCSV = {
+    name: ToolNames.EXPORT_PROJECT_AS_CSV,
     description:
-        'Export an existing project as a Todoist template, either as CSV content or as a shareable URL. Use it to duplicate a project, share its structure, or hand the CSV to import-project-template. To read a project rather than export it, use find-tasks instead — it returns structured tasks rather than raw CSV. The project itself is not modified, but the "url" format uploads a copy and returns a link that anyone holding it can open.',
+        'Export a project as CSV, like the app\'s "Export as CSV": as CSV content, or as a download link. Use it to duplicate a project, share its structure, or hand the CSV to import-project-template. To read a project rather than export it, use find-tasks instead — it returns structured tasks rather than raw CSV. The project itself is not modified, but the "url" format uploads a copy and returns a public, permanent link that anyone holding it can open.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     // Not read-only and open world: the "url" format uploads the CSV and returns a public link.
     annotations: {
+        title: 'Todoist: Export Project As CSV',
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,
@@ -65,12 +66,12 @@ const exportProjectTemplate = {
             })
 
             return {
-                textContent: `Exported project (id=${projectId}) as template URL: ${fileName}\n${fileUrl}`,
+                textContent: `Exported project (id=${projectId}) as a public CSV link: ${fileName}\n${fileUrl}\nAnyone holding the link can open it, and it cannot be revoked.`,
                 structuredContent: { format, fileName, fileUrl },
             }
         }
 
-        const content = await client.exportTemplateAsFile({ projectId, useRelativeDates })
+        const content = await client.exportProjectAsCSV({ projectId, useRelativeDates })
         const lines = content.split('\n').filter((line) => line.trim().length > 0)
 
         return {
@@ -83,7 +84,7 @@ const exportProjectTemplate = {
 } satisfies TodoistTool<typeof ArgsSchema, typeof OutputSchema>
 
 function generateTextContent({ projectId, lines }: { projectId: string; lines: string[] }) {
-    const summary = `Exported project (id=${projectId}) as a template file (${lines.length} row${lines.length === 1 ? '' : 's'}).`
+    const summary = `Exported project (id=${projectId}) as CSV (${lines.length} row${lines.length === 1 ? '' : 's'}).`
     const preview = lines.slice(0, PREVIEW_LINE_COUNT).join('\n')
     const remaining = lines.length - PREVIEW_LINE_COUNT
 
@@ -94,4 +95,4 @@ function generateTextContent({ projectId, lines }: { projectId: string; lines: s
     return `${summary}\n\n${preview}`
 }
 
-export { exportProjectTemplate }
+export { exportProjectAsCSV }
