@@ -1,7 +1,7 @@
 import { TodoistApi } from '@todoist/sdk'
-import { importProjectTemplate } from './import-project-template.js'
+import { importIntoProject } from './import-into-project.js'
 
-describe('CSV template import through the real SDK', () => {
+describe('CSV import through the real SDK', () => {
     it('sends CSV bytes as a multipart file rather than opening them as a path', async () => {
         const csv =
             '\uFEFFTYPE,CONTENT,DESCRIPTION,INDENT\r\ntask,"État, prêt","Ligne 1\nLigne 2",1\r\n'
@@ -37,7 +37,7 @@ describe('CSV template import through the real SDK', () => {
             },
         })
 
-        const result = await importProjectTemplate.execute(
+        const result = await importIntoProject.execute(
             { projectId: 'test-project', csvFileContent: csv },
             client,
         )

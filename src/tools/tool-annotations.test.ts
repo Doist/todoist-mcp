@@ -296,8 +296,8 @@ describeToolAnnotations({
             idempotentHint: true,
             openWorldHint: true,
         },
-        [ToolNames.IMPORT_PROJECT_TEMPLATE]: {
-            title: 'Todoist: Import Project Template',
+        [ToolNames.IMPORT_INTO_PROJECT]: {
+            title: 'Todoist: Import Into Project',
             readOnlyHint: false,
             destructiveHint: false,
             idempotentHint: false,
