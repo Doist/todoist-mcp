@@ -88,7 +88,7 @@ const OutputSchema = {
 const findTasks = {
     name: ToolNames.FIND_TASKS,
     description:
-        'Find tasks by text search, project/section/parent container, responsible user, labels, a raw Todoist filter string, or a saved filter by ID or name (filterIdOrName). At least one filter must be provided.',
+        'Find active tasks by text, project/section/parent, responsible user, labels, raw filter, or saved filter (filterIdOrName). Without filters, list a page. Default scope: unassigned + mine; responsibleUserFiltering="all" includes others.',
     parameters: ArgsSchema,
     outputSchema: OutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
@@ -111,22 +111,7 @@ const findTasks = {
 
         const todoistUser = await client.getUser()
 
-        // Validate at least one filter is provided
         const hasLabels = labels && labels.length > 0
-        if (
-            !searchText &&
-            !projectId &&
-            !sectionId &&
-            !parentId &&
-            !responsibleUser &&
-            !hasLabels &&
-            !filter &&
-            !filterIdOrName
-        ) {
-            throw new Error(
-                'At least one filter must be provided: searchText, projectId, sectionId, parentId, responsibleUser, labels, filter, or filterIdOrName',
-            )
-        }
 
         if (filter && filterIdOrName) {
             throw new Error(
@@ -287,7 +272,7 @@ const findTasks = {
         // Execute filter query
         const { tasks: filteredTasks, nextCursor } = await getTasksByFilter({
             client,
-            query,
+            query: query || 'all',
             cursor: normalizedCursor,
             limit: args.limit,
         })
