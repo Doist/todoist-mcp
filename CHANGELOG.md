@@ -1,3 +1,9 @@
+## [15.2.1](https://github.com/todoist/todoist-mcp/compare/v15.2.0...v15.2.1) (2026-11-13)
+
+### Bug Fixes
+
+* allow task searches with omitted optional inputs ([#715](https://github.com/todoist/todoist-mcp/issues/715)) ([4870588](https://github.com/todoist/todoist-mcp/commit/48705882590935324f0be8dab92c29d3101b188c))
+
 ## [15.2.0](https://github.com/todoist/todoist-mcp/compare/v15.1.0...v15.2.0) (2026-11-12)
 
 ### Features
